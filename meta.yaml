@@ -1,0 +1,20 @@
+package:
+  name: control_cluster_utils
+  version: 0.0.1
+
+source:
+  path: .
+
+requirements:
+  build:
+    - python 3.7
+    - setuptools
+
+build:
+  script:
+    - python3 -m pip install -v .
+
+about:
+  home: https://github.com/AndPatr/ControlClusterUtils
+  license: MIT
+  summary: Control Cluster Utilities to spawn a number of controllers over multiple processing (useful when performing training in simulation with CPU-based controllers)
