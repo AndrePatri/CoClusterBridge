@@ -310,7 +310,9 @@ class RHController(ABC):
         
     def terminate(self):
 
-        self._close_pipes()
+        # self._close_pipes()
+
+        return True
         
 RHChild = TypeVar('RHChild', bound='RHController')
 CntrlCmdChild = TypeVar('CntrlCmdChild', bound='CntrlCmd')

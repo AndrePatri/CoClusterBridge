@@ -73,15 +73,15 @@ class ControlClusterSrvr(ABC):
 
     def _clean_pipes(self):
 
-        if os.path.exists(self.cluster_size_pipe):
+        # if os.path.exists(self.cluster_size_pipe):
             
-            os.close(self.cluster_size_pipe_fd)
-            print("ControlClusterSrvr: closing pipe @" + self.cluster_size_pipe)
+        #     os.close(self.cluster_size_pipe_fd)
+        #     print("ControlClusterSrvr: closing pipe @" + self.cluster_size_pipe)
 
-        if os.path.exists(self.jnt_number_pipe):
+        # if os.path.exists(self.jnt_number_pipe):
             
-            os.close(self.jnt_number_pipe_fd)
-            print("ControlClusterSrvr: closing pipe @" + self.jnt_number_pipe)
+        #     os.close(self.jnt_number_pipe_fd)
+        #     print("ControlClusterSrvr: closing pipe @" + self.jnt_number_pipe)
             
         for i in range(0, self.cluster_size): 
 
