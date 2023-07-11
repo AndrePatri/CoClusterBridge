@@ -89,11 +89,20 @@ class ControlClusterSrvr(ABC):
 
     def _setup_pipes(self):
         
-        self.trigger_pipes = []
-        self.success_pipes = []
-        self.jnt_q_pipes = []
-        self.jnt_v_pipes = []
-        self.jnt_eff_pipes = []
+        # solution info
+        self.trigger_pipenames = []
+        self.success_pipenames = []
+        
+        # command info from controllers
+        self.cmd_jnt_q_pipenames = []
+        self.cmd_jnt_v_pipenames = []
+        self.cmd_jnt_eff_pipenames = []
+
+        # robot state to controllers
+        self.state_root_q_pipenames = []
+        self.state_root_v_pipenames = []
+        self.state_jnt_q_pipenames = []
+        self.state_jnt_v_pipenames = []
 
         self._connect_to_client() # blocks until a connection with the
         # client is established
@@ -127,15 +136,13 @@ class ControlClusterSrvr(ABC):
 
         self.jnt_number_pipe_fd = os.open(self.jnt_number_pipe, os.O_WRONLY)
 
-
         for i in range(self.cluster_size):
             
+            # solver 
             trigger_pipename = self.pipe_basepath + f"trigger{i}.pipe"
             success_pipename = self.pipe_basepath + f"success{i}.pipe"
-
-            jnt_q_pipename = self.pipe_basepath + f"jnt_q{i}.pipe"
-            jnt_v_pipename = self.pipe_basepath + f"jnt_v{i}.pipe"
-            jnt_eff_pipename = self.pipe_basepath + f"jnt_eff{i}.pipe"
+            self.trigger_pipenames.append(trigger_pipename)
+            self.success_pipenames.append(success_pipename)
 
             if not os.path.exists(trigger_pipename):
                 
@@ -147,26 +154,58 @@ class ControlClusterSrvr(ABC):
                 print("creating pipe @" + success_pipename)
                 os.mkfifo(success_pipename)
 
-            if not os.path.exists(jnt_q_pipename):
-                
-                print("creating pipe @" + jnt_q_pipename)
-                os.mkfifo(jnt_q_pipename)
+            # commands from controllers
+            cmd_jnt_q_pipename = self.pipe_basepath + f"cmd_jnt_q{i}.pipe"
+            cmd_jnt_v_pipename = self.pipe_basepath + f"cmd_jnt_v{i}.pipe"
+            cmd_jnt_eff_pipename = self.pipe_basepath + f"cmd_jnt_eff{i}.pipe"
+            self.cmd_jnt_q_pipenames.append(cmd_jnt_q_pipename)
+            self.cmd_jnt_v_pipenames.append(cmd_jnt_v_pipename)
+            self.cmd_jnt_eff_pipenames.append(cmd_jnt_eff_pipename)
 
-            if not os.path.exists(jnt_v_pipename):
-                
-                print("creating pipe @" + jnt_v_pipename)
-                os.mkfifo(jnt_v_pipename)
+            if not os.path.exists(cmd_jnt_q_pipename):
+        
+                print("creating pipe @" + cmd_jnt_q_pipename)
+                os.mkfifo(cmd_jnt_q_pipename)
 
-            if not os.path.exists(jnt_eff_pipename):
+            if not os.path.exists(cmd_jnt_v_pipename):
                 
-                print("creating pipe @" + jnt_eff_pipename)
-                os.mkfifo(jnt_eff_pipename)
+                print("creating pipe @" + cmd_jnt_v_pipename)
+                os.mkfifo(cmd_jnt_v_pipename)
 
-            self.trigger_pipes.append(trigger_pipename)
-            self.success_pipes.append(success_pipename)
-            self.jnt_q_pipes.append(jnt_q_pipename)
-            self.jnt_v_pipes.append(jnt_v_pipename)
-            self.jnt_eff_pipes.append(jnt_eff_pipename)
+            if not os.path.exists(cmd_jnt_eff_pipename):
+                
+                print("creating pipe @" + cmd_jnt_eff_pipename)
+                os.mkfifo(cmd_jnt_eff_pipename)
+
+            # state to controllers
+            state_root_q_pipename = self.pipe_basepath + f"state_root_q{i}.pipe"
+            state_root_v_pipename = self.pipe_basepath + f"state_root_v{i}.pipe"
+            state_jnt_q_pipename = self.pipe_basepath + f"state_jnt_q{i}.pipe"
+            state_jnt_v_pipename = self.pipe_basepath + f"state_jnt_v{i}.pipe"
+            self.state_root_q_pipenames.append(state_root_q_pipename)
+            self.state_root_v_pipenames.append(state_root_v_pipename)
+            self.state_jnt_q_pipenames.append(state_jnt_q_pipename)
+            self.state_jnt_v_pipenames.append(state_jnt_v_pipename)
+            
+            if not os.path.exists(state_root_q_pipename):
+        
+                print("creating pipe @" + state_root_q_pipename)
+                os.mkfifo(state_root_q_pipename)
+
+            if not os.path.exists(state_root_v_pipename):
+        
+                print("creating pipe @" + state_root_v_pipename)
+                os.mkfifo(state_root_v_pipename)
+
+            if not os.path.exists(state_jnt_q_pipename):
+        
+                print("creating pipe @" + state_jnt_q_pipename)
+                os.mkfifo(state_jnt_q_pipename)
+            
+            if not os.path.exists(state_jnt_v_pipename):
+        
+                print("creating pipe @" + state_jnt_v_pipename)
+                os.mkfifo(state_jnt_v_pipename)
 
         print("ControlClusterSrvr: connection to ControlCluster client established.")
 

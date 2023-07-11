@@ -39,18 +39,28 @@ class ControlClusterClient(ABC):
         self.cluster_size_pipe_fd = None
         self.jnt_number_pipe = None
         self.jnt_number_pipe_fd = None
+
         # we create several named pipes and store their names
-        self.trigger_pipes = []
-        self.success_pipes = []
-        self.jnt_q_pipes = []
-        self.jnt_v_pipes = []
-        self.jnt_eff_pipes = []
+
+        self.trigger_pipenames = []
+        self.success_pipenames = []
+        self.cmd_jnt_q_pipenames = []
+        self.cmd_jnt_v_pipenames = []
+        self.cmd_jnt_eff_pipenames = []
+        self.state_root_q_pipenames = []
+        self.state_root_v_pipenames = []
+        self.state_jnt_q_pipenames = []
+        self.state_jnt_v_pipenames = []
 
         self.trigger_pipes_fd = []
         self.success_pipes_fd = []
-        self.jnt_q_pipes_fd = []
-        self.jnt_v_pipes_fd = []
-        self.jnt_eff_pipes_fd = []
+        self.cmd_jnt_q_pipes_fd = []
+        self.cmd_jnt_v_pipes_fd = []
+        self.cmd_jnt_eff_pipes_fd = []
+        self.state_root_q_pipe_fd = []
+        self.state_root_v_pipe_fd = []
+        self.state_jnt_q_pipe_fd = []
+        self.state_jnt_v_pipe_fd = []
 
         self._is_cluster_ready = False
 
@@ -126,53 +136,75 @@ class ControlClusterClient(ABC):
 
         for i in range(self.cluster_size):
             
+            # solver 
             trigger_pipename = self.pipe_basepath + f"trigger{i}.pipe"
             success_pipename = self.pipe_basepath + f"success{i}.pipe"
-
-            jnt_q_pipename = self.pipe_basepath + f"jnt_q{i}.pipe"
-            jnt_v_pipename = self.pipe_basepath + f"jnt_v{i}.pipe"
-            jnt_eff_pipename = self.pipe_basepath + f"jnt_eff{i}.pipe"
-
-            self.trigger_pipes.append(trigger_pipename)
-            self.success_pipes.append(success_pipename)
-            self.jnt_q_pipes.append(jnt_q_pipename)
-            self.jnt_v_pipes.append(jnt_v_pipename)
-            self.jnt_eff_pipes.append(jnt_eff_pipename)
-
-            # we wait for pipes creation from the server
+            self.trigger_pipenames.append(trigger_pipename)
+            self.success_pipenames.append(success_pipename)
 
             while not os.path.exists(trigger_pipename): 
 
                 continue 
 
-            while not os.path.exists(trigger_pipename):
-                    
-                continue
-            
             while not os.path.exists(success_pipename):
                 
                 continue
-
-            while not os.path.exists(jnt_q_pipename):
-                
-                continue
-
-            while not os.path.exists(jnt_v_pipename):
-                
-                continue
-
-            while not os.path.exists(jnt_eff_pipename):
-                
-                continue
-
-
+            
             self.success_pipes_fd.append(os.open(success_pipename,  os.O_RDONLY | os.O_NONBLOCK))
             self.trigger_pipes_fd.append(os.open(trigger_pipename, os.O_WRONLY)) # this will block until
             # something opens the pipe in read mode
 
-            self.jnt_q_pipes_fd.append(os.open(jnt_q_pipename, os.O_RDONLY | os.O_NONBLOCK))
-            self.jnt_v_pipes_fd.append(os.open(jnt_v_pipename, os.O_RDONLY | os.O_NONBLOCK))
-            self.jnt_eff_pipes_fd.append(os.open(jnt_eff_pipename, os.O_RDONLY | os.O_NONBLOCK))
+            # cmds from controllers
+            cmd_jnt_q_pipename = self.pipe_basepath + f"cmd_jnt_q{i}.pipe"
+            cmd_jnt_v_pipename = self.pipe_basepath + f"cmd_jnt_v{i}.pipe"
+            cmd_jnt_eff_pipename = self.pipe_basepath + f"cmd_jnt_eff{i}.pipe"
+            self.cmd_jnt_q_pipenames.append(cmd_jnt_q_pipename)
+            self.cmd_jnt_v_pipenames.append(cmd_jnt_v_pipename)
+            self.cmd_jnt_eff_pipenames.append(cmd_jnt_eff_pipename)
+
+            while not os.path.exists(cmd_jnt_q_pipename):
+                
+                continue
+
+            while not os.path.exists(cmd_jnt_v_pipename):
+                
+                continue
+
+            while not os.path.exists(cmd_jnt_eff_pipename):
+                
+                continue
+
+            self.cmd_jnt_q_pipes_fd.append(os.open(cmd_jnt_q_pipename, os.O_RDONLY | os.O_NONBLOCK))
+            self.cmd_jnt_v_pipes_fd.append(os.open(cmd_jnt_v_pipename, os.O_RDONLY | os.O_NONBLOCK))
+            self.cmd_jnt_eff_pipes_fd.append(os.open(cmd_jnt_eff_pipename, os.O_RDONLY | os.O_NONBLOCK))
+
+            # state to controllers 
+            state_root_q_pipename = self.pipe_basepath + f"state_root_q{i}.pipe"
+            state_root_v_pipename = self.pipe_basepath + f"state_root_v{i}.pipe"
+            state_jnt_q_pipename = self.pipe_basepath + f"state_jnt_q{i}.pipe"
+            state_jnt_v_pipename = self.pipe_basepath + f"state_jnt_v{i}.pipe"
+            self.state_root_q_pipenames.append(state_root_q_pipename)
+            self.state_root_v_pipenames.append(state_root_v_pipename)
+            self.state_jnt_q_pipenames.append(state_jnt_q_pipename)
+            self.state_jnt_v_pipenames.append(state_jnt_v_pipename)
+            
+            while not os.path.exists(state_root_q_pipename):
+                
+                continue
+            while not os.path.exists(state_root_v_pipename):
+                
+                continue
+            while not os.path.exists(state_jnt_q_pipename):
+                
+                continue
+            while not os.path.exists(state_jnt_v_pipename):
+                
+                continue
+            
+            self.state_root_q_pipe_fd.append(os.open(state_root_q_pipename, os.O_WRONLY))
+            self.state_root_v_pipe_fd.append(os.open(state_root_v_pipename, os.O_WRONLY))
+            self.state_jnt_q_pipe_fd.append(os.open(state_jnt_q_pipename, os.O_WRONLY))
+            self.state_jnt_v_pipe_fd.append(os.open(state_jnt_v_pipename, os.O_WRONLY))
 
         jnt_number_raw = os.read(self.jnt_number_pipe_fd, 4)
         self.n_dofs = struct.unpack('i', jnt_number_raw)[0]
@@ -268,9 +300,9 @@ class ControlClusterClient(ABC):
 
                         if success == "success":
                             
-                            read_q = os.read(self.jnt_q_pipes_fd[i], self.jnt_data_size)
-                            read_v = os.read(self.jnt_v_pipes_fd[i], self.jnt_data_size)
-                            read_eff = os.read(self.jnt_eff_pipes_fd[i], self.jnt_data_size)
+                            read_q = os.read(self.cmd_jnt_q_pipes_fd[i], self.jnt_data_size)
+                            read_v = os.read(self.cmd_jnt_v_pipes_fd[i], self.jnt_data_size)
+                            read_eff = os.read(self.cmd_jnt_eff_pipes_fd[i], self.jnt_data_size)
 
                             received_q = np.frombuffer(read_q, dtype=np.float32).reshape((1, self.n_dofs))
                             received_v = np.frombuffer(read_v, dtype=np.float32).reshape((1, self.n_dofs))

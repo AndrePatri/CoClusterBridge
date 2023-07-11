@@ -57,11 +57,15 @@ class RHController(ABC):
             urdf_path: str, 
             srdf_path: str,
             config_path: str, 
-            trigger_pipename: str,
+            trigger_pipename: str, # solver pipes
             success_pipename: str, 
-            jnt_q_pipename: str,
-            jnt_v_pipename: str,
-            jnt_eff_pipename: str,
+            cmd_jnt_q_pipename: str, # commands to robot
+            cmd_jnt_v_pipename: str,
+            cmd_jnt_eff_pipename: str,
+            state_root_q_pipename: str, # state from robot
+            state_root_v_pipename: str, # state from robot
+            state_jnt_q_pipename: str, # state from robot
+            state_jnt_v_pipename: str, # state from robot
             termination_flag: mp.Value,
             name = "RHController",
             verbose = False):
@@ -87,12 +91,19 @@ class RHController(ABC):
 
         self.config_path = config_path
 
+        # solver 
         self.trigger_pipe = trigger_pipename
         self.success_pipe = success_pipename
-        self.jnt_q_pipe = jnt_q_pipename
-        self.jnt_v_pipe = jnt_v_pipename
-        self.jnt_eff_pipe = jnt_eff_pipename
-        
+        # commands to robot
+        self.cmd_jnt_q_pipename = cmd_jnt_q_pipename
+        self.cmd_jnt_v_pipename = cmd_jnt_v_pipename
+        self.cmd_jnt_eff_pipename = cmd_jnt_eff_pipename        
+        # state from robot
+        self.state_root_q_pipename = state_root_q_pipename
+        self.state_root_v_pipename = state_root_v_pipename
+        self.state_jnt_q_pipename = state_jnt_q_pipename
+        self.state_jnt_v_pipename = state_jnt_v_pipename
+
         self._open_pipes()
         
         self.rhc_cmd: RHCCmdChild = RHCCmd()
@@ -111,52 +122,79 @@ class RHController(ABC):
 
     def _open_pipes(self):
 
+        # solver
         print(self.name + ": trying to open pipe @ " + self.trigger_pipe)
         self.trigger_pipe_fd = os.open(self.trigger_pipe,  os.O_RDONLY | os.O_NONBLOCK)
-
         print(self.name + ": trying to open pipe @ " + self.success_pipe)
         self.success_pipe_fd = os.open(self.success_pipe, os.O_WRONLY) # this will block until
         # something opens the pipe in read mode
         
-        print(self.name + ": trying to open pipe @ " + self.jnt_q_pipe)
-        self.jnt_q_pipe_fd = os.open(self.jnt_q_pipe, os.O_WRONLY) # this will block until
+        # commands to robot
+        print(self.name + ": trying to open pipe @ " + self.cmd_jnt_q_pipename)
+        self.jnt_q_pipe_fd = os.open(self.cmd_jnt_q_pipename, os.O_WRONLY) # this will block until
+        # something opens the pipe in read mode
+        print(self.name + ": trying to open pipe @ " + self.cmd_jnt_v_pipename)
+        self.jnt_v_pipe_fd = os.open(self.cmd_jnt_v_pipename, os.O_WRONLY) # this will block until
+        # something opens the pipe in read mode
+        print(self.name + ": trying to open pipe @ " + self.cmd_jnt_eff_pipename)
+        self.jnt_eff_pipe_fd = os.open(self.cmd_jnt_eff_pipename, os.O_WRONLY) # this will block until
         # something opens the pipe in read mode
 
-        print(self.name + ": trying to open pipe @ " + self.jnt_v_pipe)
-        self.jnt_v_pipe_fd = os.open(self.jnt_v_pipe, os.O_WRONLY) # this will block until
-        # something opens the pipe in read mode
-
-        print(self.name + ": trying to open pipe @ " + self.jnt_eff_pipe)
-        self.jnt_eff_pipe_fd = os.open(self.jnt_eff_pipe, os.O_WRONLY) # this will block until
-        # something opens the pipe in read mode
+        # state from robot
+        print(self.name + ": trying to open pipe @ " + self.state_root_q_pipename)
+        self.state_root_q_pipe_fd = os.open(self.state_root_q_pipename, os.O_RDONLY | os.O_NONBLOCK) 
+        print(self.name + ": trying to open pipe @ " + self.state_root_v_pipename)
+        self.state_root_v_pipe_fd = os.open(self.state_root_v_pipename, os.O_RDONLY | os.O_NONBLOCK)
+        print(self.name + ": trying to open pipe @ " + self.state_jnt_q_pipename)
+        self.state_jnt_q_pipe_fd = os.open(self.state_jnt_q_pipename, os.O_RDONLY | os.O_NONBLOCK)
+        print(self.name + ": trying to open pipe @ " + self.state_jnt_v_pipename)
+        self.state_jnt_v_pipe_fd = os.open(self.state_jnt_v_pipename, os.O_RDONLY | os.O_NONBLOCK)
 
     def _close_pipes(self):
 
         # we close the pipes
+
+        # solver
         if os.path.exists(self.trigger_pipe):
                   
             os.close(self.trigger_pipe_fd)
             print(self.name + ": closed pipe @" + self.trigger_pipe)
-
         if os.path.exists(self.success_pipe):
             
             os.close(self.success_pipe_fd)
             print(self.name + ": closed pipe @" + self.success_pipe)
 
-        if os.path.exists(self.jnt_q_pipe):
+        # commands to robot
+        if os.path.exists(self.cmd_jnt_q_pipename):
             
             os.close(self.jnt_q_pipe_fd)
-            print(self.name + ": closed pipe @" + self.jnt_q_pipe)
-
-        if os.path.exists(self.jnt_v_pipe):
+            print(self.name + ": closed pipe @" + self.cmd_jnt_q_pipename)
+        if os.path.exists(self.cmd_jnt_v_pipename):
             
             os.close(self.jnt_v_pipe_fd)
-            print(self.name + ": closed pipe @" + self.jnt_v_pipe)
-
-        if os.path.exists(self.jnt_eff_pipe):
+            print(self.name + ": closed pipe @" + self.cmd_jnt_v_pipename)
+        if os.path.exists(self.cmd_jnt_eff_pipename):
             
             os.close(self.jnt_eff_pipe_fd)
-            print(self.name + ": closed pipe @" + self.jnt_eff_pipe)
+            print(self.name + ": closed pipe @" + self.cmd_jnt_eff_pipename)
+
+        # state from robot
+        if os.path.exists(self.state_root_q_pipename):
+            
+            os.close(self.state_root_q_pipe_fd)
+            print(self.name + ": closed pipe @" + self.state_root_q_pipename)
+        if os.path.exists(self.state_root_v_pipename):
+            
+            os.close(self.state_root_v_pipe_fd)
+            print(self.name + ": closed pipe @" + self.state_root_v_pipename)
+        if os.path.exists(self.state_jnt_q_pipename):
+            
+            os.close(self.state_jnt_q_pipe_fd)
+            print(self.name + ": closed pipe @" + self.state_jnt_q_pipename)
+        if os.path.exists(self.state_jnt_v_pipename):
+            
+            os.close(self.state_jnt_v_pipe_fd)
+            print(self.name + ": closed pipe @" + self.state_jnt_v_pipename)
 
     @abstractmethod
     def _get_ndofs(self):
@@ -226,6 +264,11 @@ class RHController(ABC):
     
     @abstractmethod
     def _send_solution(self):
+
+        pass
+
+    @abstractmethod
+    def _acquire_state(self):
 
         pass
 
