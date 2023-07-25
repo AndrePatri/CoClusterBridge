@@ -35,11 +35,13 @@ class ControlClusterSrvr(ABC):
 
         if not os.path.exists(self.pipe_basepath):
             
-            print("ControlClusterSrvr: creating pipe folder @ " + self.pipe_basepath)
+            print("[ControlClusterSrvr][info]: creating pipe folder @ " + self.pipe_basepath)
             os.mkdir(self.pipe_basepath)
     
         # we create several named pipes and store their names
 
+        self.start_controllers_pipe = None
+        self.start_controllers_pipe_fd = None
         self.cluster_size_pipe = None
         self.cluster_size_pipe_fd = None
         self.jnt_number_pipe = None
@@ -69,19 +71,19 @@ class ControlClusterSrvr(ABC):
                 
                 process.terminate()  # Forcefully terminate the process
             
-            print("ControlClusterSrvr: terminating child process " + str(process.name))
+            print("[ControlClusterSrvr][info]: terminating child process " + str(process.name))
 
     def _clean_pipes(self):
 
         # if os.path.exists(self.cluster_size_pipe):
             
         #     os.close(self.cluster_size_pipe_fd)
-        #     print("ControlClusterSrvr: closing pipe @" + self.cluster_size_pipe)
+        #     print("[ControlClusterSrvr][info]: closing pipe @" + self.cluster_size_pipe)
 
         # if os.path.exists(self.jnt_number_pipe):
             
         #     os.close(self.jnt_number_pipe_fd)
-        #     print("ControlClusterSrvr: closing pipe @" + self.jnt_number_pipe)
+        #     print("[ControlClusterSrvr][info]: closing pipe @" + self.jnt_number_pipe)
             
         for i in range(0, self.cluster_size): 
 
@@ -89,6 +91,9 @@ class ControlClusterSrvr(ABC):
 
     def _setup_pipes(self):
         
+        # start controllers
+        self.start_controllers_pipenames = []
+
         # solution info
         self.trigger_pipenames = []
         self.success_pipenames = []
@@ -109,7 +114,7 @@ class ControlClusterSrvr(ABC):
 
     def _connect_to_client(self):
         
-        print("ControlClusterSrvr: waiting for connection with the ControlCluster client...")
+        print("[ControlClusterSrvr][info]: waiting for connection with the ControlCluster client...")
 
         # retrieves some important configuration information from the server
 
@@ -117,25 +122,16 @@ class ControlClusterSrvr(ABC):
 
         if not os.path.exists(self.cluster_size_pipe):
             
-            print("creating pipe @" + self.cluster_size_pipe)
+            print("[ControlClusterSrvr][status]: creating pipe @" + self.cluster_size_pipe)
             os.mkfifo(self.cluster_size_pipe)
         
         # open the pipe in read mode with non-blocking option
         self.cluster_size_pipe_fd = os.open(self.cluster_size_pipe, os.O_RDONLY)
-
         cluster_size_raw = os.read(self.cluster_size_pipe_fd, 4) # we read an integer (32 bits = 4 bytes)
-
+        # this will block until we get the info from the client
         self.cluster_size = struct.unpack('i', cluster_size_raw)[0]
-
-        self.jnt_number_pipe = self.pipe_basepath + f"jnt_number.pipe"
-
-        if not os.path.exists(self.jnt_number_pipe):
-            
-            print("creating pipe @" + self.jnt_number_pipe)
-            os.mkfifo(self.jnt_number_pipe)
-
-        self.jnt_number_pipe_fd = os.open(self.jnt_number_pipe, os.O_WRONLY)
-
+        
+        # we create other pipes
         for i in range(self.cluster_size):
             
             # solver 
@@ -146,12 +142,12 @@ class ControlClusterSrvr(ABC):
 
             if not os.path.exists(trigger_pipename):
                 
-                print("creating pipe @" + trigger_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + trigger_pipename)
                 os.mkfifo(trigger_pipename)
             
             if not os.path.exists(success_pipename):
                 
-                print("creating pipe @" + success_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + success_pipename)
                 os.mkfifo(success_pipename)
 
             # commands from controllers
@@ -164,17 +160,17 @@ class ControlClusterSrvr(ABC):
 
             if not os.path.exists(cmd_jnt_q_pipename):
         
-                print("creating pipe @" + cmd_jnt_q_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + cmd_jnt_q_pipename)
                 os.mkfifo(cmd_jnt_q_pipename)
 
             if not os.path.exists(cmd_jnt_v_pipename):
                 
-                print("creating pipe @" + cmd_jnt_v_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + cmd_jnt_v_pipename)
                 os.mkfifo(cmd_jnt_v_pipename)
 
             if not os.path.exists(cmd_jnt_eff_pipename):
                 
-                print("creating pipe @" + cmd_jnt_eff_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + cmd_jnt_eff_pipename)
                 os.mkfifo(cmd_jnt_eff_pipename)
 
             # state to controllers
@@ -189,25 +185,25 @@ class ControlClusterSrvr(ABC):
             
             if not os.path.exists(state_root_q_pipename):
         
-                print("creating pipe @" + state_root_q_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + state_root_q_pipename)
                 os.mkfifo(state_root_q_pipename)
 
             if not os.path.exists(state_root_v_pipename):
         
-                print("creating pipe @" + state_root_v_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + state_root_v_pipename)
                 os.mkfifo(state_root_v_pipename)
 
             if not os.path.exists(state_jnt_q_pipename):
         
-                print("creating pipe @" + state_jnt_q_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + state_jnt_q_pipename)
                 os.mkfifo(state_jnt_q_pipename)
             
             if not os.path.exists(state_jnt_v_pipename):
         
-                print("creating pipe @" + state_jnt_v_pipename)
+                print("[ControlClusterSrvr][status]: creating pipe @" + state_jnt_v_pipename)
                 os.mkfifo(state_jnt_v_pipename)
 
-        print("ControlClusterSrvr: connection to ControlCluster client established.")
+        print("[ControlClusterSrvr][info]: connection to ControlCluster client established.")
 
     def _check_state_size(self, 
                         cluster_state: RobotClusterState):
@@ -276,8 +272,14 @@ class ControlClusterSrvr(ABC):
         
         jnt_number_data = struct.pack('i', self.n_dofs)
 
+        self.jnt_number_pipe = self.pipe_basepath + f"jnt_number.pipe"
+        if not os.path.exists(self.jnt_number_pipe):
+            print("[ControlClusterSrvr][status]: creating pipe @" + self.jnt_number_pipe)
+            os.mkfifo(self.jnt_number_pipe)
+        self.jnt_number_pipe_fd = os.open(self.jnt_number_pipe, os.O_WRONLY) # this will block until the 
+        # client opens the pipe in read mode
         os.write(self.jnt_number_pipe_fd, jnt_number_data) # we send this info
-        # to the client
+        # to the client, which is now guaranteed to be listening on the pipe
 
     def add_controller(self, controller: RHChild):
 
@@ -305,7 +307,7 @@ class ControlClusterSrvr(ABC):
 
     def terminate(self):
 
-        print("ControlClusterSrvr: terminating cluster")
+        print("[ControlClusterSrvr][info]: terminating cluster")
 
         self._close_processes() # we also terminate all the child processes
 
