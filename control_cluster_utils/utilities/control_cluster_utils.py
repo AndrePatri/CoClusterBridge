@@ -20,32 +20,42 @@ class RobotClusterState:
 
         def __init__(self, 
                     cluster_size: int = 1, 
-                    device: str = "cpu"):
+                    device: str = "cpu", 
+                    dtype = torch.float):
+            
+            self.dtype = dtype
 
             self._device = device
 
-            self.q = torch.zeros((cluster_size, 4), device = self._device) # floating base orientation (quaternion)
-            self.v = torch.zeros((cluster_size , 3), device = self._device) # floating base angular vel
-            self.a = torch.zeros((cluster_size, 3), device = self._device) # floating base angular acc
+            self.p = torch.zeros((cluster_size, 3), device = self._device, dtype=self.dtype) # floating base positions
+            self.q = torch.zeros((cluster_size, 4), device = self._device, dtype=self.dtype) # floating base orientation (quaternion)
+            self.v = torch.zeros((cluster_size , 3), device = self._device, dtype=self.dtype) # floating base angular vel
+            self.a = torch.zeros((cluster_size, 3), device = self._device, dtype=self.dtype) # floating base angular acc
 
     class JntStates:
 
         def __init__(self, 
                     n_dofs: int, 
                     cluster_size: int = 1, 
-                    device: str = "cpu"):
+                    device: str = "cpu", 
+                    dtype = torch.float):
+
+            self.dtype = dtype
 
             self._device = device
 
-            self.q = torch.zeros((cluster_size, n_dofs), device = self._device) # joint positions
-            self.v = torch.zeros((cluster_size, n_dofs), device = self._device) # joint velocities
-            self.a = torch.zeros((cluster_size, n_dofs), device = self._device) # joint accelerations
+            self.q = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint positions
+            self.v = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint velocities
+            self.a = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
+            self.eff = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
 
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
                 backend: str = "torch", 
                 device: str = "cpu"):
+        
+        self.dtype = torch.float
 
         self.backend = "torch" # forcing torch backend
 
@@ -56,11 +66,56 @@ class RobotClusterState:
             self.device = "cpu"
 
         self.root_state = self.RootStates(cluster_size = cluster_size, 
-                                        device = self.device)
+                                        device = self.device, 
+                                        dtype = self.dtype)
 
         self.jnt_state = self.JntStates(n_dofs = n_dofs, 
                                         cluster_size = cluster_size, 
-                                        device = self.device)
+                                        device = self.device, 
+                                        dtype = self.dtype)
+        
+        self.n_dofs = n_dofs
+        self.cluster_size = cluster_size
+
+class RobotClusterCmd:
+
+    class JntCmd:
+
+        def __init__(self, 
+                    n_dofs: int, 
+                    cluster_size: int = 1, 
+                    device: str = "cpu", 
+                    dtype = torch.float):
+            
+            self.dtype = dtype
+
+            self._device = device
+
+            self.q = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint positions
+            self.v = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint velocities
+        #     self.a = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
+            self.eff = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
+
+    def __init__(self, 
+                n_dofs: int, 
+                cluster_size: int = 1, 
+                backend: str = "torch", 
+                device: str = "cpu"):
+
+        self.dtype = torch.float
+
+        self.backend = "torch" # forcing torch backend
+
+        self.device = device
+
+        if (self.backend != "torch"):
+
+            self.device = "cpu"
+
+        self.jnt_cmd = self.JntCmd(n_dofs = n_dofs, 
+                                cluster_size = cluster_size, 
+                                device = self.device, 
+                                dtype = self.dtype)
         
         self.n_dofs = n_dofs
         self.cluster_size = cluster_size

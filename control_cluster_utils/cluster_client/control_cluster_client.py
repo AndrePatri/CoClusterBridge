@@ -2,7 +2,7 @@ import torch
 
 from abc import ABC, abstractmethod
 
-from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, ActionChild
+from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, RobotClusterCmd, ActionChild
 
 import os
 import struct
@@ -87,6 +87,8 @@ class ControlClusterClient(ABC):
         print("[ControlClusterClient][status]: spawned _handshake process")
 
         self._trigger_processes = []
+        self._solread_processes = []
+
         for i in range(0, self.cluster_size):
 
             self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
@@ -390,7 +392,6 @@ class ControlClusterClient(ABC):
 
         self._create_state_buffers() # used  to store the data received by the pipes
 
-        self._solread_processes = []
         for i in range(0, self.cluster_size):
 
             self._solread_processes.append(mp.Process(target=self._read_solution, 
@@ -403,11 +404,16 @@ class ControlClusterClient(ABC):
         self._robot_states = RobotClusterState(self.n_dofs.value, 
                                             cluster_size=self.cluster_size, 
                                             backend=self._backend, 
+                                            device=self._device) # from robot to controllers
+        
+        self._controllers_cmds = RobotClusterCmd(self.n_dofs.value, 
+                                            cluster_size=self.cluster_size, 
+                                            backend=self._backend, 
                                             device=self._device)
+        
         print("[ControlClusterClient][status]: initialized cluster state")
 
         self._post_init_finished = True
-
 
     def update(self, 
             cluster_state: RobotClusterState = None):
@@ -448,24 +454,41 @@ class ControlClusterClient(ABC):
         while not all(not value for value in self._trigger_read):
 
             continue
+    
+    def _fill_cluster_cmds(self):
+
+        self._controllers_cmds.jnt_cmd.q = torch.frombuffer(self._cmd_q_buffer.get_obj(), 
+                    dtype=self._controllers_cmds.dtype).reshape(self._controllers_cmds.cluster_size, 
+                                                                self._controllers_cmds.n_dofs)
         
+        self._controllers_cmds.jnt_cmd.v = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
+                    dtype=self._controllers_cmds.dtype).reshape(self._controllers_cmds.cluster_size, 
+                                                                self._controllers_cmds.n_dofs)
+
+        self._controllers_cmds.jnt_cmd.eff = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
+                    dtype=self._controllers_cmds.dtype).reshape(self._controllers_cmds.cluster_size, 
+                                                                self._controllers_cmds.n_dofs)
+
     def solve(self):
 
         # solve all the TO problems in the control cluster
 
         if (self._is_cluster_ready.value and self._post_init_finished):
+
+            start_time = time.time()
             
             self._send_trigger() # send signal to all controllers
 
-            start_time = time.time()
-
-            self._read_sols() # reads from all controllers' solutions
+            self._read_sols() # reads from all controllers' solutions (this will automatically updated a shared
+            # data buffer)
 
             self._wait_for_solutions() # will wait until all controllers are done solving their RH-TO
 
-            self.solution_time = time.time() - start_time
+            self._fill_cluster_cmds() # copies data to cluster command object
             
             self.solution_counter += 1
+
+            self.solution_time = time.time() - start_time # we profile the whole solution pipeline
 
         if (self._is_cluster_ready.value and (not self._post_init_finished)):
             
