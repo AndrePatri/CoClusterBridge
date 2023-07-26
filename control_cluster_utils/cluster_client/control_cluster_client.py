@@ -54,7 +54,6 @@ class ControlClusterClient(ABC):
         self.state_jnt_q_pipenames = []
         self.state_jnt_v_pipenames = []
 
-        self.trigger_pipes_fd = [-1] * self.cluster_size 
         self.success_pipes_fd = [-1] * self.cluster_size 
         self.cmd_jnt_q_pipes_fd = [-1] * self.cluster_size 
         self.cmd_jnt_v_pipes_fd = [-1] * self.cluster_size 
@@ -65,6 +64,7 @@ class ControlClusterClient(ABC):
         self.state_jnt_v_pipe_fd = [-1] * self.cluster_size 
         
         self._is_cluster_ready = mp.Value('b', False)
+        self._trigger_solve = mp.Array('b', self.cluster_size)
 
         self._pipes_initialized = False
         self._pipes_created = False
@@ -76,12 +76,27 @@ class ControlClusterClient(ABC):
 
         self._create_pipes() 
 
+        self._spawn_processes()
+
+    def _spawn_processes(self):
+        
         # we spawn the handshake() to another process, 
         # so that it's not blocking
-        connection_process = mp.Process(target=self._handshake, 
+        self._connection_process = mp.Process(target=self._handshake, 
                                 name = "ControlClusterClient_handshake")
-        connection_process.start()
+        self._connection_process.start()
+        print("[ControlClusterClient][status]: spawned _handshake process")
 
+        # we also spawn the method to trigger 
+
+        self._trigger_processes = []
+        for i in range(0, self.cluster_size):
+            self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
+                                                    name = "ControlClusterClient_trigger" + str(i), 
+                                                    args=(i, )), 
+                                )
+            print("[ControlClusterClient][status]: spawned _trigger_solution processes n." + str(i))
+            self._trigger_processes[i].start()
 
     def _compute_n_control_actions(self):
 
@@ -206,11 +221,6 @@ class ControlClusterClient(ABC):
     def _open_pipes(self):
 
         for i in range(self.cluster_size):
-            
-            # solver
-            self.trigger_pipes_fd[i] = os.open(self.trigger_pipenames[i],
-                                            os.O_WRONLY) # blocking (non-blocking
-            # would throw error if nothing has opened the pipe in read mode)
 
             self.success_pipes_fd[i] = os.open(self.success_pipenames[i],  
                                                 os.O_RDONLY | os.O_NONBLOCK)
@@ -263,6 +273,29 @@ class ControlClusterClient(ABC):
 
         print("[ControlClusterClient][status][handshake]: connection with ControlCluster server achieved")
 
+    def _trigger_solution(self, 
+                        index: int):
+
+        # solver
+        trigger_pipes_fd = os.open(self.trigger_pipenames[index],
+                                    os.O_WRONLY) # blocking (non-blocking
+        # would throw error if nothing has opened the pipe in read mode)
+        
+        while True: # we keep the process alive
+
+            if self._trigger_solve[index]: # this is set by the parent process
+
+                # Send a signal to perform the solution
+         
+                os.write(trigger_pipes_fd, b'solve\n')
+
+                self._trigger_solve[index] = False # we will wait for next signal
+                # from the main process
+            
+            else:
+
+                continue
+                
     def _check_state_size(self, 
                         cluster_state: RobotClusterState):
 
@@ -298,6 +331,11 @@ class ControlClusterClient(ABC):
 
         pass
 
+    def _post_initialization(self):
+
+        self._open_pipes()
+        print("[ControlClusterClient][status]: pipe opening completed")
+
     def update(self, 
             cluster_state: RobotClusterState = None):
         
@@ -324,29 +362,24 @@ class ControlClusterClient(ABC):
         # solve all the TO problems in the control cluster
 
         if (self._is_cluster_ready.value and self._pipes_initialized):
+            
+            for i in range(0, self.cluster_size):
 
-            # Send a signal to each process to perform the operation
-            for i in range(self.cluster_size):
+                self._trigger_solve[i] = True # we signal the triggger process n.{i} to trigger the solution 
+                # of the associated controller
 
-                # print("sending solution signal to controller n." + str(i))
-                
-                os.write(self.trigger_pipes_fd[i], b'solve\n')
             start_time = time.time()
-
-            print("Reading success signal")
 
             # Wait for all operations to complete
             for i in range(self.cluster_size):
-            
-                # print("waiting for solution from controller n." + str(i))
-                
+                            
                 while True:
 
                     try:
 
-                        success = os.read(self.success_pipes_fd[i], 1024).decode().strip()
+                        response = os.read(self.success_pipes_fd[i], 1024).decode().strip()
 
-                        if success == "success":
+                        if response == "success":
                             
                             read_q = os.read(self.cmd_jnt_q_pipes_fd[i], self.jnt_data_size.value)
                             read_v = os.read(self.cmd_jnt_v_pipes_fd[i], self.jnt_data_size.value)
@@ -362,11 +395,14 @@ class ControlClusterClient(ABC):
 
                             break
 
+                        else:
+
+                            print("[ControlClusterClient][warning]: received invald response " +  
+                                response + " from pipe " + self.success_pipenames[i])
+
                     except BlockingIOError or SystemError:
 
                         continue # try again to read
-
-            print("Read succes signal")
 
             self.solution_time = time.time() - start_time
             
@@ -374,9 +410,7 @@ class ControlClusterClient(ABC):
 
         if (self._is_cluster_ready.value and (not self._pipes_initialized)):
             
-            self._open_pipes()
-
-            print("[ControlClusterClient][status]: pipe opening completed")
+            self._post_initialization() # perform post-initialization steps
 
         if not self._is_cluster_ready.value:
 
@@ -392,3 +426,27 @@ class ControlClusterClient(ABC):
                     cluster_cmd: ActionChild):
 
         pass
+    
+    def close(self):
+
+        self.__del__()
+        
+    def __del__(self):
+        
+        if self._connection_process.is_alive():
+                
+            self._connection_process.terminate()  # Forcefully terminate the process
+            
+            print("[ControlClusterClient][info]: terminating child process " + str(self._connection_process.name))
+        
+            self._connection_process.join()
+
+        for process in self._trigger_processes:
+
+            if process.is_alive():
+                    
+                process.terminate()  # Forcefully terminate the process
+                
+                print("[ControlClusterClient][info]: terminating child process " + str(process.name))
+            
+                process.join()
