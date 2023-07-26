@@ -65,6 +65,7 @@ class ControlClusterClient(ABC):
         
         self._is_cluster_ready = mp.Value('b', False)
         self._trigger_solve = mp.Array('b', self.cluster_size)
+        self._trigger_read = mp.Array('b', self.cluster_size)
 
         self._pipes_initialized = False
         self._pipes_created = False
@@ -87,16 +88,24 @@ class ControlClusterClient(ABC):
         self._connection_process.start()
         print("[ControlClusterClient][status]: spawned _handshake process")
 
-        # we also spawn the method to trigger 
-
         self._trigger_processes = []
+        self._solread_processes = []
         for i in range(0, self.cluster_size):
+
             self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
                                                     name = "ControlClusterClient_trigger" + str(i), 
                                                     args=(i, )), 
                                 )
             print("[ControlClusterClient][status]: spawned _trigger_solution processes n." + str(i))
             self._trigger_processes[i].start()
+
+
+            self._solread_processes.append(mp.Process(target=self._read_solution, 
+                                                    name = "ControlClusterClient_solread" + str(i), 
+                                                    args=(i, )), 
+                                )
+            print("[ControlClusterClient][status]: spawned _read_solution processes n." + str(i))
+            self._solread_processes[i].start()
 
     def _compute_n_control_actions(self):
 
@@ -242,6 +251,12 @@ class ControlClusterClient(ABC):
             
         self._pipes_initialized = True
 
+    def _create_state_buffers(self):
+        
+        self._cmd_q_buffer = mp.Array('d', self.cluster_size * self.n_dofs.value)
+        self._cmd_v_buffer = mp.Array('d', self.cluster_size * self.n_dofs.value)
+        self._cmd_eff_buffer = mp.Array('d', self.cluster_size * self.n_dofs.value) 
+
     def _handshake(self):
         
         # THIS RUNS IN A CHILD PROCESS --> we perform the "handshake" with
@@ -295,7 +310,61 @@ class ControlClusterClient(ABC):
             else:
 
                 continue
-                
+
+    def _read_solution(self, 
+                    index: int):
+
+        # success signal from controllers
+        success_pipes_fd = os.open(self.success_pipenames[index],  
+                                    os.O_RDONLY | os.O_NONBLOCK)
+
+        # cmds from controllers
+        cmd_jnt_q_pipes_fd = os.open(self.cmd_jnt_q_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+        cmd_jnt_v_pipes_fd = os.open(self.cmd_jnt_v_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+        cmd_jnt_eff_pipes_fd = os.open(self.cmd_jnt_eff_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+
+        while True: # we keep the process alive
+
+            if self._trigger_read[index]: # this is set by the parent process
+
+                while True: # continue polling pipe until a success is read
+
+                    try:
+
+                        response = os.read(success_pipes_fd, 1024).decode().strip()
+
+                        if response == "success":
+                            
+                            read_q = os.read(cmd_jnt_q_pipes_fd, self.jnt_data_size.value)
+                            read_v = os.read(cmd_jnt_v_pipes_fd, self.jnt_data_size.value)
+                            read_eff = os.read(cmd_jnt_eff_pipes_fd, self.jnt_data_size.value)
+
+                            received_q = np.frombuffer(read_q, dtype=np.float32).reshape((1, self.n_dofs.value))
+                            received_v = np.frombuffer(read_v, dtype=np.float32).reshape((1, self.n_dofs.value))
+                            received_eff = np.frombuffer(read_eff, dtype=np.float32).reshape((1, self.n_dofs.value))
+
+                            print("received q" + str(index) + str(received_q))
+                            print("received v" + str(index) + str(received_v))
+                            print("received eff" + str(index) + str(received_eff))
+
+                            break
+
+                        else:
+
+                            print("[ControlClusterClient][warning]: received invald response " +  
+                                response + " from pipe " + self.success_pipenames[index])
+
+                    except BlockingIOError or SystemError:
+
+                        continue # try again to read
+
+                self._trigger_read[index] = False # we will wait for next signal
+                # from the main process
+            
+            else:
+
+                continue
+
     def _check_state_size(self, 
                         cluster_state: RobotClusterState):
 
@@ -336,6 +405,14 @@ class ControlClusterClient(ABC):
         self._open_pipes()
         print("[ControlClusterClient][status]: pipe opening completed")
 
+        self._robot_states = RobotClusterState(self.n_dofs.value, 
+                                            cluster_size=self.cluster_size, 
+                                            backend=self._backend, 
+                                            device=self._device)
+        print("[ControlClusterClient][status]: initialized cluster state")
+
+        self._create_state_buffers() # used  to store the data received by the pipes
+
     def update(self, 
             cluster_state: RobotClusterState = None):
         
@@ -356,53 +433,39 @@ class ControlClusterClient(ABC):
         else:
 
             return False 
-     
+    
+    def _send_trigger(self):
+
+        for i in range(0, self.cluster_size):
+
+            self._trigger_solve[i] = True # we signal the triggger process n.{i} to trigger the solution 
+            # of the associated controller
+
+    def _read_sols(self):
+
+        for i in range(self.cluster_size):
+            
+            self._trigger_read[i] = True
+
+    def _wait_for_solutions(self):
+        
+        while not all(not value for value in self._trigger_read):
+
+            continue
+        
     def solve(self):
 
         # solve all the TO problems in the control cluster
 
         if (self._is_cluster_ready.value and self._pipes_initialized):
             
-            for i in range(0, self.cluster_size):
-
-                self._trigger_solve[i] = True # we signal the triggger process n.{i} to trigger the solution 
-                # of the associated controller
+            self._send_trigger() # send signal to all controllers
 
             start_time = time.time()
 
-            # Wait for all operations to complete
-            for i in range(self.cluster_size):
-                            
-                while True:
+            self._read_sols() # reads from all controllers' solutions
 
-                    try:
-
-                        response = os.read(self.success_pipes_fd[i], 1024).decode().strip()
-
-                        if response == "success":
-                            
-                            read_q = os.read(self.cmd_jnt_q_pipes_fd[i], self.jnt_data_size.value)
-                            read_v = os.read(self.cmd_jnt_v_pipes_fd[i], self.jnt_data_size.value)
-                            read_eff = os.read(self.cmd_jnt_eff_pipes_fd[i], self.jnt_data_size.value)
-
-                            received_q = np.frombuffer(read_q, dtype=np.float32).reshape((1, self.n_dofs.value))
-                            received_v = np.frombuffer(read_v, dtype=np.float32).reshape((1, self.n_dofs.value))
-                            received_eff = np.frombuffer(read_eff, dtype=np.float32).reshape((1, self.n_dofs.value))
-
-                            print("received q" + str(i) + str(received_q))
-                            print("received v" + str(i) + str(received_v))
-                            print("received eff" + str(i) + str(received_eff))
-
-                            break
-
-                        else:
-
-                            print("[ControlClusterClient][warning]: received invald response " +  
-                                response + " from pipe " + self.success_pipenames[i])
-
-                    except BlockingIOError or SystemError:
-
-                        continue # try again to read
+            self._wait_for_solutions() # will wait until all controllers are done solving their RH-TO
 
             self.solution_time = time.time() - start_time
             
@@ -450,3 +513,13 @@ class ControlClusterClient(ABC):
                 print("[ControlClusterClient][info]: terminating child process " + str(process.name))
             
                 process.join()
+
+        # for process in self._solread_processes:
+
+        #     if process.is_alive():
+                    
+        #         process.terminate()  # Forcefully terminate the process
+                
+        #         print("[ControlClusterClient][info]: terminating child process " + str(process.name))
+            
+        #         process.join()
