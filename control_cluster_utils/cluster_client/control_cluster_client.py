@@ -53,11 +53,7 @@ class ControlClusterClient(ABC):
         self.state_root_v_pipenames = []
         self.state_jnt_q_pipenames = []
         self.state_jnt_v_pipenames = []
-
-        self.success_pipes_fd = [-1] * self.cluster_size 
-        self.cmd_jnt_q_pipes_fd = [-1] * self.cluster_size 
-        self.cmd_jnt_v_pipes_fd = [-1] * self.cluster_size 
-        self.cmd_jnt_eff_pipes_fd = [-1] * self.cluster_size 
+        
         self.state_root_q_pipe_fd = [-1] * self.cluster_size 
         self.state_root_v_pipe_fd = [-1] * self.cluster_size 
         self.state_jnt_q_pipe_fd = [-1] * self.cluster_size 
@@ -231,14 +227,6 @@ class ControlClusterClient(ABC):
 
         for i in range(self.cluster_size):
 
-            self.success_pipes_fd[i] = os.open(self.success_pipenames[i],  
-                                                os.O_RDONLY | os.O_NONBLOCK)
-
-            # cmds from controllers
-            self.cmd_jnt_q_pipes_fd[i] = os.open(self.cmd_jnt_q_pipenames[i], os.O_RDONLY | os.O_NONBLOCK)
-            self.cmd_jnt_v_pipes_fd[i] = os.open(self.cmd_jnt_v_pipenames[i], os.O_RDONLY | os.O_NONBLOCK)
-            self.cmd_jnt_eff_pipes_fd[i] = os.open(self.cmd_jnt_eff_pipenames[i], os.O_RDONLY | os.O_NONBLOCK)
-            
             # state to controllers 
             self.state_root_q_pipe_fd[i] = os.open(self.state_root_q_pipenames[i], 
                                                     os.O_WRONLY)
@@ -514,12 +502,12 @@ class ControlClusterClient(ABC):
             
                 process.join()
 
-        # for process in self._solread_processes:
+        for process in self._solread_processes:
 
-        #     if process.is_alive():
+            if process.is_alive():
                     
-        #         process.terminate()  # Forcefully terminate the process
+                process.terminate()  # Forcefully terminate the process
                 
-        #         print("[ControlClusterClient][info]: terminating child process " + str(process.name))
+                print("[ControlClusterClient][info]: terminating child process " + str(process.name))
             
-        #         process.join()
+                process.join()
