@@ -13,6 +13,8 @@ import numpy as np
 
 import multiprocess as mp
 
+import ctypes
+
 class ControlClusterClient(ABC):
 
     def __init__(self, 
@@ -63,7 +65,7 @@ class ControlClusterClient(ABC):
         self._trigger_solve = mp.Array('b', self.cluster_size)
         self._trigger_read = mp.Array('b', self.cluster_size)
 
-        self._pipes_initialized = False
+        self._post_init_finished = False
         self._pipes_created = False
 
         self.solution_time = -1.0
@@ -85,7 +87,6 @@ class ControlClusterClient(ABC):
         print("[ControlClusterClient][status]: spawned _handshake process")
 
         self._trigger_processes = []
-        self._solread_processes = []
         for i in range(0, self.cluster_size):
 
             self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
@@ -94,14 +95,6 @@ class ControlClusterClient(ABC):
                                 )
             print("[ControlClusterClient][status]: spawned _trigger_solution processes n." + str(i))
             self._trigger_processes[i].start()
-
-
-            self._solread_processes.append(mp.Process(target=self._read_solution, 
-                                                    name = "ControlClusterClient_solread" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print("[ControlClusterClient][status]: spawned _read_solution processes n." + str(i))
-            self._solread_processes[i].start()
 
     def _compute_n_control_actions(self):
 
@@ -237,13 +230,11 @@ class ControlClusterClient(ABC):
             self.state_jnt_v_pipe_fd[i] = os.open(self.state_jnt_v_pipenames[i], 
                                                     os.O_WRONLY)
             
-        self._pipes_initialized = True
-
     def _create_state_buffers(self):
         
-        self._cmd_q_buffer = mp.Array('d', self.cluster_size * self.n_dofs.value)
-        self._cmd_v_buffer = mp.Array('d', self.cluster_size * self.n_dofs.value)
-        self._cmd_eff_buffer = mp.Array('d', self.cluster_size * self.n_dofs.value) 
+        self._cmd_q_buffer = mp.Array(ctypes.c_float, self.cluster_size * self.n_dofs.value)
+        self._cmd_v_buffer = mp.Array(ctypes.c_float, self.cluster_size * self.n_dofs.value)
+        self._cmd_eff_buffer = mp.Array(ctypes.c_float, self.cluster_size * self.n_dofs.value) 
 
     def _handshake(self):
         
@@ -322,18 +313,22 @@ class ControlClusterClient(ABC):
                         response = os.read(success_pipes_fd, 1024).decode().strip()
 
                         if response == "success":
+                                
+                            self._cmd_q_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
+                                np.frombuffer(os.read(cmd_jnt_q_pipes_fd, self.jnt_data_size.value), 
+                                                dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
+                        
+                            self._cmd_v_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
+                                np.frombuffer(os.read(cmd_jnt_v_pipes_fd, self.jnt_data_size.value),
+                                                dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
                             
-                            read_q = os.read(cmd_jnt_q_pipes_fd, self.jnt_data_size.value)
-                            read_v = os.read(cmd_jnt_v_pipes_fd, self.jnt_data_size.value)
-                            read_eff = os.read(cmd_jnt_eff_pipes_fd, self.jnt_data_size.value)
+                            self._cmd_eff_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
+                                np.frombuffer(os.read(cmd_jnt_eff_pipes_fd, self.jnt_data_size.value),
+                                                dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
 
-                            received_q = np.frombuffer(read_q, dtype=np.float32).reshape((1, self.n_dofs.value))
-                            received_v = np.frombuffer(read_v, dtype=np.float32).reshape((1, self.n_dofs.value))
-                            received_eff = np.frombuffer(read_eff, dtype=np.float32).reshape((1, self.n_dofs.value))
-
-                            print("received q" + str(index) + str(received_q))
-                            print("received v" + str(index) + str(received_v))
-                            print("received eff" + str(index) + str(received_eff))
+                            # print("received q" + str(index) + str(self._cmd_q_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
+                            # print("received v" + str(index) + str(self._cmd_v_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
+                            # print("received eff" + str(index) + str(self._cmd_eff_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
 
                             break
 
@@ -390,8 +385,20 @@ class ControlClusterClient(ABC):
 
     def _post_initialization(self):
 
-        self._open_pipes()
-        print("[ControlClusterClient][status]: pipe opening completed")
+        # self._open_pipes()
+        # print("[ControlClusterClient][status]: pipe opening completed")
+
+        self._create_state_buffers() # used  to store the data received by the pipes
+
+        self._solread_processes = []
+        for i in range(0, self.cluster_size):
+
+            self._solread_processes.append(mp.Process(target=self._read_solution, 
+                                                    name = "ControlClusterClient_solread" + str(i), 
+                                                    args=(i, )), 
+                                )
+            print("[ControlClusterClient][status]: spawned _read_solution processes n." + str(i))
+            self._solread_processes[i].start()
 
         self._robot_states = RobotClusterState(self.n_dofs.value, 
                                             cluster_size=self.cluster_size, 
@@ -399,7 +406,8 @@ class ControlClusterClient(ABC):
                                             device=self._device)
         print("[ControlClusterClient][status]: initialized cluster state")
 
-        self._create_state_buffers() # used  to store the data received by the pipes
+        self._post_init_finished = True
+
 
     def update(self, 
             cluster_state: RobotClusterState = None):
@@ -445,7 +453,7 @@ class ControlClusterClient(ABC):
 
         # solve all the TO problems in the control cluster
 
-        if (self._is_cluster_ready.value and self._pipes_initialized):
+        if (self._is_cluster_ready.value and self._post_init_finished):
             
             self._send_trigger() # send signal to all controllers
 
@@ -459,9 +467,11 @@ class ControlClusterClient(ABC):
             
             self.solution_counter += 1
 
-        if (self._is_cluster_ready.value and (not self._pipes_initialized)):
+        if (self._is_cluster_ready.value and (not self._post_init_finished)):
             
             self._post_initialization() # perform post-initialization steps
+
+            print("[ControlClusterClient][status]: post initialization steps performed")
 
         if not self._is_cluster_ready.value:
 
