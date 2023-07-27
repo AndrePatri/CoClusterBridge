@@ -3,6 +3,9 @@ import torch
 from abc import ABC, abstractmethod
 
 from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, RobotClusterCmd, ActionChild
+from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
+OMode = NamedPipesHandler.OMode
+DSize = NamedPipesHandler.DSize
 
 import os
 import struct
@@ -21,9 +24,10 @@ class ControlClusterClient(ABC):
             cluster_size: int, 
             control_dt: float,
             cluster_dt: float,
+            pipes_config_path: str,
             backend: str = "torch", 
             device: str = "cpu"):
-
+        
         self.status = "status"
         self.info = "info"
         self.warning = "warning"
@@ -35,51 +39,27 @@ class ControlClusterClient(ABC):
         self.n_dofs = mp.Value('i', -1)
         self.jnt_data_size = mp.Value('i', -1)
         self.cluster_size = cluster_size
-
+        
         self._backend = backend
 
         self._device = device
 
         self._robot_states: RobotClusterState = None
 
-        self.pipe_basepath = "/tmp/control_cluster_pipes/"
-        
-        self.cluster_size_pipe = None
-        self.cluster_size_pipe_fd_mp = mp.Value('i', -1)
-        self.jnt_number_pipe = None
-        self.jnt_number_pipe_fd_mp = mp.Value('i', -1)
+        self.pipes_manager = NamedPipesHandler(pipes_config_path)
+        self.pipes_manager.create_buildpipes()
+        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes
 
-        # we create several named pipes and store their names
-
-        self.trigger_pipenames = []
-        self.success_pipenames = []
-        self.cmd_jnt_q_pipenames = []
-        self.cmd_jnt_v_pipenames = []
-        self.cmd_jnt_eff_pipenames = []
-        self.rhc_info_pipenames = []
-        self.state_root_q_pipenames = []
-        self.state_root_v_pipenames = []
-        self.state_jnt_q_pipenames = []
-        self.state_jnt_v_pipenames = []
-        
-        self.state_root_q_pipe_fd = [-1] * self.cluster_size 
-        self.state_root_v_pipe_fd = [-1] * self.cluster_size 
-        self.state_jnt_q_pipe_fd = [-1] * self.cluster_size 
-        self.state_jnt_v_pipe_fd = [-1] * self.cluster_size 
-        
         self._is_cluster_ready = mp.Value('b', False)
         self._trigger_solve = mp.Array('b', self.cluster_size)
         self._trigger_read = mp.Array('b', self.cluster_size)
 
         self._post_init_finished = False
-        self._pipes_created = False
 
         self.solution_time = -1.0
         self.n_sim_step_per_cntrl = -1
         self.solution_counter = 0
         self._compute_n_control_actions()
-
-        self._create_pipes() 
 
         self._spawn_processes()
 
@@ -131,109 +111,6 @@ class ControlClusterClient(ABC):
 
         return (control_index+1) % self.n_sim_step_per_cntrl == 0
 
-    def _create_pipes(self):
-        
-        # base pipe dir
-        if not os.path.exists(self.pipe_basepath):
-            
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipes directory @ " + self.pipe_basepath)
-            os.mkdir(self.pipe_basepath)
-
-        # handshake pipes
-        self.cluster_size_pipe = self.pipe_basepath + f"cluster_size.pipe"
-        if not os.path.exists(self.cluster_size_pipe):
-            
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @ " + self.cluster_size_pipe)
-            os.mkfifo(self.cluster_size_pipe)
-
-        self.jnt_number_pipe = self.pipe_basepath + f"jnt_number.pipe"
-
-        if not os.path.exists(self.jnt_number_pipe):
-            
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + self.jnt_number_pipe)
-            os.mkfifo(self.jnt_number_pipe)
-
-        for i in range(self.cluster_size):
-            
-            # solver 
-            trigger_pipename = self.pipe_basepath + f"trigger{i}.pipe"
-            success_pipename = self.pipe_basepath + f"success{i}.pipe"
-            self.trigger_pipenames.append(trigger_pipename)
-            self.success_pipenames.append(success_pipename)
-
-            if not os.path.exists(trigger_pipename):
-                
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + trigger_pipename)
-                os.mkfifo(trigger_pipename)
-
-            if not os.path.exists(success_pipename):
-                
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + success_pipename)
-                os.mkfifo(success_pipename)
-        
-            # cmds from controllers
-            cmd_jnt_q_pipename = self.pipe_basepath + f"cmd_jnt_q{i}.pipe"
-            cmd_jnt_v_pipename = self.pipe_basepath + f"cmd_jnt_v{i}.pipe"
-            cmd_jnt_eff_pipename = self.pipe_basepath + f"cmd_jnt_eff{i}.pipe"
-            self.cmd_jnt_q_pipenames.append(cmd_jnt_q_pipename)
-            self.cmd_jnt_v_pipenames.append(cmd_jnt_v_pipename)
-            self.cmd_jnt_eff_pipenames.append(cmd_jnt_eff_pipename)
-
-            if not os.path.exists(cmd_jnt_q_pipename):
-        
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + cmd_jnt_q_pipename)
-                os.mkfifo(cmd_jnt_q_pipename)
-
-            if not os.path.exists(cmd_jnt_v_pipename):
-                
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + cmd_jnt_v_pipename)
-                os.mkfifo(cmd_jnt_v_pipename)
-
-            if not os.path.exists(cmd_jnt_eff_pipename):
-                
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + cmd_jnt_eff_pipename)
-                os.mkfifo(cmd_jnt_eff_pipename)
-            
-            # additional data from controllers
-            rhc_info_pipename = self.pipe_basepath + f"rhc_info{i}.pipe"
-            self.rhc_info_pipenames.append(rhc_info_pipename)
-            if not os.path.exists(rhc_info_pipename):
-        
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + rhc_info_pipename)
-                os.mkfifo(rhc_info_pipename)
-
-            # state to controllers 
-            state_root_q_pipename = self.pipe_basepath + f"state_root_q{i}.pipe"
-            state_root_v_pipename = self.pipe_basepath + f"state_root_v{i}.pipe"
-            state_jnt_q_pipename = self.pipe_basepath + f"state_jnt_q{i}.pipe"
-            state_jnt_v_pipename = self.pipe_basepath + f"state_jnt_v{i}.pipe"
-            self.state_root_q_pipenames.append(state_root_q_pipename)
-            self.state_root_v_pipenames.append(state_root_v_pipename)
-            self.state_jnt_q_pipenames.append(state_jnt_q_pipename)
-            self.state_jnt_v_pipenames.append(state_jnt_v_pipename)
-            
-            if not os.path.exists(state_root_q_pipename):
-        
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + state_root_q_pipename)
-                os.mkfifo(state_root_q_pipename)
-            
-            if not os.path.exists(state_root_v_pipename):
-        
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + state_root_v_pipename)
-                os.mkfifo(state_root_v_pipename)
-            
-            if not os.path.exists(state_jnt_q_pipename):
-        
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + state_jnt_q_pipename)
-                os.mkfifo(state_jnt_q_pipename)
-            
-            if not os.path.exists(state_jnt_v_pipename):
-        
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + state_jnt_v_pipename)
-                os.mkfifo(state_jnt_v_pipename)
-            
-        self._pipes_created = True
-
     def _open_pipes(self):
 
         for i in range(self.cluster_size):
@@ -262,27 +139,23 @@ class ControlClusterClient(ABC):
 
         self._rhc_info_buffer = mp.Array(ctypes.c_float, self.cluster_size * self._add_info_size) 
 
-        
-
     def _handshake(self):
         
         # THIS RUNS IN A CHILD PROCESS --> we perform the "handshake" with
         # the server: we exchange crucial info which has to be shared between 
         # them
+        
+        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": waiting for handshake with the ControlCluster server...")
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + "" + f"[{self._handshake.__name__}]" + ": opening cluster pipe")
-        self.cluster_size_pipe_fd_mp.value = os.open(self.cluster_size_pipe, os.O_WRONLY) # this will block until
-        # the server will open it in read mode
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + "" + f"[{self._handshake.__name__}]" + ": cluster pipe opened")
-
+        # retrieves some important configuration information from the server
+        self.pipes_manager.open_pipes(["cluster_size"], 
+                                    mode=OMode["O_WRONLY"])
         cluster_size_data = struct.pack('i', self.cluster_size)
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + "" + f"[{self._handshake.__name__}]" + ": writing to cluster pipe")
-        os.write(self.cluster_size_pipe_fd_mp.value, cluster_size_data) # the server is listening -> we send the info we need
+        os.write(self.pipes_manager.pipes_fd["cluster_size"], cluster_size_data) # the server is listening -> we send the info we need
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + "" + f"[{self._handshake.__name__}]" + ": opening jnt number pipe")
-        self.jnt_number_pipe_fd_mp.value = os.open(self.jnt_number_pipe, os.O_RDONLY)
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + "" + f"[{self._handshake.__name__}]" + ": reading from jnt number pipe")
-        jnt_number_raw = os.read(self.jnt_number_pipe_fd_mp.value, 4)
+        self.pipes_manager.open_pipes(selector=["jnt_number"], 
+                                mode=OMode["O_RDONLY"])
+        jnt_number_raw = os.read(self.pipes_manager.pipes_fd["jnt_number"], DSize["int"])
         self.n_dofs.value = struct.unpack('i', jnt_number_raw)[0]
 
         import numpy as np
@@ -293,14 +166,14 @@ class ControlClusterClient(ABC):
         self._is_cluster_ready.value = True # we signal the main process
         # the connection is established
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + "" + f"[{self._handshake.__name__}]" + ": connection with ControlCluster server achieved")
+        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": friendship with ControlCluster server established.")
 
     def _trigger_solution(self, 
                         index: int):
 
         # solver
-        trigger_pipes_fd = os.open(self.trigger_pipenames[index],
-                                    os.O_WRONLY) # blocking (non-blocking
+        self.pipes_manager.open_pipes(["trigger"], 
+                                    mode=OMode["O_WRONLY"]) # blocking (non-blocking
         # would throw error if nothing has opened the pipe in read mode)
         
         while True: # we keep the process alive
@@ -309,7 +182,7 @@ class ControlClusterClient(ABC):
 
                 # Send a signal to perform the solution
          
-                os.write(trigger_pipes_fd, b'solve\n')
+                os.write(self.pipes_manager.pipes_fd["trigger"][index], b'solve\n')
 
                 self._trigger_solve[index] = False # we will wait for next signal
                 # from the main process
@@ -321,18 +194,13 @@ class ControlClusterClient(ABC):
     def _read_solution(self, 
                     index: int):
 
-        
-        # success signal from controllers
-        success_pipes_fd = os.open(self.success_pipenames[index],  
-                                    os.O_RDONLY | os.O_NONBLOCK)
-
-        # cmds from controllers
-        cmd_jnt_q_pipe_fd = os.open(self.cmd_jnt_q_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
-        cmd_jnt_v_pipe_fd = os.open(self.cmd_jnt_v_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
-        cmd_jnt_eff_pipe_fd = os.open(self.cmd_jnt_eff_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
-
-        # additional solution data
-        rhc_info_pipes_fd = os.open(self.rhc_info_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+        # these are not blocking
+        self.pipes_manager.open_pipes(selector=["success", 
+                "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
+                "rhc_info"
+                ], 
+                mode = OMode["O_RDONLY_NONBLOCK"], 
+                index=index)
 
         while True: # we keep the process alive
 
@@ -342,24 +210,24 @@ class ControlClusterClient(ABC):
 
                     try:
 
-                        response = os.read(success_pipes_fd, 1024).decode().strip()
+                        response = os.read(self.pipes_manager.pipes_fd["success"][index], 1024).decode().strip()
 
                         if response == "success":
                                 
                             self._cmd_q_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
-                                np.frombuffer(os.read(cmd_jnt_q_pipe_fd, self.jnt_data_size.value), 
+                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_q"][index], self.jnt_data_size.value), 
                                                 dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
                         
                             self._cmd_v_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
-                                np.frombuffer(os.read(cmd_jnt_v_pipe_fd, self.jnt_data_size.value),
+                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_v"][index], self.jnt_data_size.value),
                                                 dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
                             
                             self._cmd_eff_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
-                                np.frombuffer(os.read(cmd_jnt_eff_pipe_fd, self.jnt_data_size.value),
+                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size.value),
                                                 dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
                             
                             self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
-                                np.frombuffer(os.read(rhc_info_pipes_fd, self._add_info_datasize),
+                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
                                                 dtype=np.float32)
         
                             # print("received q" + str(index) + str(self._cmd_q_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
@@ -371,7 +239,7 @@ class ControlClusterClient(ABC):
                         else:
 
                             print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": received invald response " +  
-                                response + " from pipe " + self.success_pipenames[index])
+                                response + " from pipe " + self.pipes_manager.pipes["success"][index])
 
                     except BlockingIOError or SystemError:
 
@@ -423,7 +291,7 @@ class ControlClusterClient(ABC):
 
         # self._open_pipes()
         # print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": pipe opening completed")
-
+            
         self._create_state_buffers() # used  to store the data received by the pipes
 
         for i in range(0, self.cluster_size):
@@ -555,13 +423,15 @@ class ControlClusterClient(ABC):
         
     def __del__(self):
         
-        if self._connection_process.is_alive():
-                
-            self._connection_process.terminate()  # Forcefully terminate the process
+        if self._connection_process is not None:
             
-            print(f"[{self.__class__.__name__}]"  + f"[{self.info}]" + ": terminating child process " + str(self._connection_process.name))
-        
-            self._connection_process.join()
+            if self._connection_process.is_alive():
+                    
+                self._connection_process.terminate()  # Forcefully terminate the process
+                
+                print(f"[{self.__class__.__name__}]"  + f"[{self.info}]" + ": terminating child process " + str(self._connection_process.name))
+            
+                self._connection_process.join()
 
         for process in self._trigger_processes:
 

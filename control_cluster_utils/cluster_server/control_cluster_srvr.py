@@ -2,22 +2,29 @@ from abc import ABC, abstractmethod
 
 from control_cluster_utils.controllers.rhc import RHChild
 from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, ActionChild
+from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
+OMode = NamedPipesHandler.OMode
+DSize = NamedPipesHandler.DSize
 
-import multiprocess as mp
 import os
 import struct
 
 from typing import List
 
+import multiprocess as mp
+
 class ControlClusterSrvr(ABC):
 
     def __init__(self, 
-                processes_basename: str = "controller", 
-                pipe_basepath: str = "/tmp/control_cluster_pipes/"):
+                pipes_config_path: str,
+                processes_basename: str = "controller"):
 
         # ciao :D
         #        CR 
         
+        self.pipes_manager = NamedPipesHandler(pipes_config_path) # object to better handle 
+        self.pipes_manager.create_buildpipes()
+
         self.status = "status"
         self.info = "info"
         self.warning = "warning"
@@ -36,23 +43,7 @@ class ControlClusterSrvr(ABC):
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
 
-        self.pipe_basepath = pipe_basepath
-
-        if not os.path.exists(self.pipe_basepath):
-            
-            print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": creating pipe folder @ " + self.pipe_basepath)
-            os.mkdir(self.pipe_basepath)
-    
-        # we create several named pipes and store their names
-
-        self.start_controllers_pipe = None
-        self.start_controllers_pipe_fd = None
-        self.cluster_size_pipe = None
-        self.cluster_size_pipe_fd = None
-        self.jnt_number_pipe = None
-        self.jnt_number_pipe_fd = None
-
-        self._setup_pipes()
+        self._handshake() 
 
         self._processes: List[mp.Process] = [] 
 
@@ -80,147 +71,26 @@ class ControlClusterSrvr(ABC):
 
     def _clean_pipes(self):
 
-        # if os.path.exists(self.cluster_size_pipe):
-            
-        #     os.close(self.cluster_size_pipe_fd)
-        #     print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": closing pipe @" + self.cluster_size_pipe)
-
-        # if os.path.exists(self.jnt_number_pipe):
-            
-        #     os.close(self.jnt_number_pipe_fd)
-        #     print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": closing pipe @" + self.jnt_number_pipe)
-            
+        self.pipes_manager.close_pipes(selector=["cluster_size", "jnt_number"])
+        
         for i in range(0, self.cluster_size): 
 
-            self._controllers[i].terminate() # closes internal pipes
+            self._controllers[i].terminate() # send signal to close controller's internal pipes
 
-    def _setup_pipes(self):
+    def _handshake(self):
         
-        # start controllers
-        self.start_controllers_pipenames = []
-
-        # solution info
-        self.trigger_pipenames = []
-        self.success_pipenames = []
-        
-        # command info from controllers
-        self.cmd_jnt_q_pipenames = []
-        self.cmd_jnt_v_pipenames = []
-        self.cmd_jnt_eff_pipenames = []
-
-        # additional info from controllers
-
-        self.rhc_info_pipenames = []
-
-        # robot state to controllers
-        self.state_root_q_pipenames = []
-        self.state_root_v_pipenames = []
-        self.state_jnt_q_pipenames = []
-        self.state_jnt_v_pipenames = []
-
-        self._connect_to_client() # blocks until a connection with the
-        # client is established
-
-    def _connect_to_client(self):
-        
-        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": waiting for connection with the ControlCluster client...")
+        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": waiting for handshake with the ControlCluster client...")
 
         # retrieves some important configuration information from the server
-
-        self.cluster_size_pipe = self.pipe_basepath + f"cluster_size.pipe"
-
-        if not os.path.exists(self.cluster_size_pipe):
-            
-            print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + self.cluster_size_pipe)
-            os.mkfifo(self.cluster_size_pipe)
-        
-        # open the pipe in read mode with non-blocking option
-        self.cluster_size_pipe_fd = os.open(self.cluster_size_pipe, os.O_RDONLY)
-        cluster_size_raw = os.read(self.cluster_size_pipe_fd, 4) # we read an integer (32 bits = 4 bytes)
+        self.pipes_manager.open_pipes(["cluster_size"], 
+                                    mode=OMode["O_RDONLY"])
+        cluster_size_raw = os.read(self.pipes_manager.pipes_fd["cluster_size"], DSize["int"])
         # this will block until we get the info from the client
         self.cluster_size = struct.unpack('i', cluster_size_raw)[0]
         
-        # we create other pipes
-        for i in range(self.cluster_size):
-            
-            # solver 
-            trigger_pipename = self.pipe_basepath + f"trigger{i}.pipe"
-            success_pipename = self.pipe_basepath + f"success{i}.pipe"
-            self.trigger_pipenames.append(trigger_pipename)
-            self.success_pipenames.append(success_pipename)
+        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes
 
-            if not os.path.exists(trigger_pipename):
-                
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + trigger_pipename)
-                os.mkfifo(trigger_pipename)
-            
-            if not os.path.exists(success_pipename):
-                
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + success_pipename)
-                os.mkfifo(success_pipename)
-
-            # commands from controllers
-            cmd_jnt_q_pipename = self.pipe_basepath + f"cmd_jnt_q{i}.pipe"
-            cmd_jnt_v_pipename = self.pipe_basepath + f"cmd_jnt_v{i}.pipe"
-            cmd_jnt_eff_pipename = self.pipe_basepath + f"cmd_jnt_eff{i}.pipe"
-            self.cmd_jnt_q_pipenames.append(cmd_jnt_q_pipename)
-            self.cmd_jnt_v_pipenames.append(cmd_jnt_v_pipename)
-            self.cmd_jnt_eff_pipenames.append(cmd_jnt_eff_pipename)
-
-            if not os.path.exists(cmd_jnt_q_pipename):
-        
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + cmd_jnt_q_pipename)
-                os.mkfifo(cmd_jnt_q_pipename)
-
-            if not os.path.exists(cmd_jnt_v_pipename):
-                
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + cmd_jnt_v_pipename)
-                os.mkfifo(cmd_jnt_v_pipename)
-
-            if not os.path.exists(cmd_jnt_eff_pipename):
-                
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + cmd_jnt_eff_pipename)
-                os.mkfifo(cmd_jnt_eff_pipename)
-
-            # additional info
-            rhc_info_pipename = self.pipe_basepath + f"rhc_info{i}.pipe"
-            self.rhc_info_pipenames.append(rhc_info_pipename)
-            if not os.path.exists(rhc_info_pipename):
-        
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + rhc_info_pipename)
-                os.mkfifo(rhc_info_pipename)
-
-            # state to controllers
-            state_root_q_pipename = self.pipe_basepath + f"state_root_q{i}.pipe"
-            state_root_v_pipename = self.pipe_basepath + f"state_root_v{i}.pipe"
-            state_jnt_q_pipename = self.pipe_basepath + f"state_jnt_q{i}.pipe"
-            state_jnt_v_pipename = self.pipe_basepath + f"state_jnt_v{i}.pipe"
-            self.state_root_q_pipenames.append(state_root_q_pipename)
-            self.state_root_v_pipenames.append(state_root_v_pipename)
-            self.state_jnt_q_pipenames.append(state_jnt_q_pipename)
-            self.state_jnt_v_pipenames.append(state_jnt_v_pipename)
-            
-            if not os.path.exists(state_root_q_pipename):
-        
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + state_root_q_pipename)
-                os.mkfifo(state_root_q_pipename)
-
-            if not os.path.exists(state_root_v_pipename):
-        
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + state_root_v_pipename)
-                os.mkfifo(state_root_v_pipename)
-
-            if not os.path.exists(state_jnt_q_pipename):
-        
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + state_jnt_q_pipename)
-                os.mkfifo(state_jnt_q_pipename)
-            
-            if not os.path.exists(state_jnt_v_pipename):
-        
-                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + state_jnt_v_pipename)
-                os.mkfifo(state_jnt_v_pipename)
-
-        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": connection to ControlCluster client established.")
+        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": friendship with ControlCluster client established.")
 
     def _check_state_size(self, 
                         cluster_state: RobotClusterState):
@@ -288,14 +158,11 @@ class ControlClusterSrvr(ABC):
                                 device = self._device)
         
         jnt_number_data = struct.pack('i', self.n_dofs)
+        
+        self.pipes_manager.open_pipes(selector=["jnt_number"], 
+                                mode=OMode["O_WRONLY"])
 
-        self.jnt_number_pipe = self.pipe_basepath + f"jnt_number.pipe"
-        if not os.path.exists(self.jnt_number_pipe):
-            print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + self.jnt_number_pipe)
-            os.mkfifo(self.jnt_number_pipe)
-        self.jnt_number_pipe_fd = os.open(self.jnt_number_pipe, os.O_WRONLY) # this will block until the 
-        # client opens the pipe in read mode
-        os.write(self.jnt_number_pipe_fd, jnt_number_data) # we send this info
+        os.write(self.pipes_manager.pipes_fd["jnt_number"], jnt_number_data) # we send this info
         # to the client, which is now guaranteed to be listening on the pipe
 
     def add_controller(self, controller: RHChild):
