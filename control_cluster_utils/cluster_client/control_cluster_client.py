@@ -56,6 +56,7 @@ class ControlClusterClient(ABC):
         self.cmd_jnt_q_pipenames = []
         self.cmd_jnt_v_pipenames = []
         self.cmd_jnt_eff_pipenames = []
+        self.rhc_info_pipenames = []
         self.state_root_q_pipenames = []
         self.state_root_v_pipenames = []
         self.state_jnt_q_pipenames = []
@@ -131,12 +132,14 @@ class ControlClusterClient(ABC):
         return (control_index+1) % self.n_sim_step_per_cntrl == 0
 
     def _create_pipes(self):
-
+        
+        # base pipe dir
         if not os.path.exists(self.pipe_basepath):
             
             print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipes directory @ " + self.pipe_basepath)
             os.mkdir(self.pipe_basepath)
 
+        # handshake pipes
         self.cluster_size_pipe = self.pipe_basepath + f"cluster_size.pipe"
         if not os.path.exists(self.cluster_size_pipe):
             
@@ -191,6 +194,14 @@ class ControlClusterClient(ABC):
                 print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + cmd_jnt_eff_pipename)
                 os.mkfifo(cmd_jnt_eff_pipename)
             
+            # additional data from controllers
+            rhc_info_pipename = self.pipe_basepath + f"rhc_info{i}.pipe"
+            self.rhc_info_pipenames.append(rhc_info_pipename)
+            if not os.path.exists(rhc_info_pipename):
+        
+                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": creating pipe @" + rhc_info_pipename)
+                os.mkfifo(rhc_info_pipename)
+
             # state to controllers 
             state_root_q_pipename = self.pipe_basepath + f"state_root_q{i}.pipe"
             state_root_v_pipename = self.pipe_basepath + f"state_root_v{i}.pipe"
@@ -239,9 +250,19 @@ class ControlClusterClient(ABC):
             
     def _create_state_buffers(self):
         
+        data_aux = np.zeros((1, 1), dtype=np.float32)
+        self.float32_size = data_aux.itemsize
+        
         self._cmd_q_buffer = mp.Array(ctypes.c_float, self.cluster_size * self.n_dofs.value)
         self._cmd_v_buffer = mp.Array(ctypes.c_float, self.cluster_size * self.n_dofs.value)
         self._cmd_eff_buffer = mp.Array(ctypes.c_float, self.cluster_size * self.n_dofs.value) 
+
+        self._add_info_size = 2
+        self._add_info_datasize = 2 * self.float32_size
+
+        self._rhc_info_buffer = mp.Array(ctypes.c_float, self.cluster_size * self._add_info_size) 
+
+        
 
     def _handshake(self):
         
@@ -265,9 +286,9 @@ class ControlClusterClient(ABC):
         self.n_dofs.value = struct.unpack('i', jnt_number_raw)[0]
 
         import numpy as np
-        data = np.zeros((self.n_dofs.value, 1))
-        element_size = data.itemsize
-        self.jnt_data_size.value = data.shape[0] * data.shape[1] * element_size
+        data = np.zeros((self.n_dofs.value, 1), dtype=np.float32)
+        self.float32_size = data.itemsize
+        self.jnt_data_size.value = data.shape[0] * data.shape[1] * self.float32_size
 
         self._is_cluster_ready.value = True # we signal the main process
         # the connection is established
@@ -300,14 +321,18 @@ class ControlClusterClient(ABC):
     def _read_solution(self, 
                     index: int):
 
+        
         # success signal from controllers
         success_pipes_fd = os.open(self.success_pipenames[index],  
                                     os.O_RDONLY | os.O_NONBLOCK)
 
         # cmds from controllers
-        cmd_jnt_q_pipes_fd = os.open(self.cmd_jnt_q_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
-        cmd_jnt_v_pipes_fd = os.open(self.cmd_jnt_v_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
-        cmd_jnt_eff_pipes_fd = os.open(self.cmd_jnt_eff_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+        cmd_jnt_q_pipe_fd = os.open(self.cmd_jnt_q_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+        cmd_jnt_v_pipe_fd = os.open(self.cmd_jnt_v_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+        cmd_jnt_eff_pipe_fd = os.open(self.cmd_jnt_eff_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
+
+        # additional solution data
+        rhc_info_pipes_fd = os.open(self.rhc_info_pipenames[index], os.O_RDONLY | os.O_NONBLOCK)
 
         while True: # we keep the process alive
 
@@ -322,21 +347,25 @@ class ControlClusterClient(ABC):
                         if response == "success":
                                 
                             self._cmd_q_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
-                                np.frombuffer(os.read(cmd_jnt_q_pipes_fd, self.jnt_data_size.value), 
+                                np.frombuffer(os.read(cmd_jnt_q_pipe_fd, self.jnt_data_size.value), 
                                                 dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
                         
                             self._cmd_v_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
-                                np.frombuffer(os.read(cmd_jnt_v_pipes_fd, self.jnt_data_size.value),
+                                np.frombuffer(os.read(cmd_jnt_v_pipe_fd, self.jnt_data_size.value),
                                                 dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
                             
                             self._cmd_eff_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)] = \
-                                np.frombuffer(os.read(cmd_jnt_eff_pipes_fd, self.jnt_data_size.value),
+                                np.frombuffer(os.read(cmd_jnt_eff_pipe_fd, self.jnt_data_size.value),
                                                 dtype=np.float32).reshape((1, self.n_dofs.value)).flatten()
-
+                            
+                            self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
+                                np.frombuffer(os.read(rhc_info_pipes_fd, self._add_info_datasize),
+                                                dtype=np.float32)
+        
                             # print("received q" + str(index) + str(self._cmd_q_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
                             # print("received v" + str(index) + str(self._cmd_v_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
                             # print("received eff" + str(index) + str(self._cmd_eff_buffer[(index * self.n_dofs.value):(index * self.n_dofs.value + self.n_dofs.value)]))
-
+                            
                             break
 
                         else:
@@ -473,6 +502,10 @@ class ControlClusterClient(ABC):
         self._controllers_cmds.jnt_cmd.eff = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
                     dtype=self._controllers_cmds.dtype).reshape(self._controllers_cmds.cluster_size, 
                                                                 self._controllers_cmds.n_dofs)
+        
+        self._controllers_cmds.rhc_info.info = torch.frombuffer(self._rhc_info_buffer.get_obj(),
+                    dtype=self._controllers_cmds.dtype).reshape(self._controllers_cmds.cluster_size, 
+                                                                self._add_info_size)
 
     def solve(self):
 

@@ -21,7 +21,7 @@ class RobotClusterState:
         def __init__(self, 
                     cluster_size: int = 1, 
                     device: str = "cpu", 
-                    dtype = torch.float):
+                    dtype = torch.float32):
             
             self.dtype = dtype
 
@@ -38,7 +38,7 @@ class RobotClusterState:
                     n_dofs: int, 
                     cluster_size: int = 1, 
                     device: str = "cpu", 
-                    dtype = torch.float):
+                    dtype = torch.float32):
 
             self.dtype = dtype
 
@@ -53,9 +53,10 @@ class RobotClusterState:
                 n_dofs: int, 
                 cluster_size: int = 1, 
                 backend: str = "torch", 
-                device: str = "cpu"):
+                device: str = "cpu", 
+                dtype: torch.dtype = torch.float32):
         
-        self.dtype = torch.float
+        self.dtype = dtype
 
         self.backend = "torch" # forcing torch backend
 
@@ -85,7 +86,7 @@ class RobotClusterCmd:
                     n_dofs: int, 
                     cluster_size: int = 1, 
                     device: str = "cpu", 
-                    dtype = torch.float):
+                    dtype = torch.float32):
             
             self.dtype = dtype
 
@@ -96,13 +97,33 @@ class RobotClusterCmd:
         #     self.a = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
             self.eff = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
 
+    class RhcInfo:
+
+        def __init__(self, 
+                    cluster_size: int = 1, 
+                    add_data_size: int = 1,
+                    device: str = "cpu", 
+                    dtype = torch.float32):
+            
+            self.dtype = dtype
+
+            self._device = device
+            
+            self._add_data_size = add_data_size
+
+            self.info =  torch.zeros((cluster_size, self._add_data_size), device = self._device, dtype=self.dtype)
+
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
                 backend: str = "torch", 
-                device: str = "cpu"):
+                device: str = "cpu", 
+                dtype: torch.dtype = torch.float32):
 
-        self.dtype = torch.float
+        self.n_dofs = n_dofs
+        self.cluster_size = cluster_size
+    
+        self.dtype = dtype
 
         self.backend = "torch" # forcing torch backend
 
@@ -112,13 +133,16 @@ class RobotClusterCmd:
 
             self.device = "cpu"
 
-        self.jnt_cmd = self.JntCmd(n_dofs = n_dofs, 
-                                cluster_size = cluster_size, 
+        self.jnt_cmd = self.JntCmd(n_dofs = self.n_dofs, 
+                                cluster_size = self.cluster_size, 
                                 device = self.device, 
                                 dtype = self.dtype)
         
-        self.n_dofs = n_dofs
-        self.cluster_size = cluster_size
+        self.rhc_info = self.RhcInfo(cluster_size=self.cluster_size, 
+                                device=self.device, 
+                                dtype=self.dtype)
+
+
 
 class Action(ABC):
         

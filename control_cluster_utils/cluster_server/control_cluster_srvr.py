@@ -108,6 +108,10 @@ class ControlClusterSrvr(ABC):
         self.cmd_jnt_v_pipenames = []
         self.cmd_jnt_eff_pipenames = []
 
+        # additional info from controllers
+
+        self.rhc_info_pipenames = []
+
         # robot state to controllers
         self.state_root_q_pipenames = []
         self.state_root_v_pipenames = []
@@ -177,6 +181,14 @@ class ControlClusterSrvr(ABC):
                 
                 print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + cmd_jnt_eff_pipename)
                 os.mkfifo(cmd_jnt_eff_pipename)
+
+            # additional info
+            rhc_info_pipename = self.pipe_basepath + f"rhc_info{i}.pipe"
+            self.rhc_info_pipenames.append(rhc_info_pipename)
+            if not os.path.exists(rhc_info_pipename):
+        
+                print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating pipe @" + rhc_info_pipename)
+                os.mkfifo(rhc_info_pipename)
 
             # state to controllers
             state_root_q_pipename = self.pipe_basepath + f"state_root_q{i}.pipe"

@@ -30,12 +30,24 @@ class RobotState:
             self.a = np.zeros((n_dofs, 1), dtype=np.float32) # joint accelerations
             self.effort = np.zeros((n_dofs, 1), dtype=np.float32) # joint efforts
 
+    class SolverState:
+
+        def __init__(self, 
+                add_info_size = 1):
+
+            self.info = np.zeros((add_info_size, 1), dtype=np.float32)
+
     def __init__(self, 
-                n_dofs: int):
+                n_dofs: int, 
+                add_info_size: int = None):
 
         self.root_state = RobotState.RootState()
 
         self.jnt_state = RobotState.JntState(n_dofs)
+
+        if add_info_size is not None:
+
+            self.slvr_state = RobotState.SolverState(n_dofs)
 
         self.n_dofs = n_dofs
 
@@ -62,6 +74,7 @@ class RHController(ABC):
             cmd_jnt_q_pipename: str, # commands to robot
             cmd_jnt_v_pipename: str,
             cmd_jnt_eff_pipename: str,
+            rhc_info_pipename: str,
             state_root_q_pipename: str, # state from robot
             state_root_v_pipename: str, # state from robot
             state_jnt_q_pipename: str, # state from robot
@@ -102,7 +115,9 @@ class RHController(ABC):
         # commands to robot
         self.cmd_jnt_q_pipename = cmd_jnt_q_pipename
         self.cmd_jnt_v_pipename = cmd_jnt_v_pipename
-        self.cmd_jnt_eff_pipename = cmd_jnt_eff_pipename        
+        self.cmd_jnt_eff_pipename = cmd_jnt_eff_pipename 
+        # additional solver info 
+        self.rhc_info_pipename = rhc_info_pipename        
         # state from robot
         self.state_root_q_pipename = state_root_q_pipename
         self.state_root_v_pipename = state_root_v_pipename
@@ -146,6 +161,11 @@ class RHController(ABC):
         self.jnt_eff_pipe_fd = os.open(self.cmd_jnt_eff_pipename, os.O_WRONLY) # this will block until
         # something opens the pipe in read mode
 
+        # additional solver info
+        print("[" + self.name + "]"  + f"[{self.status}]" + ": trying to open pipe @ " + self.rhc_info_pipename)
+        self.add_info_pipe_fd = os.open(self.rhc_info_pipename, os.O_WRONLY) # this will block until
+        # something opens the pipe in read mode
+
         # state from robot
         print("[" + self.name + "]"  + f"[{self.status}]" + ": trying to open pipe @ " + self.state_root_q_pipename)
         self.state_root_q_pipe_fd = os.open(self.state_root_q_pipename, os.O_RDONLY | os.O_NONBLOCK) 
@@ -183,6 +203,12 @@ class RHController(ABC):
             
             os.close(self.jnt_eff_pipe_fd)
             print("[" + self.name + "]"  + f"[{self.status}]" + ": closed pipe @" + self.cmd_jnt_eff_pipename)
+
+        # add info 
+        if os.path.exists(self.rhc_info_pipename):
+            
+            os.close(self.add_info_pipe_fd)
+            print("[" + self.name + "]"  + f"[{self.status}]" + ": closed pipe @" + self.rhc_info_pipename)
 
         # state from robot
         if os.path.exists(self.state_root_q_pipename):
