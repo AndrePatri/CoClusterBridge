@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from control_cluster_utils.controllers.rhc import RHChild
 from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, ActionChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
+from control_cluster_utils.utilities.sysutils import PathsGetter
+
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
 
@@ -13,16 +15,20 @@ from typing import List
 
 import multiprocess as mp
 
+import sys
+
 class ControlClusterSrvr(ABC):
 
     def __init__(self, 
-                pipes_config_path: str,
                 processes_basename: str = "controller"):
 
         # ciao :D
         #        CR 
         
-        self.pipes_manager = NamedPipesHandler(pipes_config_path) # object to better handle 
+        paths = PathsGetter()
+        self.pipes_config_path = paths.PIPES_CONFIGPATH
+
+        self.pipes_manager = NamedPipesHandler(self.pipes_config_path) # object to better handle 
         self.pipes_manager.create_buildpipes()
 
         self.status = "status"

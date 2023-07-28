@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 
 from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, RobotClusterCmd, ActionChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
+from control_cluster_utils.utilities.sysutils import PathsGetter
+
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
 
@@ -24,35 +26,36 @@ class ControlClusterClient(ABC):
             cluster_size: int, 
             control_dt: float,
             cluster_dt: float,
-            pipes_config_path: str,
             backend: str = "torch", 
             device: str = "cpu"):
         
+        self.n_dofs = mp.Value('i', -1)
+        self.jnt_data_size = mp.Value('i', -1)
+        self.cluster_size = cluster_size
+        
+        self.cluster_dt = cluster_dt # dt at which the controllers in the cluster will run 
+        self.control_dt = control_dt # dt at which the low level controller or the simulator runs
+
+        self._backend = backend
+        self._device = device
+
+        self._robot_states: RobotClusterState = None
+
+        self._is_cluster_ready = mp.Value('b', False)
+        self._trigger_solve = mp.Array('b', self.cluster_size)
+        self._trigger_read = mp.Array('b', self.cluster_size)
+
         self.status = "status"
         self.info = "info"
         self.warning = "warning"
         self.exception = "exception"
 
-        self.cluster_dt = cluster_dt # dt at which the controllers in the cluster will run 
-        self.control_dt = control_dt # dt at which the low level controller or the simulator runs
+        paths = PathsGetter()
+        self.pipes_config_path = paths.PIPES_CONFIGPATH
 
-        self.n_dofs = mp.Value('i', -1)
-        self.jnt_data_size = mp.Value('i', -1)
-        self.cluster_size = cluster_size
-        
-        self._backend = backend
-
-        self._device = device
-
-        self._robot_states: RobotClusterState = None
-
-        self.pipes_manager = NamedPipesHandler(pipes_config_path)
+        self.pipes_manager = NamedPipesHandler(self.pipes_config_path)
         self.pipes_manager.create_buildpipes()
         self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes
-
-        self._is_cluster_ready = mp.Value('b', False)
-        self._trigger_solve = mp.Array('b', self.cluster_size)
-        self._trigger_read = mp.Array('b', self.cluster_size)
 
         self._post_init_finished = False
 
