@@ -176,7 +176,8 @@ class ControlClusterClient(ABC):
 
         # solver
         self.pipes_manager.open_pipes(["trigger"], 
-                                    mode=OMode["O_WRONLY"]) # blocking (non-blocking
+                                    mode=OMode["O_WRONLY"], 
+                                    index=index) # blocking (non-blocking
         # would throw error if nothing has opened the pipe in read mode)
         
         while True: # we keep the process alive
@@ -184,7 +185,6 @@ class ControlClusterClient(ABC):
             if self._trigger_solve[index]: # this is set by the parent process
 
                 # Send a signal to perform the solution
-         
                 os.write(self.pipes_manager.pipes_fd["trigger"][index], b'solve\n')
 
                 self._trigger_solve[index] = False # we will wait for next signal
