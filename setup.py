@@ -14,7 +14,7 @@ root_dir = os.path.dirname(os.path.realpath(__file__))
 INSTALL_REQUIRES = [
     "numpy",
     "torch", 
-    "multiprocessing"
+    "multiprocess"
     ]
 
 # Installation operation
@@ -28,6 +28,9 @@ setup(
     python_requires=">=3.7",
     install_requires=INSTALL_REQUIRES,
     packages=find_packages("."),
+    package_data={
+        'control_cluster_utils': ['config/pipes/*.yaml'], # additional files to be included package distribution
+    },
     classifiers=["Natural Language :: English", "Programming Language :: Python :: 3.6, 3.7, 3.8"],
     zip_safe=False,
 )
