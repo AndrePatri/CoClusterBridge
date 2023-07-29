@@ -17,4 +17,4 @@ build:
 about:
   home: https://github.com/AndPatr/ControlClusterUtils
   license: MIT
-  summary: Control Cluster Utilities to spawn a number of controllers over multiple processing (useful when performing training in simulation with CPU-based controllers)
+  summary: Utilities to create a CPU-based controllers cluster to be interfaced with GPU-based simulators 
