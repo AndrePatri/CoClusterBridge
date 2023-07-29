@@ -17,7 +17,6 @@ class NamedPipesHandler:
 
     DSize = {
         'int': 4 # bytes, 
-
     }
 
     def __init__(self, 
