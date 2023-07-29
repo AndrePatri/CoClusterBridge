@@ -3,8 +3,6 @@ from abc import ABC, abstractmethod
 from control_cluster_utils.controllers.rhc import RHChild
 from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, ActionChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
-from control_cluster_utils.utilities.sysutils import PathsGetter
-
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
 
@@ -25,10 +23,7 @@ class ControlClusterSrvr(ABC):
         # ciao :D
         #        CR 
         
-        paths = PathsGetter()
-        self.pipes_config_path = paths.PIPES_CONFIGPATH
-
-        self.pipes_manager = NamedPipesHandler(self.pipes_config_path) # object to better handle 
+        self.pipes_manager = NamedPipesHandler() # object to better handle 
         self.pipes_manager.create_buildpipes()
 
         self.status = "status"
@@ -94,7 +89,7 @@ class ControlClusterSrvr(ABC):
         # this will block until we get the info from the client
         self.cluster_size = struct.unpack('i', cluster_size_raw)[0]
         
-        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes
+        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes, now that we now the cluster size
 
         print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": friendship with ControlCluster client established.")
 

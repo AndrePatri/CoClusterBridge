@@ -4,6 +4,7 @@ import yaml
 
 from typing import List
 from enum import Enum
+from control_cluster_utils.utilities.sysutils import PathsGetter
 
 class NamedPipesHandler:
 
@@ -20,7 +21,6 @@ class NamedPipesHandler:
     }
 
     def __init__(self, 
-            pipes_config_path: str, 
             name: str = "PipesManager"):
 
         self.name = name
@@ -30,9 +30,10 @@ class NamedPipesHandler:
         self.exception = "exception"
         self.warning = "warning"
 
-        self.pipes_config_path = pipes_config_path
+        paths = PathsGetter()
+        self.pipes_config_path = paths.PIPES_CONFIGPATH
 
-        with open(pipes_config_path) as file:
+        with open(self.pipes_config_path) as file:
             
             self.yamldata = yaml.load(file, Loader=yaml.FullLoader)
 

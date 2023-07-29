@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 
 from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, RobotClusterCmd, ActionChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
-from control_cluster_utils.utilities.sysutils import PathsGetter
-
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
 
@@ -49,11 +47,8 @@ class ControlClusterClient(ABC):
         self.info = "info"
         self.warning = "warning"
         self.exception = "exception"
-
-        paths = PathsGetter()
-        self.pipes_config_path = paths.PIPES_CONFIGPATH
-
-        self.pipes_manager = NamedPipesHandler(self.pipes_config_path)
+    
+        self.pipes_manager = NamedPipesHandler()
         self.pipes_manager.create_buildpipes()
         self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes
 
