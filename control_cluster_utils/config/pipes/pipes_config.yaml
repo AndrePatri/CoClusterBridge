@@ -5,4 +5,4 @@ runtime_basenames: [trigger, success,
             cmd_jnt_q, cmd_jnt_v, cmd_jnt_a, cmd_jnt_eff, 
             rhc_info,
             state_root_p, state_root_q, state_root_v, state_root_omega, state_jnt_q, state_jnt_v
-            ] # these are pipes which are to be replicated at runtime
+            ] # these are pipes which are to be replicated at runtime, depending on the cluster size

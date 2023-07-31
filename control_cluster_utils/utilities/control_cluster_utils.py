@@ -1,18 +1,8 @@
 import torch
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
-from control_cluster_utils.controllers.rhc import RHChild
-
-import multiprocess as mp
-import os
-import struct
-
-import time
-
-from typing import TypeVar, List
-
-import numpy as np
+from typing import TypeVar
 
 class RobotClusterState:
 
@@ -29,8 +19,8 @@ class RobotClusterState:
 
             self.p = torch.zeros((cluster_size, 3), device = self._device, dtype=self.dtype) # floating base positions
             self.q = torch.zeros((cluster_size, 4), device = self._device, dtype=self.dtype) # floating base orientation (quaternion)
-            self.v = torch.zeros((cluster_size , 3), device = self._device, dtype=self.dtype) # floating base angular vel
-            self.a = torch.zeros((cluster_size, 3), device = self._device, dtype=self.dtype) # floating base angular acc
+            self.v = torch.zeros((cluster_size , 3), device = self._device, dtype=self.dtype) # floating base linear vel
+            self.omega = torch.zeros((cluster_size , 3), device = self._device, dtype=self.dtype) # floating base linear vel
 
     class JntStates:
 

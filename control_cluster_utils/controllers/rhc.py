@@ -16,15 +16,18 @@ DSize = NamedPipesHandler.DSize
 
 import copy
 
+import torch 
+
 class RobotState:
 
     class RootState:
 
         def __init__(self):
-
+            
+            self.p = np.zeros((3, 1), dtype=np.float32) # floating base position
             self.q = np.zeros((4, 1), dtype=np.float32) # floating base orientation (quaternion)
-            self.v = np.zeros((3, 1), dtype=np.float32) # floating base angular vel
-            self.a = np.zeros((3, 1), dtype=np.float32) # floating base angular acc
+            self.v = np.zeros((3, 1), dtype=np.float32) # floating base linear vel
+            self.omega = np.zeros((3, 1), dtype=np.float32) # floating base angular vel
 
     class JntState:
 
@@ -56,6 +59,7 @@ class RobotState:
             self.slvr_state = RobotState.SolverState(n_dofs)
 
         self.n_dofs = n_dofs
+
 
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 
@@ -125,7 +129,7 @@ class RHController(ABC):
         
     def _init(self):
 
-        self._init_problem()
+        self._init_problem() # we call the child's initialization method
 
     def _open_pipes(self):
         
@@ -137,7 +141,8 @@ class RHController(ABC):
                 mode = OMode["O_RDONLY_NONBLOCK"], 
                 index=self.controller_index)
 
-        # these are blocking
+        
+        # these are blocking (we read even if the pipe is empty)
         self.pipes_manager.open_pipes(selector=["success", 
                 "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
                 "rhc_info"
@@ -158,26 +163,16 @@ class RHController(ABC):
                 ], 
                 index=self.controller_index)
     
-    @abstractmethod
-    def _get_ndofs(self):
+    def _init_states(self):
+        
+        # to be called after n_dofs is known
+        self.robot_state = RobotState(self.n_dofs) # used for storing state coming FROM robot
 
-        pass
+        self.robot_cmds = RobotState(self.n_dofs, 
+                                add_info_size=2) # used for storing internal state (i.e. from TO solution)
+        
+        self._init_sizes() # to make reading from pipes easier
 
-    @abstractmethod
-    def _init_problem(self):
-
-        # initialized horizon's TO problem
-
-        pass
-    
-    def set_commands(self, 
-                    action: RHCCmdChild):
-
-        # sets all run-time parameters of the RHC controller:
-        # command references, phases, etc...
-
-        self.rhc_cmd = action
-    
     def _update_open_loop(self):
 
         # updates measured robot state 
@@ -219,20 +214,76 @@ class RHController(ABC):
 
         return self.cntrl_cmd
     
-    @abstractmethod
-    def _solve(self):
+    def _init_sizes(self):
 
-        pass
-    
-    @abstractmethod
+        self.root_p_size = self.robot_state.root_state.p.shape[0] * \
+                        self.robot_state.root_state.p.shape[1] * \
+                        self.robot_state.root_state.p.itemsize
+        
+        self.root_q_size = self.robot_state.root_state.q.shape[0] * \
+                        self.robot_state.root_state.q.shape[1] * \
+                        self.robot_state.root_state.q.itemsize
+        
+        self.root_v_size = self.robot_state.root_state.v.shape[0] * \
+                        self.robot_state.root_state.v.shape[1] * \
+                        self.robot_state.root_state.v.itemsize
+        
+        self.root_omega_size = self.robot_state.root_state.omega.shape[0] * \
+                        self.robot_state.root_state.omega.shape[1] * \
+                        self.robot_state.root_state.omega.itemsize
+        
+        self.jnt_q_size = self.robot_state.jnt_state.q.shape[0] * \
+                        self.robot_state.jnt_state.q.shape[1] * \
+                        self.robot_state.jnt_state.q.itemsize
+        
+        self.jnt_v_size = self.robot_state.jnt_state.v.shape[0] * \
+                        self.robot_state.jnt_state.v.shape[1] * \
+                        self.robot_state.jnt_state.v.itemsize
+        
+    def _read_state(self):
+        
+        self.robot_state.root_state.p = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_p"][self.controller_index], 
+                                                            self.root_p_size), 
+                                        dtype=np.float32)
+        
+        self.robot_state.root_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_q"][self.controller_index], 
+                                                            self.root_q_size), 
+                                        dtype=np.float32)
+        
+        self.robot_state.root_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_v"][self.controller_index], 
+                                                            self.root_v_size), 
+                                        dtype=np.float32)
+        
+        self.robot_state.root_state.omega = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_omega"][self.controller_index],
+                                                            self.root_omega_size), 
+                                        dtype=np.float32)
+        
+        self.robot_state.jnt_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_q"][self.controller_index], 
+                                                            self.jnt_q_size), 
+                                        dtype=np.float32)
+        
+        self.robot_state.jnt_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_v"][self.controller_index], 
+                                                            self.jnt_v_size), 
+                                        dtype=np.float32)
+
     def _send_solution(self):
+        
+        # writes commands from robot state
+        os.write(self.pipes_manager.pipes_fd["cmd_jnt_q"][self.controller_index], self.robot_cmds.jnt_state.q.tobytes())
+        os.write(self.pipes_manager.pipes_fd["cmd_jnt_v"][self.controller_index], self.robot_cmds.jnt_state.v.tobytes())
+        os.write(self.pipes_manager.pipes_fd["cmd_jnt_eff"][self.controller_index], self.robot_cmds.jnt_state.effort.tobytes())
 
-        pass
+        # write additional info
+        os.write(self.pipes_manager.pipes_fd["rhc_info"][self.controller_index], self.robot_cmds.slvr_state.info.tobytes())
+    
+    def _fill_cmds_from_sol(self):
 
-    @abstractmethod
-    def _acquire_state(self):
+        # get data from the solution
+        self.robot_cmds.jnt_state.q = self._get_cmd_jnt_q_from_sol()
+        self.robot_cmds.jnt_state.v = self._get_cmd_jnt_v_from_sol()
+        self.robot_cmds.jnt_state.effort = self._get_cmd_jnt_eff_from_sol()
 
-        pass
+        self.robot_cmds.slvr_state.info = self._get_additional_slvr_info()
 
     def solve(self):
         
@@ -261,10 +312,15 @@ class RHController(ABC):
                                     
                     start = time.time()
 
+                    # read latest states from pipe 
+                    self._read_state()
+
                     self._solve()
 
                     duration = time.time() - start
                     
+                    self._fill_cmds_from_sol() # we get data from the solution
+
                     self._send_solution() # writes solution on pipe
 
                     os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
@@ -284,7 +340,44 @@ class RHController(ABC):
         # self._close_pipes()
 
         return True
-        
+     
+    @abstractmethod
+    def _get_cmd_jnt_q_from_sol(self) -> np.ndarray:
+
+        pass
+
+    abstractmethod
+    def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
+
+        pass
+    
+    abstractmethod
+    def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
+
+        pass
+    
+    abstractmethod
+    def _get_additional_slvr_info(self) -> np.ndarray:
+
+        pass
+    
+    @abstractmethod
+    def _solve(self):
+
+        pass
+            
+    @abstractmethod
+    def _get_ndofs(self):
+
+        pass
+
+    @abstractmethod
+    def _init_problem(self):
+
+        # initialized horizon's TO problem
+
+        pass
+   
 RHChild = TypeVar('RHChild', bound='RHController')
 CntrlCmdChild = TypeVar('CntrlCmdChild', bound='CntrlCmd')
 

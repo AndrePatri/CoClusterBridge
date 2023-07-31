@@ -93,19 +93,6 @@ class ControlClusterSrvr(ABC):
 
         print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": friendship with ControlCluster client established.")
 
-    def _check_state_size(self, 
-                        cluster_state: RobotClusterState):
-
-        if cluster_state.n_dofs != self.n_dofs:
-
-            return False
-        
-        if cluster_state.cluster_size != self.cluster_size:
-
-            return False
-        
-        return True
-
     @abstractmethod
     def _check_cmd_size(self, 
                     cluster_cmd: ActionChild):
