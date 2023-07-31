@@ -25,7 +25,7 @@ class ControlClusterClient(ABC):
             control_dt: float,
             cluster_dt: float,
             backend: str = "torch", 
-            device: str = "cpu"):
+            device: torch.device = torch.device("cpu")):
         
         self.n_dofs = mp.Value('i', -1)
         self.jnt_data_size = mp.Value('i', -1)
@@ -132,8 +132,7 @@ class ControlClusterClient(ABC):
 
         import numpy as np
         data = np.zeros((self.n_dofs.value, 1), dtype=np.float32)
-        self.float32_size = data.itemsize
-        self.jnt_data_size.value = data.shape[0] * data.shape[1] * self.float32_size
+        self.jnt_data_size.value = data.nbytes
 
         self._is_cluster_ready.value = True # we signal the main process
         # the connection is established
@@ -231,6 +230,7 @@ class ControlClusterClient(ABC):
                                                 index=index)
 
         root_p_size = self.robot_states.root_state.p.shape[1]
+
         root_q_size = self.robot_states.root_state.q.shape[1]
         root_v_size = self.robot_states.root_state.v.shape[1]
         root_omega_size = self.robot_states.root_state.omega.shape[1]
@@ -245,6 +245,7 @@ class ControlClusterClient(ABC):
                 os.write(self.pipes_manager.pipes_fd["state_root_p"][index], 
                         np.array(self._state_root_p_buffer, 
                                 dtype=np.float32)[(index * root_p_size):(index * root_p_size + root_p_size)].tobytes())
+
                 os.write(self.pipes_manager.pipes_fd["state_root_q"][index], 
                         np.array(self._state_root_q_buffer, 
                                 dtype=np.float32)[(index * root_q_size):(index * root_q_size + root_q_size)].tobytes())
@@ -324,10 +325,6 @@ class ControlClusterClient(ABC):
     
     def _fill_buffers_with_states(self):
         
-        for i in range(0, self.cluster_size):
-            
-            self.robot_states.jnt_state.v[i, :] = torch.full((1, self.n_dofs.value), i) + torch.rand(1, self.n_dofs.value)
-                
         # root state 
         self._state_root_p_buffer[:] = self.robot_states.root_state.p.cpu().flatten(start_dim=0).numpy() # we flatten along clusters
         
@@ -341,7 +338,7 @@ class ControlClusterClient(ABC):
         self._state_jnt_q_buffer[:] = self.robot_states.jnt_state.q.cpu().flatten(start_dim=0).numpy()
         
         self._state_jnt_v_buffer[:] = self.robot_states.jnt_state.v.cpu().flatten(start_dim=0).numpy()
-        
+
     def _post_initialization(self):
 
         # self._open_pipes()
