@@ -82,19 +82,16 @@ class RHController(ABC):
             pipes_manager: NamedPipesHandler,
             controller_index: int,
             termination_flag: mp.Value,
-            name = "RHController",
             verbose = False):
         
         self.controller_index = controller_index
 
-        self.pipes_manager = copy.deepcopy(pipes_manager) # we make a copy
+        self.pipes_manager = copy.deepcopy(pipes_manager) # we make a (deep) copy
 
         self.status = "status"
         self.info = "info"
         self.exception = "exception"
         self.warning = "warning"
-
-        self.name = name
 
         self._termination_flag = termination_flag
 
@@ -327,7 +324,7 @@ class RHController(ABC):
 
                     if self._verbose:
 
-                        print("[" + self.name + "]"  + f"[{self.status}]" + ":" + f"Solution time from {self.name} controller: " + str(duration))
+                        print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + f"[{self.status}]" + ":" + f"Solution time -> " + str(duration))
 
             except BlockingIOError:
 

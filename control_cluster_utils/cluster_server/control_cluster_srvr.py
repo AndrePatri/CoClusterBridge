@@ -13,7 +13,9 @@ from typing import List
 
 import multiprocess as mp
 
-import sys
+from typing import TypeVar
+
+ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterSrvr')
 
 class ControlClusterSrvr(ABC):
 
