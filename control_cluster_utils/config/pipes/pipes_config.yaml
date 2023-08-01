@@ -1,6 +1,6 @@
 path: /tmp/control_cluster_pipes
 extension: pipe # this is the extension appended to each pipe created
-build_basenames: [cluster_size, jnt_number] # these are unique pipes which are used e.g. for handshake operations
+build_basenames: [cluster_size, jnt_number_srvr, n_bytes_jnt_names_client, jnt_names_client] # these are unique pipes which are used e.g. for handshake operations
 runtime_basenames: [trigger, success, 
             cmd_jnt_q, cmd_jnt_v, cmd_jnt_a, cmd_jnt_eff, 
             rhc_info,

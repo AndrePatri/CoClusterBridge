@@ -18,12 +18,15 @@ import multiprocess as mp
 
 import ctypes
 
+from typing import List
+
 class ControlClusterClient(ABC):
 
     def __init__(self, 
             cluster_size: int, 
             control_dt: float,
             cluster_dt: float,
+            jnt_names: List[str],
             backend: str = "torch", 
             device: torch.device = torch.device("cpu")):
         
@@ -31,6 +34,8 @@ class ControlClusterClient(ABC):
         self.jnt_data_size = mp.Value('i', -1)
         self.cluster_size = cluster_size
         
+        self.jnt_names = jnt_names
+
         self.cluster_dt = cluster_dt # dt at which the controllers in the cluster will run 
         self.control_dt = control_dt # dt at which the low level controller or the simulator runs
 
@@ -92,20 +97,49 @@ class ControlClusterClient(ABC):
         
         print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": waiting for handshake with the ControlCluster server...")
 
-        # retrieves some important configuration information from the server
+        # retrieves/sends some important configuration information from the server
+
+        # cluster size TO cluster server
         self.pipes_manager.open_pipes(["cluster_size"], 
                                     mode=OMode["O_WRONLY"])
         cluster_size_data = struct.pack('i', self.cluster_size)
         os.write(self.pipes_manager.pipes_fd["cluster_size"], cluster_size_data) # the server is listening -> we send the info we need
 
-        self.pipes_manager.open_pipes(selector=["jnt_number"], 
+        # robot joint number FROM server
+        self.pipes_manager.open_pipes(selector=["jnt_number_srvr"], 
                                 mode=OMode["O_RDONLY"])
-        jnt_number_raw = os.read(self.pipes_manager.pipes_fd["jnt_number"], DSize["int"])
+        jnt_number_raw = os.read(self.pipes_manager.pipes_fd["jnt_number_srvr"], DSize["int"])
         self.n_dofs.value = struct.unpack('i', jnt_number_raw)[0]
 
+        if len(self.jnt_names) != self.n_dofs.value:
+
+            exception = f"[{self.__class__.__name__}]" + f"{self.exception}" + \
+                f": the received number of robot joints from cluster server { self.n_dofs.value} " + \
+                f"does not match the client-side value of {len(self.jnt_names)}"
+            
+            raise Exception(exception)
+        
         import numpy as np
         data = np.zeros((self.n_dofs.value, 1), dtype=np.float32)
         self.jnt_data_size.value = data.nbytes
+
+        # client-side robot joints name TO cluster server
+
+        # we first encode the list
+        jnt_names_client_string = "\n".join(self.jnt_names)  # convert list to a newline-separated string
+        jnt_names_client_raw = jnt_names_client_string.encode('utf-8')
+        n_bytes_jnt_names = len(jnt_names_client_raw)
+
+        self.pipes_manager.open_pipes(["n_bytes_jnt_names_client"], 
+                                    mode=OMode["O_WRONLY"])
+        n_bytes_jnt_names_raw = struct.pack('i', n_bytes_jnt_names)
+        os.write(self.pipes_manager.pipes_fd["n_bytes_jnt_names_client"], n_bytes_jnt_names_raw)
+
+        self.pipes_manager.open_pipes(["jnt_names_client"], 
+                                    mode=OMode["O_WRONLY"])
+        
+        os.write(self.pipes_manager.pipes_fd["jnt_names_client"], 
+                jnt_names_client_raw)
 
         self._is_cluster_ready.value = True # we signal the main process
         # the connection is established

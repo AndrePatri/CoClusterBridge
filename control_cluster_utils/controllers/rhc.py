@@ -16,7 +16,7 @@ DSize = NamedPipesHandler.DSize
 
 import copy
 
-import torch 
+from typing import List
 
 class RobotState:
 
@@ -120,10 +120,19 @@ class RHController(ABC):
 
         self.robot_state: RobotStateChild = None 
         
+        self._client_side_jnt_names = []
+        self._server_side_jnt_names = []
+        self._got_jnt_names_client = False
+        self._got_jnt_names_server = False
+
+        self._to_server = []
+        self._to_client = []
+        self._jnt_maps_created = False
+
         self._init()
 
         self._pipe_opened = False
-        
+
     def _init(self):
 
         self._init_problem() # we call the child's initialization method
@@ -257,18 +266,21 @@ class RHController(ABC):
         
         self.robot_state.jnt_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_q"][self.controller_index], 
                                                             self.jnt_q_size), 
-                                        dtype=np.float32)
+                                        dtype=np.float32)[self._to_server] # with joint remapping to controller's order
         
         self.robot_state.jnt_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_v"][self.controller_index], 
                                                             self.jnt_v_size), 
-                                        dtype=np.float32)
+                                        dtype=np.float32)[self._to_server] # with joint remapping to controller's order
 
     def _send_solution(self):
         
         # writes commands from robot state
-        os.write(self.pipes_manager.pipes_fd["cmd_jnt_q"][self.controller_index], self.robot_cmds.jnt_state.q.tobytes())
-        os.write(self.pipes_manager.pipes_fd["cmd_jnt_v"][self.controller_index], self.robot_cmds.jnt_state.v.tobytes())
-        os.write(self.pipes_manager.pipes_fd["cmd_jnt_eff"][self.controller_index], self.robot_cmds.jnt_state.effort.tobytes())
+        os.write(self.pipes_manager.pipes_fd["cmd_jnt_q"][self.controller_index], 
+                self.robot_cmds.jnt_state.q[self._to_client].tobytes()) # with joint remapping to client's order
+        os.write(self.pipes_manager.pipes_fd["cmd_jnt_v"][self.controller_index], 
+                self.robot_cmds.jnt_state.v[self._to_client].tobytes()) # with joint remapping to client's order
+        os.write(self.pipes_manager.pipes_fd["cmd_jnt_eff"][self.controller_index], 
+                self.robot_cmds.jnt_state.effort[self._to_client].tobytes()) # with joint remapping to client's order
 
         # write additional info
         os.write(self.pipes_manager.pipes_fd["rhc_info"][self.controller_index], self.robot_cmds.slvr_state.info.tobytes())
@@ -284,6 +296,10 @@ class RHController(ABC):
 
     def solve(self):
         
+        if not self._jnt_maps_created:
+
+            self._create_jnt_maps()
+
         if not self._pipe_opened:
             
             # we open here the pipes so that they are opened into 
@@ -337,7 +353,48 @@ class RHController(ABC):
         # self._close_pipes()
 
         return True
-     
+    
+    def assign_client_side_jnt_names(self, 
+                        jnt_names: List[str]):
+
+        self._client_side_jnt_names = jnt_names
+
+        self._got_jnt_names_client = True
+
+    def _assign_server_side_jnt_names(self, 
+                        jnt_names: List[str]):
+
+        self._server_side_jnt_names = jnt_names
+
+        self._got_jnt_names_server = True
+
+    def _create_jnt_maps(self):
+
+        if not self._got_jnt_names_client:
+
+            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                f"[{self.exception}]" + ":" + f"Cannot run the solve().  assign_client_side_jnt_names() was not called!"
+
+            raise Exception(exception)
+        
+        if not self._got_jnt_names_server:
+
+            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                f"[{self.exception}]" + ":" + f"Cannot run the solve().  _assign_server_side_jnt_names() was not called!"
+
+            raise Exception(exception)
+        
+        self._to_server = [self._client_side_jnt_names.index(element) for element in self._server_side_jnt_names]
+
+        self._to_client = [self._server_side_jnt_names.index(element) for element in self._client_side_jnt_names]
+
+        self._jnt_maps_created = True
+
+    @abstractmethod
+    def _get_robot_jnt_names(self) -> List[str]:
+
+        pass
+
     @abstractmethod
     def _get_cmd_jnt_q_from_sol(self) -> np.ndarray:
 
