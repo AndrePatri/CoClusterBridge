@@ -336,25 +336,27 @@ class ControlClusterClient(ABC):
 
     def _fill_cmds_from_buffer(self):
 
+        # HERE IS WHERE COPIES FROM CPU TO GPU ARE MADE (if the used device is GPU)
+
         self.controllers_cmds.jnt_cmd.q = torch.frombuffer(self._cmd_q_buffer.get_obj(), 
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs)
+                                                                self.controllers_cmds.n_dofs).to(self._device)
         
         self.controllers_cmds.jnt_cmd.v = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs)
+                                                                self.controllers_cmds.n_dofs).to(self._device)
 
-        self.controllers_cmds.jnt_cmd.eff = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
+        self.controllers_cmds.jnt_cmd.eff = torch.frombuffer(self._cmd_eff_buffer.get_obj(), 
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs)
+                                                                self.controllers_cmds.n_dofs).to(self._device)
         
         self.controllers_cmds.rhc_info.info = torch.frombuffer(self._rhc_info_buffer.get_obj(),
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self._add_info_size)
+                                                                self._add_info_size).to(self._device)
     
     def _fill_buffers_with_states(self):
         
-        # HERE IS WHERE COPIES FROM GPU TO CPU ARE MADE (if the used device is CPU)
+        # HERE IS WHERE COPIES OF THE STATE FROM GPU TO CPU ARE MADE (if the used device is CPU)
 
         # root state 
         self._state_root_p_buffer[:] = self.robot_states.root_state.p.cpu().flatten(start_dim=0).numpy() # we flatten along clusters
