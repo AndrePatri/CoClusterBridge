@@ -84,33 +84,6 @@ class ControlClusterClient(ABC):
             print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution processes n." + str(i))
             self._trigger_processes[i].start()
 
-    def _compute_n_control_actions(self):
-
-        if self.cluster_dt < self.control_dt:
-
-            print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": cluster_dt has to be >= control_dt")
-
-            self.n_sim_step_per_cntrl = 1
-        
-        else:
-            
-            self.n_sim_step_per_cntrl = round(self.cluster_dt / self.control_dt)
-            self.cluster_dt = self.control_dt * self.n_sim_step_per_cntrl
-
-        message = f"[{self.__class__.__name__}]"  + f"[{self.info}]" + ": the cluster controllers will run at a rate of " + \
-                str(1.0 / self.cluster_dt) + " Hz"\
-                ", while the low level control will run at " + str(1.0 / self.control_dt) + "Hz.\n" + \
-                "Number of sim steps per control steps: " + str(self.n_sim_step_per_cntrl)
-
-        print(message)
-    
-    def is_cluster_instant(self, 
-                        control_index: int):
-        
-        # control_index is, e.g., the current simulation loop number (0-based)
-
-        return (control_index+1) % self.n_sim_step_per_cntrl == 0
-
     def _handshake(self):
         
         # THIS RUNS IN A CHILD PROCESS --> we perform the "handshake" with
@@ -405,7 +378,34 @@ class ControlClusterClient(ABC):
         while not all(not value for value in self._trigger_send_state):
 
             continue
+
+    def _compute_n_control_actions(self):
+
+        if self.cluster_dt < self.control_dt:
+
+            print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": cluster_dt has to be >= control_dt")
+
+            self.n_sim_step_per_cntrl = 1
         
+        else:
+            
+            self.n_sim_step_per_cntrl = round(self.cluster_dt / self.control_dt)
+            self.cluster_dt = self.control_dt * self.n_sim_step_per_cntrl
+
+        message = f"[{self.__class__.__name__}]"  + f"[{self.info}]" + ": the cluster controllers will run at a rate of " + \
+                str(1.0 / self.cluster_dt) + " Hz"\
+                ", while the low level control will run at " + str(1.0 / self.control_dt) + "Hz.\n" + \
+                "Number of sim steps per control steps: " + str(self.n_sim_step_per_cntrl)
+
+        print(message)
+    
+    def is_cluster_instant(self, 
+                        control_index: int):
+        
+        # control_index is, e.g., the current simulation loop number (0-based)
+
+        return (control_index+1) % self.n_sim_step_per_cntrl == 0
+    
     def solve(self):
 
         # solve all the TO problems in the control cluster
@@ -426,7 +426,6 @@ class ControlClusterClient(ABC):
             
             start_time = time.time() # we profile the whole solution pipeline
             
-            # self.robot_states.root_state.p[:, 0] = torch.full((self.cluster_size, 1), 1.34, device=self._device)
             self._fill_buffers_with_states() # we fill the buffers with the states
             self._send_state_trigger() # we send the state to each controller
             self._wait_for_state_writing() # we wait until everything was sent (the controllers are 
