@@ -27,14 +27,18 @@ class ControlClusterClient(ABC):
             control_dt: float,
             cluster_dt: float,
             jnt_names: List[str],
-            backend: str = "torch", 
-            device: torch.device = torch.device("cpu")):
+            backend = "torch", 
+            device = torch.device("cpu"), 
+            np_array_dtype = np.float32):
         
+
+        self.np_array_dtype = np_array_dtype
+
         self.jnt_names = jnt_names
 
         self.n_dofs = len(self.jnt_names)
         self.jnt_data_size = np.zeros((self.n_dofs, 1),
-                                    dtype=np.float32).nbytes
+                                    dtype=self.np_array_dtype).nbytes
         
         self.cluster_size = cluster_size
         
@@ -56,7 +60,7 @@ class ControlClusterClient(ABC):
                                             backend=self._backend, 
                                             device=self._device)
 
-        self._is_cluster_ready = mp.Value('b', False)
+        self.is_cluster_ready = mp.Value('b', False)
         self._trigger_solve = mp.Array('b', self.cluster_size)
         self._trigger_read = mp.Array('b', self.cluster_size)
         self._trigger_send_state = mp.Array('b', self.cluster_size)
@@ -99,21 +103,21 @@ class ControlClusterClient(ABC):
                                                     name = "ControlClusterClient_trigger" + str(i), 
                                                     args=(i, )), 
                                 )
-            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution processes n." + str(i))
+            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution process n." + str(i))
             self._trigger_processes[i].start()
 
             self._solread_processes.append(mp.Process(target=self._read_solution, 
                                                     name = "ControlClusterClient_solread" + str(i), 
                                                     args=(i, )), 
                                 )
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _read_solution processes n." + str(i))
+            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _read_solution process n." + str(i))
             self._solread_processes[i].start()
 
             self._statesend_processes.append(mp.Process(target=self._send_states, 
                                                     name = "ControlClusterClient_sendstates" + str(i), 
                                                     args=(i, )), 
                                 )
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _send_states processes n." + str(i))
+            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _send_states process n." + str(i))
             self._statesend_processes[i].start()
 
     def _handshake(self):
@@ -163,7 +167,7 @@ class ControlClusterClient(ABC):
         os.write(self.pipes_manager.pipes_fd["jnt_names_client"], 
                 jnt_names_client_raw)
 
-        self._is_cluster_ready.value = True # we signal the main process
+        self.is_cluster_ready.value = True # we signal the main process
         # the connection is established
 
         print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": friendship with ControlCluster server established.")
@@ -179,7 +183,7 @@ class ControlClusterClient(ABC):
         
         while True: # we keep the process alive
 
-            if self._trigger_solve[index] and self._is_cluster_ready.value: # these are set by the parent process
+            if self._trigger_solve[index] and self.is_cluster_ready.value: # these are set by the parent process
                 
                 # Send a signal to perform the solution
                 os.write(self.pipes_manager.pipes_fd["trigger"][index], b'solve\n')
@@ -204,7 +208,7 @@ class ControlClusterClient(ABC):
 
         while True: # we keep the process alive
 
-            if self._trigger_read[index] and self._is_cluster_ready.value: # these are set by the parent process
+            if self._trigger_read[index] and self.is_cluster_ready.value: # these are set by the parent process
 
                 while True: # continue polling pipe until a success is read
 
@@ -216,19 +220,19 @@ class ControlClusterClient(ABC):
                                 
                             self._cmd_q_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_q"][index], self.jnt_data_size), 
-                                                dtype=np.float32).reshape((1, self.n_dofs)).flatten()
+                                                dtype=self.np_array_dtype).reshape((1, self.n_dofs)).flatten()
                         
                             self._cmd_v_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_v"][index], self.jnt_data_size),
-                                                dtype=np.float32).reshape((1, self.n_dofs)).flatten()
+                                                dtype=self.np_array_dtype).reshape((1, self.n_dofs)).flatten()
                             
                             self._cmd_eff_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size),
-                                                dtype=np.float32).reshape((1, self.n_dofs)).flatten()
+                                                dtype=self.np_array_dtype).reshape((1, self.n_dofs)).flatten()
                             
                             self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
-                                                dtype=np.float32)
+                                                dtype=self.np_array_dtype)
         
                             break
 
@@ -268,30 +272,30 @@ class ControlClusterClient(ABC):
 
         while True: # we keep the process alive
 
-            if self._trigger_send_state[index] and self._is_cluster_ready.value: # these are set by the parent process
+            if self._trigger_send_state[index] and self.is_cluster_ready.value: # these are set by the parent process
                 
                 # root state
                 os.write(self.pipes_manager.pipes_fd["state_root_p"][index], 
                         np.array(self._state_root_p_buffer, 
-                                dtype=np.float32)[(index * root_p_size):(index * root_p_size + root_p_size)].tobytes())
+                                dtype=self.np_array_dtype)[(index * root_p_size):(index * root_p_size + root_p_size)].tobytes())
 
                 os.write(self.pipes_manager.pipes_fd["state_root_q"][index], 
                         np.array(self._state_root_q_buffer, 
-                                dtype=np.float32)[(index * root_q_size):(index * root_q_size + root_q_size)].tobytes())
+                                dtype=self.np_array_dtype)[(index * root_q_size):(index * root_q_size + root_q_size)].tobytes())
                 os.write(self.pipes_manager.pipes_fd["state_root_v"][index], 
                         np.array(self._state_root_v_buffer, 
-                                dtype=np.float32)[(index * root_v_size):(index * root_v_size + root_v_size)].tobytes())
+                                dtype=self.np_array_dtype)[(index * root_v_size):(index * root_v_size + root_v_size)].tobytes())
                 os.write(self.pipes_manager.pipes_fd["state_root_omega"][index],
                         np.array(self._state_root_omega_buffer, 
-                                dtype=np.float32)[(index * root_omega_size):(index * root_omega_size + root_omega_size)].tobytes())
+                                dtype=self.np_array_dtype)[(index * root_omega_size):(index * root_omega_size + root_omega_size)].tobytes())
 
                 # jnt state
                 os.write(self.pipes_manager.pipes_fd["state_jnt_q"][index], 
                         np.array(self._state_jnt_q_buffer, 
-                                dtype=np.float32)[(index * jnt_q_size):(index * jnt_q_size + jnt_q_size)].tobytes())
+                                dtype=self.np_array_dtype)[(index * jnt_q_size):(index * jnt_q_size + jnt_q_size)].tobytes())
                 os.write(self.pipes_manager.pipes_fd["state_jnt_v"][index], 
                         np.array(self._state_jnt_v_buffer,
-                                dtype=np.float32)[(index * jnt_v_size):(index * jnt_v_size + jnt_v_size)].tobytes())
+                                dtype=self.np_array_dtype)[(index * jnt_v_size):(index * jnt_v_size + jnt_v_size)].tobytes())
 
                 self._trigger_send_state[index] = False # we will wait for next signal
                 # from the main process
@@ -302,7 +306,7 @@ class ControlClusterClient(ABC):
     
     def _create_shared_buffers(self):
         
-        data_aux = np.zeros((1, 1), dtype=np.float32)
+        data_aux = np.zeros((1, 1), dtype=self.np_array_dtype)
         self.float32_size = data_aux.itemsize
         
         # cmds from controllers to robot
@@ -439,11 +443,11 @@ class ControlClusterClient(ABC):
 
         # solve all the TO problems in the control cluster
 
-        if not self._is_cluster_ready.value:
+        if not self.is_cluster_ready.value:
 
             print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": waiting connection to ControlCluster server")
 
-        if (self._is_cluster_ready.value):
+        if (self.is_cluster_ready.value):
             
             start_time = time.time() # we profile the whole solution pipeline
             
