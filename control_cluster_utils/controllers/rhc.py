@@ -34,10 +34,10 @@ class RobotState:
         def __init__(self, 
                     n_dofs: int):
 
-            self.q = np.zeros((n_dofs, 1), dtype=np.float32) # joint positions
-            self.v = np.zeros((n_dofs, 1), dtype=np.float32) # joint velocities
-            self.a = np.zeros((n_dofs, 1), dtype=np.float32) # joint accelerations
-            self.effort = np.zeros((n_dofs, 1), dtype=np.float32) # joint efforts
+            self.q = np.zeros((1, n_dofs), dtype=np.float32) # joint positions
+            self.v = np.zeros((1, n_dofs), dtype=np.float32) # joint velocities
+            self.a = np.zeros((1, n_dofs), dtype=np.float32) # joint accelerations
+            self.effort = np.zeros((1, n_dofs), dtype=np.float32) # joint efforts
 
     class SolverState:
 
@@ -82,7 +82,8 @@ class RHController(ABC):
             pipes_manager: NamedPipesHandler,
             controller_index: int,
             termination_flag: mp.Value,
-            verbose = False):
+            verbose = False, 
+            array_dtype = np.float32):
         
         self.controller_index = controller_index
 
@@ -132,6 +133,8 @@ class RHController(ABC):
         self._init()
 
         self._pipe_opened = False
+
+        self.array_dtype = array_dtype
 
     def _init(self):
 
