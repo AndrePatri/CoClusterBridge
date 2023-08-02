@@ -100,28 +100,6 @@ class ControlClusterSrvr(ABC):
 
         print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": handshake with ControlCluster client completed.")
 
-    @abstractmethod
-    def _check_cmd_size(self, 
-                    cluster_cmd: ActionChild):
-        
-        pass
-
-    @abstractmethod
-    def _synch_controllers_from_cluster(self):
-
-        # pushes all necessary data from the cluster (which interfaces with the environment)
-        # to each controller, so that their internal state is updated
-
-        pass
-
-    @abstractmethod
-    def _synch_cluster_from_controllers(self):
-
-        # synch the cluster with the data in each controller: 
-        # this might include, for example, computed control commands
-
-        pass
-
     def _spawn_processes(self):
 
         if self._controllers_count == self.cluster_size:
@@ -189,12 +167,6 @@ class ControlClusterSrvr(ABC):
             self._controllers[i]._create_jnt_maps() # this is called anyway inside the solve, but this way
             # we save a bit of time when spawning the processes
 
-        print("Check1")
-        print([self.client_side_jnt_names[index] for index in self._controllers[0]._to_server])
-
-        print("Check2")
-        print([self.server_side_jnt_names[index] for index in self._controllers[0]._to_client])
-
         self._check_jnt_names_compatibility() 
 
         print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": final initialization steps completed.")
@@ -241,14 +213,3 @@ class ControlClusterSrvr(ABC):
         self._close_processes() # we also terminate all the child processes
 
         self._clean_pipes() # we close all the used pipes
-
-    @abstractmethod
-    def get(self):
-
-        pass
-    
-    @abstractmethod
-    def set_commands(self,  
-                    cluster_cmd: ActionChild):
-
-        pass
