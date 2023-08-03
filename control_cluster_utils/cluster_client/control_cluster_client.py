@@ -16,8 +16,6 @@ import numpy as np
 
 import multiprocess as mp
 
-import ctypes
-
 from typing import List
 
 class ControlClusterClient(ABC):
@@ -30,15 +28,21 @@ class ControlClusterClient(ABC):
             backend = "torch", 
             device = torch.device("cpu"), 
             np_array_dtype = np.float32):
-        
+    
+        self.np_dtype = np_array_dtype
+        data_aux = np.zeros((1, 1), dtype=self.np_dtype)
+        self.np_array_itemsize = data_aux.itemsize
 
-        self.np_array_dtype = np_array_dtype
+        if self.np_dtype == np.float64:
+            self.torch_dtype = torch.float64
+        if self.np_dtype == np.float32:
+            self.torch_dtype = torch.float32
 
         self.jnt_names = jnt_names
 
         self.n_dofs = len(self.jnt_names)
         self.jnt_data_size = np.zeros((self.n_dofs, 1),
-                                    dtype=self.np_array_dtype).nbytes
+                                    dtype=self.np_dtype).nbytes
         
         self.cluster_size = cluster_size
         
@@ -53,12 +57,14 @@ class ControlClusterClient(ABC):
         self.robot_states = RobotClusterState(self.n_dofs, 
                                             cluster_size=self.cluster_size, 
                                             backend=self._backend, 
-                                            device=self._device) # from robot to controllers
+                                            device=self._device, 
+                                            dtype=self.torch_dtype) # from robot to controllers
         
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
                                             cluster_size=self.cluster_size, 
                                             backend=self._backend, 
-                                            device=self._device)
+                                            device=self._device, 
+                                            dtype=self.torch_dtype)
 
         self.is_cluster_ready = mp.Value('b', False)
         self._trigger_solve = mp.Array('b', self.cluster_size)
@@ -220,19 +226,19 @@ class ControlClusterClient(ABC):
                                 
                             self._cmd_q_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_q"][index], self.jnt_data_size), 
-                                                dtype=self.np_array_dtype).reshape((1, self.n_dofs)).flatten()
+                                                dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
                         
                             self._cmd_v_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_v"][index], self.jnt_data_size),
-                                                dtype=self.np_array_dtype).reshape((1, self.n_dofs)).flatten()
+                                                dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
                             
                             self._cmd_eff_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size),
-                                                dtype=self.np_array_dtype).reshape((1, self.n_dofs)).flatten()
+                                                dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
                             
                             self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
-                                                dtype=self.np_array_dtype)
+                                                dtype=self.np_dtype)
         
                             break
 
@@ -277,25 +283,25 @@ class ControlClusterClient(ABC):
                 # root state
                 os.write(self.pipes_manager.pipes_fd["state_root_p"][index], 
                         np.array(self._state_root_p_buffer, 
-                                dtype=self.np_array_dtype)[(index * root_p_size):(index * root_p_size + root_p_size)].tobytes())
+                                dtype=self.np_dtype)[(index * root_p_size):(index * root_p_size + root_p_size)].tobytes())
 
                 os.write(self.pipes_manager.pipes_fd["state_root_q"][index], 
                         np.array(self._state_root_q_buffer, 
-                                dtype=self.np_array_dtype)[(index * root_q_size):(index * root_q_size + root_q_size)].tobytes())
+                                dtype=self.np_dtype)[(index * root_q_size):(index * root_q_size + root_q_size)].tobytes())
                 os.write(self.pipes_manager.pipes_fd["state_root_v"][index], 
                         np.array(self._state_root_v_buffer, 
-                                dtype=self.np_array_dtype)[(index * root_v_size):(index * root_v_size + root_v_size)].tobytes())
+                                dtype=self.np_dtype)[(index * root_v_size):(index * root_v_size + root_v_size)].tobytes())
                 os.write(self.pipes_manager.pipes_fd["state_root_omega"][index],
                         np.array(self._state_root_omega_buffer, 
-                                dtype=self.np_array_dtype)[(index * root_omega_size):(index * root_omega_size + root_omega_size)].tobytes())
+                                dtype=self.np_dtype)[(index * root_omega_size):(index * root_omega_size + root_omega_size)].tobytes())
 
                 # jnt state
                 os.write(self.pipes_manager.pipes_fd["state_jnt_q"][index], 
                         np.array(self._state_jnt_q_buffer, 
-                                dtype=self.np_array_dtype)[(index * jnt_q_size):(index * jnt_q_size + jnt_q_size)].tobytes())
+                                dtype=self.np_dtype)[(index * jnt_q_size):(index * jnt_q_size + jnt_q_size)].tobytes())
                 os.write(self.pipes_manager.pipes_fd["state_jnt_v"][index], 
                         np.array(self._state_jnt_v_buffer,
-                                dtype=self.np_array_dtype)[(index * jnt_v_size):(index * jnt_v_size + jnt_v_size)].tobytes())
+                                dtype=self.np_dtype)[(index * jnt_v_size):(index * jnt_v_size + jnt_v_size)].tobytes())
 
                 self._trigger_send_state[index] = False # we will wait for next signal
                 # from the main process
@@ -306,36 +312,35 @@ class ControlClusterClient(ABC):
     
     def _create_shared_buffers(self):
         
-        data_aux = np.zeros((1, 1), dtype=self.np_array_dtype)
-        self.float32_size = data_aux.itemsize
-        
+        buffer_cdtype = np.ctypeslib.as_ctypes_type(self.np_dtype)
+
         # cmds from controllers to robot
-        self._cmd_q_buffer = mp.Array(ctypes.c_float, 
+        self._cmd_q_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.n_dofs)
-        self._cmd_v_buffer = mp.Array(ctypes.c_float, 
+        self._cmd_v_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.n_dofs)
-        self._cmd_eff_buffer = mp.Array(ctypes.c_float, 
+        self._cmd_eff_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.n_dofs) 
 
         self._add_info_size = 2
-        self._add_info_datasize = 2 * self.float32_size
+        self._add_info_datasize = 2 * self.np_array_itemsize
 
         # additional info from controllers
-        self._rhc_info_buffer = mp.Array(ctypes.c_float, 
+        self._rhc_info_buffer = mp.Array(buffer_cdtype, 
                                         self.robot_states.cluster_size * self._add_info_size) 
 
         # state from robot to controllers
-        self._state_root_p_buffer = mp.Array(ctypes.c_float, 
+        self._state_root_p_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.robot_states.root_state.p.shape[1])
-        self._state_root_q_buffer = mp.Array(ctypes.c_float,
+        self._state_root_q_buffer = mp.Array(buffer_cdtype,
                                     self.robot_states.cluster_size * self.robot_states.root_state.q.shape[1])
-        self._state_root_v_buffer = mp.Array(ctypes.c_float, 
+        self._state_root_v_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.robot_states.root_state.v.shape[1])
-        self._state_root_omega_buffer = mp.Array(ctypes.c_float, 
+        self._state_root_omega_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.robot_states.root_state.omega.shape[1])
-        self._state_jnt_q_buffer = mp.Array(ctypes.c_float, 
+        self._state_jnt_q_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.robot_states.jnt_state.q.shape[1])
-        self._state_jnt_v_buffer = mp.Array(ctypes.c_float, 
+        self._state_jnt_v_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.robot_states.jnt_state.v.shape[1])
 
     def _fill_cmds_from_buffer(self):
@@ -354,7 +359,7 @@ class ControlClusterClient(ABC):
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
                                                                 self.controllers_cmds.n_dofs).to(self._device)
         
-        self.controllers_cmds.rhc_info.info = torch.frombuffer(self._rhc_info_buffer.get_obj(),
+        self.controllers_cmds.rhc_info.data = torch.frombuffer(self._rhc_info_buffer.get_obj(),
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
                                                                 self._add_info_size).to(self._device)
     

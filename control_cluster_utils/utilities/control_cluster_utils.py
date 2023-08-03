@@ -107,7 +107,7 @@ class RobotClusterCmd:
             
             self._add_data_size = add_data_size
 
-            self.info =  torch.zeros((cluster_size, self._add_data_size), device = self._device, dtype=self.dtype)
+            self.data =  torch.zeros((cluster_size, self._add_data_size), device = self._device, dtype=self.dtype)
 
     def __init__(self, 
                 n_dofs: int, 

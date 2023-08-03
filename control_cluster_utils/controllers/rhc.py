@@ -22,41 +22,49 @@ class RobotState:
 
     class RootState:
 
-        def __init__(self):
+        def __init__(self, 
+                    dtype = np.float32):
             
-            self.p = np.zeros((3, 1), dtype=np.float32) # floating base position
-            self.q = np.zeros((4, 1), dtype=np.float32) # floating base orientation (quaternion)
-            self.v = np.zeros((3, 1), dtype=np.float32) # floating base linear vel
-            self.omega = np.zeros((3, 1), dtype=np.float32) # floating base angular vel
+            self.p = np.zeros((1, 3), dtype=dtype) # floating base position
+            self.q = np.zeros((1, 4), dtype=dtype) # floating base orientation (quaternion)
+            self.v = np.zeros((1, 3), dtype=dtype) # floating base linear vel
+            self.omega = np.zeros((1, 3), dtype=dtype) # floating base angular vel
 
     class JntState:
 
         def __init__(self, 
-                    n_dofs: int):
+                    n_dofs: int, 
+                    dtype = np.float32):
 
-            self.q = np.zeros((1, n_dofs), dtype=np.float32) # joint positions
-            self.v = np.zeros((1, n_dofs), dtype=np.float32) # joint velocities
-            self.a = np.zeros((1, n_dofs), dtype=np.float32) # joint accelerations
-            self.effort = np.zeros((1, n_dofs), dtype=np.float32) # joint efforts
+            self.q = np.zeros((1, n_dofs), dtype=dtype) # joint positions
+            self.v = np.zeros((1, n_dofs), dtype=dtype) # joint velocities
+            self.a = np.zeros((1, n_dofs), dtype=dtype) # joint accelerations
+            self.effort = np.zeros((1, n_dofs), dtype=dtype) # joint efforts
 
     class SolverState:
 
         def __init__(self, 
-                add_info_size = 1):
+                add_info_size = 1, 
+                dtype = np.float32):
 
-            self.info = np.zeros((add_info_size, 1), dtype=np.float32)
+            self.info = np.zeros((1, add_info_size), dtype=dtype)
 
     def __init__(self, 
                 n_dofs: int, 
-                add_info_size: int = None):
+                add_info_size: int = None, 
+                dtype = np.float32):
 
-        self.root_state = RobotState.RootState()
+        self.dtype = dtype
 
-        self.jnt_state = RobotState.JntState(n_dofs)
+        self.root_state = RobotState.RootState(self.dtype)
+
+        self.jnt_state = RobotState.JntState(n_dofs, 
+                                            self.dtype)
 
         if add_info_size is not None:
 
-            self.slvr_state = RobotState.SolverState(n_dofs)
+            self.slvr_state = RobotState.SolverState(n_dofs, 
+                                                self.dtype)
 
         self.n_dofs = n_dofs
 
@@ -128,6 +136,7 @@ class RHController(ABC):
 
         self._to_server = []
         self._to_client = []
+        self._to_horizon_quat = [1, 2, 3, 0] # mapping from robot quat. to Horizon's quaternion convention
         self._jnt_maps_created = False
 
         self._init()
@@ -175,27 +184,14 @@ class RHController(ABC):
     def _init_states(self):
         
         # to be called after n_dofs is known
-        self.robot_state = RobotState(self.n_dofs) # used for storing state coming FROM robot
+        self.robot_state = RobotState(self.n_dofs, 
+                                    dtype=self.array_dtype) # used for storing state coming FROM robot
 
         self.robot_cmds = RobotState(self.n_dofs, 
-                                add_info_size=2) # used for storing internal state (i.e. from TO solution)
+                                add_info_size=2, 
+                                dtype=self.array_dtype) # used for storing internal state (i.e. from TO solution)
         
         self._init_sizes() # to make reading from pipes easier
-
-    def _update_open_loop(self):
-
-        # updates measured robot state 
-        # using the internal robot state of the RHC controller
-
-        pass
-
-    def _update_closed_loop(self, 
-               current_robot_state: RobotStateChild):
-
-        # updates measured robot state 
-        # using the provided measurements
-
-        self.robot_state = current_robot_state
 
     def update(self, 
                current_robot_state: RobotStateChild = None):
@@ -253,37 +249,43 @@ class RHController(ABC):
         
         self.robot_state.root_state.p = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_p"][self.controller_index], 
                                                             self.root_p_size), 
-                                        dtype=np.float32)
+                                        dtype=self.array_dtype).reshape(1, 
+                                                            self.robot_state.root_state.p.shape[1])
         
         self.robot_state.root_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_q"][self.controller_index], 
                                                             self.root_q_size), 
-                                        dtype=np.float32)
+                                        dtype=self.array_dtype)[self._to_horizon_quat].reshape(1, 
+                                                            self.robot_state.root_state.q.shape[1])
         
         self.robot_state.root_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_v"][self.controller_index], 
                                                             self.root_v_size), 
-                                        dtype=np.float32)
+                                        dtype=self.array_dtype).reshape(1, 
+                                                            self.robot_state.root_state.v.shape[1])
         
         self.robot_state.root_state.omega = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_omega"][self.controller_index],
                                                             self.root_omega_size), 
-                                        dtype=np.float32)
+                                        dtype=self.array_dtype).reshape(1, 
+                                                            self.robot_state.root_state.omega.shape[1])
         
         self.robot_state.jnt_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_q"][self.controller_index], 
                                                             self.jnt_q_size), 
-                                        dtype=np.float32)[self._to_server] # with joint remapping to controller's order
+                                        dtype=self.array_dtype)[self._to_server].reshape(1, 
+                                                                            self.robot_state.jnt_state.q.shape[1]) # with joint remapping to controller's order
         
         self.robot_state.jnt_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_v"][self.controller_index], 
                                                             self.jnt_v_size), 
-                                        dtype=np.float32)[self._to_server] # with joint remapping to controller's order
+                                        dtype=self.array_dtype)[self._to_server].reshape(1,
+                                                                            self.robot_state.jnt_state.v.shape[1]) # with joint remapping to controller's order
 
     def _send_solution(self):
         
         # writes commands from robot state
         os.write(self.pipes_manager.pipes_fd["cmd_jnt_q"][self.controller_index], 
-                self.robot_cmds.jnt_state.q[self._to_client].tobytes()) # with joint remapping to client's order
+                self.robot_cmds.jnt_state.q[0, self._to_client].tobytes()) # with joint remapping to client's order
         os.write(self.pipes_manager.pipes_fd["cmd_jnt_v"][self.controller_index], 
-                self.robot_cmds.jnt_state.v[self._to_client].tobytes()) # with joint remapping to client's order
+                self.robot_cmds.jnt_state.v[0, self._to_client].tobytes()) # with joint remapping to client's order
         os.write(self.pipes_manager.pipes_fd["cmd_jnt_eff"][self.controller_index], 
-                self.robot_cmds.jnt_state.effort[self._to_client].tobytes()) # with joint remapping to client's order
+                self.robot_cmds.jnt_state.effort[0, self._to_client].tobytes()) # with joint remapping to client's order
 
         # write additional info
         os.write(self.pipes_manager.pipes_fd["rhc_info"][self.controller_index], self.robot_cmds.slvr_state.info.tobytes())
@@ -339,6 +341,11 @@ class RHController(ABC):
 
                     self._send_solution() # writes solution on pipe
 
+                    print("cmd debug n." + str(self.controller_index) + "\n" + 
+                            "q_cmd: " + str(self.robot_cmds.jnt_state.q) + "\n" + 
+                            "v_cmd: " + str(self.robot_cmds.jnt_state.v) + "\n" + 
+                            "eff_cmd: " + str(self.robot_cmds.jnt_state.effort))
+                                    
                     os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
 
                     if self._verbose:
@@ -403,21 +410,37 @@ class RHController(ABC):
 
         pass
 
-    abstractmethod
+    @abstractmethod
     def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
 
         pass
     
-    abstractmethod
+    @abstractmethod
     def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
 
         pass
     
-    abstractmethod
+    @abstractmethod
     def _get_additional_slvr_info(self) -> np.ndarray:
 
         pass
+
+    @abstractmethod
+    def _update_open_loop(self):
+
+        # updates measured robot state 
+        # using the internal robot state of the RHC controller
+
+        pass
     
+    @abstractmethod
+    def _update_closed_loop(self):
+
+        # updates measured robot state 
+        # using the provided measurements
+
+        pass
+
     @abstractmethod
     def _solve(self):
 
