@@ -27,8 +27,11 @@ class ControlClusterClient(ABC):
             jnt_names: List[str],
             backend = "torch", 
             device = torch.device("cpu"), 
-            np_array_dtype = np.float32):
-    
+            np_array_dtype = np.float32, 
+            verbose = False):
+
+        self._verbose = verbose
+
         self.np_dtype = np_array_dtype
         data_aux = np.zeros((1, 1), dtype=self.np_dtype)
         self.np_array_itemsize = data_aux.itemsize
@@ -209,21 +212,21 @@ class ControlClusterClient(ABC):
                 "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
                 "rhc_info"
                 ], 
-                mode = OMode["O_RDONLY_NONBLOCK"], 
+                mode = OMode["O_RDONLY"], 
                 index=index)
 
         while True: # we keep the process alive
-
+            
             if self._trigger_read[index] and self.is_cluster_ready.value: # these are set by the parent process
 
                 while True: # continue polling pipe until a success is read
 
                     try:
-
+                        
                         response = os.read(self.pipes_manager.pipes_fd["success"][index], 1024).decode().strip()
 
                         if response == "success":
-                                
+                            
                             self._cmd_q_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_q"][index], self.jnt_data_size), 
                                                 dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
@@ -239,17 +242,25 @@ class ControlClusterClient(ABC):
                             self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
                                                 dtype=self.np_dtype)
-        
+
                             break
 
                         else:
+                            
+                            if self._verbose:
 
-                            print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": received invald response " +  
-                                response + " from pipe " + self.pipes_manager.pipes["success"][index])
+                                print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": received invald response " +  
+                                    response + " from pipe " + self.pipes_manager.pipes["success"][index])
 
                     except BlockingIOError or SystemError:
 
-                        continue # try again to read
+                                if self._verbose:
+                    
+                                    print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + \
+                                          ": could not read from pipes of controller n."  + \
+                                            f"{index}")
+
+                                continue # try again to read
 
                 self._trigger_read[index] = False # we will wait for next signal
                 # from the main process
@@ -380,10 +391,6 @@ class ControlClusterClient(ABC):
         self._state_jnt_q_buffer[:] = self.robot_states.jnt_state.q.cpu().flatten(start_dim=0).numpy()
         
         self._state_jnt_v_buffer[:] = self.robot_states.jnt_state.v.cpu().flatten(start_dim=0).numpy()
-
-    def _post_initialization(self):
-
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": post initialization completed")
     
     def _send_sol_trigger(self):
 
@@ -399,7 +406,7 @@ class ControlClusterClient(ABC):
             self._trigger_send_state[i] = True # we signal the state process n.{i} to send the state to the 
             # associated controller
 
-    def _read_sols(self):
+    def _send_read_sols_trigger(self):
 
         for i in range(self.cluster_size):
             
@@ -450,22 +457,29 @@ class ControlClusterClient(ABC):
 
         if not self.is_cluster_ready.value:
 
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": waiting connection to ControlCluster server")
+            if self._verbose: 
+
+                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": waiting connection to ControlCluster server")
 
         if (self.is_cluster_ready.value):
             
             start_time = time.time() # we profile the whole solution pipeline
             
             self._fill_buffers_with_states() # we fill the buffers with the states
+
             self._send_state_trigger() # we send the state to each controller
+            
             self._wait_for_state_writing() # we wait until everything was sent (the controllers are 
-            # always polling for new states)
+            # # always polling for new states)
 
             self._send_sol_trigger() # we send a signal to solve the TO to all controllers
 
-            self._read_sols() # reads from all controllers' solutions (this will automatically update the shared
-            # data buffers)
+            self._send_read_sols_trigger() # reads from all controllers' solutions (this will automatically update the shared
+            # # data buffers)
+            
             self._wait_for_solutions() # will wait until all controllers are done solving their TO
+
+            t = time.time()
 
             self._fill_cmds_from_buffer() # copies data from the solution buffers to the robot cmds object
             

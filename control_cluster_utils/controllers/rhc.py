@@ -18,6 +18,8 @@ import copy
 
 from typing import List
 
+import sys 
+
 class RobotState:
 
     class RootState:
@@ -68,7 +70,6 @@ class RobotState:
 
         self.n_dofs = n_dofs
 
-
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 
 class CntrlCmd(ABC):
@@ -106,8 +107,6 @@ class RHController(ABC):
 
         self._verbose = verbose
         
-        self._solve_exited = False
-
         self.urdf_path = urdf_path
         self.srdf_path = srdf_path
         # read urdf and srdf files
@@ -294,7 +293,9 @@ class RHController(ABC):
 
         # get data from the solution
         self.robot_cmds.jnt_state.q = self._get_cmd_jnt_q_from_sol()
+
         self.robot_cmds.jnt_state.v = self._get_cmd_jnt_v_from_sol()
+
         self.robot_cmds.jnt_state.effort = self._get_cmd_jnt_eff_from_sol()
 
         self.robot_cmds.slvr_state.info = self._get_additional_slvr_info()
@@ -314,54 +315,65 @@ class RHController(ABC):
 
             self._pipe_opened = True
 
-        while not self._termination_flag.value:
+        if self._termination_flag.value:
+            
+            self.terminate()
 
-            try:
+        else:
 
-                signal = os.read(self.pipes_manager.pipes_fd["trigger"][self.controller_index], 1024).decode().strip()
+            while True:
+                
+                # we are always listening for a trigger signal from the client 
 
-                if signal == 'terminate':
-                    
-                    self._solve_exited = True
+                try:
 
-                    break
-                    
-                elif signal == 'solve':
-                                    
-                    start = time.time()
+                    signal = os.read(self.pipes_manager.pipes_fd["trigger"][self.controller_index], 1024).decode().strip()
 
-                    # read latest states from pipe 
-                    self._read_state()
+                    if signal == 'terminate':
+                        
+                        self.terminate() # termination triggered from client
 
-                    self._solve()
+                        break
+                        
+                    elif signal == 'solve':
+                        
+                        if self._verbose:
 
-                    duration = time.time() - start
-                    
-                    self._fill_cmds_from_sol() # we get data from the solution
+                            start = time.time()
 
-                    self._send_solution() # writes solution on pipe
+                        # read latest states from pipe 
 
-                    print("cmd debug n." + str(self.controller_index) + "\n" + 
-                            "q_cmd: " + str(self.robot_cmds.jnt_state.q) + "\n" + 
-                            "v_cmd: " + str(self.robot_cmds.jnt_state.v) + "\n" + 
-                            "eff_cmd: " + str(self.robot_cmds.jnt_state.effort))
-                                    
-                    os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
+                        self._read_state()
 
-                    if self._verbose:
+                        self._solve()
 
-                        print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + f"[{self.status}]" + ":" + f"Solution time -> " + str(duration))
+                        self._fill_cmds_from_sol() # we get data from the solution        
+                        
+                        self._send_solution() # writes solution on pipe
 
-            except BlockingIOError:
+                        # print("cmd debug n." + str(self.controller_index) + "\n" + 
+                        #         "q_cmd: " + str(self.robot_cmds.jnt_state.q) + "\n" + 
+                        #         "v_cmd: " + str(self.robot_cmds.jnt_state.v) + "\n" + 
+                        #         "eff_cmd: " + str(self.robot_cmds.jnt_state.effort))
 
-                continue
+                            
+                        os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
+                        
+                        if self._verbose:
+                            
+                            duration = time.time() - start
 
-        self._solve_exited = True
+                            print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                                f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+
+                except BlockingIOError:
+
+                    continue
         
     def terminate(self):
 
         # self._close_pipes()
-
+        
         return True
     
     def assign_client_side_jnt_names(self, 
