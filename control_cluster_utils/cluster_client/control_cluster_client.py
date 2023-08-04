@@ -185,7 +185,7 @@ class ControlClusterClient(ABC):
                         index: int):
 
         # solver
-        self.pipes_manager.open_pipes(["trigger"], 
+        self.pipes_manager.open_pipes(["trigger_solve"], 
                                     mode=OMode["O_WRONLY"], 
                                     index=index) # blocking (non-blocking
         # would throw error if nothing has opened the pipe in read mode)
@@ -194,8 +194,10 @@ class ControlClusterClient(ABC):
 
             if self._trigger_solve[index] and self.is_cluster_ready.value: # these are set by the parent process
                 
+                msg_bytes = b's'
                 # Send a signal to perform the solution
-                os.write(self.pipes_manager.pipes_fd["trigger"][index], b'solve\n')
+                os.write(self.pipes_manager.pipes_fd["trigger_solve"][index], 
+                    msg_bytes)
 
                 self._trigger_solve[index] = False # we will wait for next signal
                 # from the main process
@@ -208,7 +210,7 @@ class ControlClusterClient(ABC):
                     index: int):
 
         # these are not blocking
-        self.pipes_manager.open_pipes(selector=["success", 
+        self.pipes_manager.open_pipes(selector=[
                 "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
                 "rhc_info"
                 ], 
@@ -219,48 +221,21 @@ class ControlClusterClient(ABC):
             
             if self._trigger_read[index] and self.is_cluster_ready.value: # these are set by the parent process
 
-                while True: # continue polling pipe until a success is read
-
-                    try:
-                        
-                        response = os.read(self.pipes_manager.pipes_fd["success"][index], 1024).decode().strip()
-
-                        if response == "success":
-                            
-                            self._cmd_q_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
+                self._cmd_q_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
                                 np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_q"][index], self.jnt_data_size), 
                                                 dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
                         
-                            self._cmd_v_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
-                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_v"][index], self.jnt_data_size),
-                                                dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
-                            
-                            self._cmd_eff_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
-                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size),
-                                                dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
-                            
-                            self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
-                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
-                                                dtype=self.np_dtype)
-
-                            break
-
-                        else:
-                            
-                            if self._verbose:
-
-                                print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": received invald response " +  
-                                    response + " from pipe " + self.pipes_manager.pipes["success"][index])
-
-                    except BlockingIOError or SystemError:
-
-                                if self._verbose:
-                    
-                                    print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + \
-                                          ": could not read from pipes of controller n."  + \
-                                            f"{index}")
-
-                                continue # try again to read
+                self._cmd_v_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
+                    np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_v"][index], self.jnt_data_size),
+                                    dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
+                
+                self._cmd_eff_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
+                    np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size),
+                                    dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
+                
+                self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
+                    np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
+                                    dtype=self.np_dtype)
 
                 self._trigger_read[index] = False # we will wait for next signal
                 # from the main process
@@ -469,8 +444,8 @@ class ControlClusterClient(ABC):
 
             self._send_state_trigger() # we send the state to each controller
             
-            self._wait_for_state_writing() # we wait until everything was sent (the controllers are 
-            # # always polling for new states)
+            self._wait_for_state_writing() # we wait until everything was sent (as soon as each controller 
+            # receives a state, it solves the TO)
 
             self._send_sol_trigger() # we send a signal to solve the TO to all controllers
 
@@ -478,9 +453,7 @@ class ControlClusterClient(ABC):
             # # data buffers)
             
             self._wait_for_solutions() # will wait until all controllers are done solving their TO
-
-            t = time.time()
-
+            
             self._fill_cmds_from_buffer() # copies data from the solution buffers to the robot cmds object
             
             self.solution_counter += 1

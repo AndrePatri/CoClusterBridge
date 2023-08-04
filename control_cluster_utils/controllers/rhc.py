@@ -150,14 +150,18 @@ class RHController(ABC):
 
     def _open_pipes(self):
         
-        # these are not blocking
-        self.pipes_manager.open_pipes(selector=["trigger", 
+        # these are blocking
+        self.pipes_manager.open_pipes(selector=["trigger_solve"
+                ], 
+                mode = OMode["O_RDONLY_NONBLOCK"], 
+                index=self.controller_index)
+
+        self.pipes_manager.open_pipes(selector=[ 
                 "state_root_p", "state_root_q", "state_root_v", "state_root_omega", 
                 "state_jnt_q", "state_jnt_v"
                 ], 
                 mode = OMode["O_RDONLY_NONBLOCK"], 
                 index=self.controller_index)
-
         
         # these are blocking (we read even if the pipe is empty)
         self.pipes_manager.open_pipes(selector=["success", 
@@ -170,10 +174,9 @@ class RHController(ABC):
     def _close_pipes(self):
 
         # we close the pipes
-        self.pipes_manager.close_pipes(selector=["trigger", 
+        self.pipes_manager.close_pipes(selector=["trigger_solve", 
                 "state_root_p", "state_root_q", "state_root_v", "state_root_omega", 
                 "state_jnt_q", "state_jnt_v", 
-                "success", 
                 "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
                 "state_jnt_q", "state_jnt_v", 
                 "rhc_info"
@@ -326,21 +329,17 @@ class RHController(ABC):
                 # we are always listening for a trigger signal from the client 
 
                 try:
-
-                    signal = os.read(self.pipes_manager.pipes_fd["trigger"][self.controller_index], 1024).decode().strip()
-
-                    if signal == 'terminate':
-                        
-                        self.terminate() # termination triggered from client
-
-                        break
-                        
-                    elif signal == 'solve':
-                        
-                        if self._verbose:
+                    
+                    if self._verbose:
 
                             start = time.time()
 
+                    msg_bytes = b's'
+                    signal = os.read(self.pipes_manager.pipes_fd["trigger_solve"][self.controller_index], 
+                                    len(msg_bytes)).decode().strip()
+                    
+                    if signal == 's':
+                        
                         # read latest states from pipe 
 
                         self._read_state()
@@ -356,8 +355,7 @@ class RHController(ABC):
                         #         "v_cmd: " + str(self.robot_cmds.jnt_state.v) + "\n" + 
                         #         "eff_cmd: " + str(self.robot_cmds.jnt_state.effort))
 
-                            
-                        os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
+                        # os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
                         
                         if self._verbose:
                             
@@ -365,7 +363,14 @@ class RHController(ABC):
 
                             print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                                 f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+                        
+                    else:
 
+                        if self._verbose:
+
+                            print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                                f"[{self.warning}]" + ":" + f"received invalid signal {signal} on trigger solve pipe")
+                            
                 except BlockingIOError:
 
                     continue
