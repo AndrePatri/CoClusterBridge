@@ -332,7 +332,7 @@ class RHController(ABC):
                     
                     if self._verbose:
 
-                            start = time.time()
+                            start = time.monotonic()
 
                     msg_bytes = b's'
                     signal = os.read(self.pipes_manager.pipes_fd["trigger_solve"][self.controller_index], 
@@ -359,7 +359,7 @@ class RHController(ABC):
                         
                         if self._verbose:
                             
-                            duration = time.time() - start
+                            duration = time.monotonic() - start
 
                             print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                                 f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))

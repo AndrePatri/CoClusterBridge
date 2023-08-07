@@ -439,7 +439,7 @@ class ControlClusterClient(ABC):
 
         if (self.is_cluster_ready.value):
             
-            start_time = time.time() # we profile the whole solution pipeline
+            start_time = time.monotonic() # we profile the whole solution pipeline
             
             self._fill_buffers_with_states() # we fill the buffers with the states
 
@@ -459,7 +459,7 @@ class ControlClusterClient(ABC):
             
             self.solution_counter += 1
 
-            self.solution_time = time.time() - start_time # we profile the whole solution pipeline
+            self.solution_time = time.monotonic() - start_time # we profile the whole solution pipeline
 
     def close(self):
 
