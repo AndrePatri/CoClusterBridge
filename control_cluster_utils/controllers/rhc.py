@@ -18,7 +18,7 @@ import copy
 
 from typing import List
 
-import sys 
+import numpy as np
 
 class RobotState:
 

@@ -107,14 +107,17 @@ class RobotClusterCmd:
             
             self._add_data_size = add_data_size
 
-            self.data =  torch.zeros((cluster_size, self._add_data_size), device = self._device, dtype=self.dtype)
+            self.data = torch.zeros((cluster_size, self._add_data_size), 
+                                device = self._device,
+                                dtype=self.dtype)
 
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
                 backend: str = "torch", 
                 device: torch.device = torch.device("cpu"),  
-                dtype: torch.dtype = torch.float32):
+                dtype: torch.dtype = torch.float32, 
+                add_data_size: int = None):
 
         self.n_dofs = n_dofs
         self.cluster_size = cluster_size
@@ -134,9 +137,12 @@ class RobotClusterCmd:
                                 device = self.device, 
                                 dtype = self.dtype)
         
-        self.rhc_info = self.RhcInfo(cluster_size=self.cluster_size, 
-                                device=self.device, 
-                                dtype=self.dtype)
+        if add_data_size is not None:
+            
+                self.rhc_info = self.RhcInfo(cluster_size=self.cluster_size, 
+                                        device=self.device, 
+                                        dtype=self.dtype, 
+                                        add_data_size = add_data_size)
 
 
 
