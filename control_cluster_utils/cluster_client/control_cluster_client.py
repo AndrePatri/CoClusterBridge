@@ -195,7 +195,7 @@ class ControlClusterClient(ABC):
 
             if self._trigger_solve[index] and self.is_cluster_ready.value: # these are set by the parent process
                 
-                msg_bytes = b's'
+                msg_bytes = b'1'
                 # Send a signal to perform the solution
                 os.write(self.pipes_manager.pipes_fd["trigger_solve"][index], 
                     msg_bytes)
