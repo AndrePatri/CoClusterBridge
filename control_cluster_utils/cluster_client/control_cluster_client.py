@@ -64,7 +64,8 @@ class ControlClusterClient(ABC):
                                             dtype=self.torch_dtype) # from robot to controllers
         
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
-                                            cluster_size=self.cluster_size, 
+                                            cluster_size=self.cluster_size,
+                                            add_data_size = 2, 
                                             backend=self._backend, 
                                             device=self._device, 
                                             dtype=self.torch_dtype)
@@ -333,21 +334,21 @@ class ControlClusterClient(ABC):
 
         # HERE IS WHERE COPIES FROM CPU TO GPU ARE MADE (if the used device is GPU)
 
-        self.controllers_cmds.jnt_cmd.q = torch.frombuffer(self._cmd_q_buffer.get_obj(), 
+        self.controllers_cmds.jnt_cmd.q[:, :] = torch.frombuffer(self._cmd_q_buffer.get_obj(), 
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs).to(self._device)
+                                                                self.controllers_cmds.n_dofs)
         
-        self.controllers_cmds.jnt_cmd.v = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
+        self.controllers_cmds.jnt_cmd.v[:, :] = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs).to(self._device)
+                                                                self.controllers_cmds.n_dofs)
 
-        self.controllers_cmds.jnt_cmd.eff = torch.frombuffer(self._cmd_eff_buffer.get_obj(), 
+        self.controllers_cmds.jnt_cmd.eff[:, :] = torch.frombuffer(self._cmd_eff_buffer.get_obj(), 
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs).to(self._device)
+                                                                self.controllers_cmds.n_dofs)
         
-        self.controllers_cmds.rhc_info.data = torch.frombuffer(self._rhc_info_buffer.get_obj(),
+        self.controllers_cmds.rhc_info.data[:, :] = torch.frombuffer(self._rhc_info_buffer.get_obj(),
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self._add_info_size).to(self._device)
+                                                                self._add_info_size)
     
     def _fill_buffers_with_states(self):
         
