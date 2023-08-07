@@ -62,18 +62,21 @@ class ControlClusterClient(ABC):
                                             backend=self._backend, 
                                             device=self._device, 
                                             dtype=self.torch_dtype) # from robot to controllers
-        
+
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
                                             cluster_size=self.cluster_size,
-                                            add_data_size = 2, 
+                                            add_data_size = 1, 
                                             backend=self._backend, 
                                             device=self._device, 
                                             dtype=self.torch_dtype)
-
+        
+        self.was_cluster_ready = False
         self.is_cluster_ready = mp.Value('b', False)
         self._trigger_solve = mp.Array('b', self.cluster_size)
         self._trigger_read = mp.Array('b', self.cluster_size)
         self._trigger_send_state = mp.Array('b', self.cluster_size)
+
+        self.add_data_length = mp.Value('i', 0)
 
         self.status = "status"
         self.info = "info"
@@ -89,9 +92,6 @@ class ControlClusterClient(ABC):
         self.solution_counter = 0
         self._compute_n_control_actions()
 
-        self._create_shared_buffers() # used to store the data received by the pipes 
-        # on the child processes
-
         self._spawn_processes() # we launch all the child processes
 
     def _spawn_processes(self):
@@ -102,33 +102,6 @@ class ControlClusterClient(ABC):
                                 name = "ControlClusterClient_handshake")
         self._connection_process.start()
         print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _handshake process")
-
-        self._trigger_processes = []
-        self._solread_processes = []
-        self._statesend_processes = []
-
-        for i in range(0, self.cluster_size):
-
-            self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
-                                                    name = "ControlClusterClient_trigger" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution process n." + str(i))
-            self._trigger_processes[i].start()
-
-            self._solread_processes.append(mp.Process(target=self._read_solution, 
-                                                    name = "ControlClusterClient_solread" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _read_solution process n." + str(i))
-            self._solread_processes[i].start()
-
-            self._statesend_processes.append(mp.Process(target=self._send_states, 
-                                                    name = "ControlClusterClient_sendstates" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _send_states process n." + str(i))
-            self._statesend_processes[i].start()
 
     def _handshake(self):
         
@@ -159,6 +132,13 @@ class ControlClusterClient(ABC):
                 f"does not match the client-side value of {len(self.jnt_names)}"
             
             raise Exception(exception)
+
+        self.pipes_manager.open_pipes(selector=["add_data_length"], 
+                                mode=OMode["O_RDONLY"])
+        add_data_length_raw = os.read(self.pipes_manager.pipes_fd["add_data_length"], DSize["int"])
+        self.add_data_length.value = struct.unpack('i', add_data_length_raw)[0]
+
+        # additional data from solver length
 
         # client-side robot joints name TO cluster server
         # we first encode the list
@@ -234,7 +214,7 @@ class ControlClusterClient(ABC):
                     np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size),
                                     dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
                 
-                self._rhc_info_buffer[(index * self._add_info_size):(index * self._add_info_size + self._add_info_size)] = \
+                self._rhc_info_buffer[(index * self.add_data_length.value):(index * self.add_data_length.value + self.add_data_length.value)] = \
                     np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
                                     dtype=self.np_dtype)
 
@@ -309,12 +289,11 @@ class ControlClusterClient(ABC):
         self._cmd_eff_buffer = mp.Array(buffer_cdtype, 
                                     self.robot_states.cluster_size * self.n_dofs) 
 
-        self._add_info_size = 2
-        self._add_info_datasize = 2 * self.np_array_itemsize
+        self._add_info_datasize = self.add_data_length.value * self.np_array_itemsize
 
         # additional info from controllers
         self._rhc_info_buffer = mp.Array(buffer_cdtype, 
-                                        self.robot_states.cluster_size * self._add_info_size) 
+                                        self.robot_states.cluster_size * self.add_data_length.value) 
 
         # state from robot to controllers
         self._state_root_p_buffer = mp.Array(buffer_cdtype, 
@@ -348,7 +327,7 @@ class ControlClusterClient(ABC):
         
         self.controllers_cmds.rhc_info.data[:, :] = torch.frombuffer(self._rhc_info_buffer.get_obj(),
                     dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self._add_info_size)
+                                                                self.add_data_length.value)
     
     def _fill_buffers_with_states(self):
         
@@ -427,17 +406,69 @@ class ControlClusterClient(ABC):
 
         return (control_index+1) % self.n_sim_step_per_cntrl == 0
     
+    def _finalize_init(self):
+        
+        # things to be done when everything is set but before starting to solve
+
+        self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
+                                            cluster_size=self.cluster_size,
+                                            add_data_size = self.add_data_length.value, 
+                                            backend=self._backend, 
+                                            device=self._device, 
+                                            dtype=self.torch_dtype) # now that we know add_data_size
+        # we overwrite controllers_cmds
+
+        self._create_shared_buffers() # used to store the data received by the pipes 
+        # on the child processes
+
+        self._trigger_processes = []
+        self._solread_processes = []
+        self._statesend_processes = []
+
+        for i in range(0, self.cluster_size):
+
+            self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
+                                                    name = "ControlClusterClient_trigger" + str(i), 
+                                                    args=(i, )), 
+                                )
+            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution process n." + str(i))
+            self._trigger_processes[i].start()
+
+            self._solread_processes.append(mp.Process(target=self._read_solution, 
+                                                    name = "ControlClusterClient_solread" + str(i), 
+                                                    args=(i, )), 
+                                )
+            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _read_solution process n." + str(i))
+            self._solread_processes[i].start()
+
+            self._statesend_processes.append(mp.Process(target=self._send_states, 
+                                                    name = "ControlClusterClient_sendstates" + str(i), 
+                                                    args=(i, )), 
+                                )
+            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _send_states process n." + str(i))
+            self._statesend_processes[i].start()
+
     def solve(self):
 
         # solve all the TO problems in the control cluster
 
-        if not self.is_cluster_ready.value:
+        is_cluster_ready = self.is_cluster_ready.value
+
+        if not is_cluster_ready:
 
             if self._verbose: 
 
                 print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": waiting connection to ControlCluster server")
 
-        if (self.is_cluster_ready.value):
+        if (not self.was_cluster_ready) and is_cluster_ready:
+            
+            # first time the cluster is ready 
+
+            self._finalize_init() # we perform the final initializations
+
+            self.was_cluster_ready = True
+
+        if (is_cluster_ready):
             
             start_time = time.monotonic() # we profile the whole solution pipeline
             
@@ -460,7 +491,7 @@ class ControlClusterClient(ABC):
             self.solution_counter += 1
 
             self.solution_time = time.monotonic() - start_time # we profile the whole solution pipeline
-
+        
     def close(self):
 
         self.__del__()

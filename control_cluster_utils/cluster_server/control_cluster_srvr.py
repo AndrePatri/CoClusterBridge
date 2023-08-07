@@ -139,10 +139,16 @@ class ControlClusterSrvr(ABC):
         jnt_number_srvr_data = struct.pack('i', self.n_dofs)
         self.pipes_manager.open_pipes(selector=["jnt_number_srvr"], 
                                 mode=OMode["O_WRONLY"])
-
         os.write(self.pipes_manager.pipes_fd["jnt_number_srvr"], jnt_number_srvr_data) # we send this info
         # to the client, which is now guaranteed to be listening on the pipe
-
+        
+        # we send the joint number to the client 
+        add_data_lenght_data = struct.pack('i', self._controllers[0].add_data_lenght)
+        self.pipes_manager.open_pipes(selector=["add_data_length"], 
+                                mode=OMode["O_WRONLY"])
+        os.write(self.pipes_manager.pipes_fd["add_data_length"], add_data_lenght_data) # we send this info
+        # to the client, which is now guaranteed to be listening on the pipe
+        
         # client-side joint names (e.g. coming from the simulator)
 
         self.pipes_manager.open_pipes(["n_bytes_jnt_names_client"], 
@@ -168,7 +174,7 @@ class ControlClusterSrvr(ABC):
             # we save a bit of time when spawning the processes
 
         self._check_jnt_names_compatibility() 
-
+    
         print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": final initialization steps completed.")
 
     def _check_jnt_names_compatibility(self):
