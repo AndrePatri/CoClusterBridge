@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from control_cluster_utils.controllers.rhc import RHChild
-from control_cluster_utils.utilities.control_cluster_utils import RobotClusterState, ActionChild
+from control_cluster_utils.utilities.control_cluster_defs import RobotClusterState, ActionChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize

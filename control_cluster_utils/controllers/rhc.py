@@ -19,57 +19,117 @@ import copy
 from typing import List
 
 import numpy as np
+import torch
 
 class RobotState:
 
     class RootState:
 
         def __init__(self, 
-                    dtype = np.float32):
+                    dtype = torch.float32, 
+                    device: torch.device = torch.device('cpu')):
             
-            self.p = np.zeros((1, 3), dtype=dtype) # floating base position
-            self.q = np.zeros((1, 4), dtype=dtype) # floating base orientation (quaternion)
-            self.v = np.zeros((1, 3), dtype=dtype) # floating base linear vel
-            self.omega = np.zeros((1, 3), dtype=dtype) # floating base angular vel
+            self.p = torch.zeros((1, 3), dtype=dtype, device = device) # floating base position
+            self.q = torch.zeros((1, 4), dtype=dtype, device = device) # floating base orientation (quaternion)
+            self.v = torch.zeros((1, 3), dtype=dtype, device = device) # floating base linear vel
+            self.omega = torch.zeros((1, 3), dtype=dtype, device = device) # floating base angular vel
 
     class JntState:
 
         def __init__(self, 
                     n_dofs: int, 
-                    dtype = np.float32):
+                    dtype = torch.float32, 
+                    device: torch.device = torch.device('cpu')):
 
-            self.q = np.zeros((1, n_dofs), dtype=dtype) # joint positions
-            self.v = np.zeros((1, n_dofs), dtype=dtype) # joint velocities
-            self.a = np.zeros((1, n_dofs), dtype=dtype) # joint accelerations
-            self.effort = np.zeros((1, n_dofs), dtype=dtype) # joint efforts
+            self.q = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint positions
+            self.v = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint velocities
+            self.a = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint accelerations
+            self.eff = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint efforts
+
+    def __init__(self, 
+                n_dofs: int, 
+                dtype = torch.float32):
+
+        self.dtype = dtype
+
+        self.device = torch.device('cpu') # born to live on CPU
+
+        self.n_dofs = n_dofs
+
+        self.root_state = RobotState.RootState(dtype=self.dtype, 
+                                            device=self.device)
+
+        self.jnt_state = RobotState.JntState(n_dofs=n_dofs, 
+                                            dtype=self.dtype, 
+                                            device=self.device)
+
+
+        self.aggregate_view = torch.cat([
+            self.root_state.p,
+            self.root_state.q,
+            self.root_state.v,
+            self.root_state.omega,
+            self.jnt_state.q,
+            self.jnt_state.v
+            ], dim=1)
+
+class RobotCmds:
+
+    class JntCmd:
+
+        def __init__(self, 
+                    n_dofs: int, 
+                    dtype = torch.float32, 
+                    device: torch.device = torch.device('cpu')):
+
+            self.q = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint positions
+            self.v = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint velocities
+            self.eff = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint efforts
 
     class SolverState:
 
         def __init__(self, 
                 add_info_size = 1, 
-                dtype = np.float32):
+                dtype = torch.float32, 
+                device: torch.device = torch.device('cpu')):
 
-            self.info = np.zeros((1, add_info_size), dtype=dtype)
+            self.info = torch.zeros((1, add_info_size), dtype=dtype, device = device)
 
     def __init__(self, 
                 n_dofs: int, 
                 add_info_size: int = None, 
-                dtype = np.float32):
+                dtype = torch.float32):
 
         self.dtype = dtype
 
-        self.root_state = RobotState.RootState(self.dtype)
-
-        self.jnt_state = RobotState.JntState(n_dofs, 
-                                            self.dtype)
-
-        if add_info_size is not None:
-
-            self.slvr_state = RobotState.SolverState(n_dofs, 
-                                                self.dtype)
+        self.device = torch.device('cpu') # born to live on CPU
 
         self.n_dofs = n_dofs
 
+        self.jnt_cmd = RobotCmds.JntCmd(n_dofs = n_dofs, 
+                                        dtype=self.dtype, 
+                                        device=self.device)
+
+        if add_info_size is not None:
+
+            self.slvr_state = RobotCmds.SolverState(dtype=self.dtype, 
+                                            device=self.device)
+            
+            self.aggregate_view = torch.cat([
+                self.jnt_cmd.q,
+                self.jnt_cmd.v,
+                self.jnt_cmd.eff,
+                self.slvr_state.info
+                ], dim=1)
+        
+        else:
+
+            self.aggregate_view = torch.cat([
+                self.jnt_cmd.q,
+                self.jnt_cmd.v,
+                self.jnt_cmd.eff
+                ], dim=1)
+            
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 
 class CntrlCmd(ABC):
@@ -92,7 +152,7 @@ class RHController(ABC):
             controller_index: int,
             termination_flag: mp.Value,
             verbose = False, 
-            array_dtype = np.float32):
+            array_dtype = torch.float32):
         
         self.controller_index = controller_index
 
@@ -189,7 +249,7 @@ class RHController(ABC):
         self.robot_state = RobotState(self.n_dofs, 
                                     dtype=self.array_dtype) # used for storing state coming FROM robot
 
-        self.robot_cmds = RobotState(self.n_dofs, 
+        self.robot_cmds = RobotCmds(self.n_dofs, 
                                 add_info_size=2, 
                                 dtype=self.array_dtype) # used for storing internal state (i.e. from TO solution)
         
@@ -225,56 +285,56 @@ class RHController(ABC):
 
         self.root_p_size = self.robot_state.root_state.p.shape[0] * \
                         self.robot_state.root_state.p.shape[1] * \
-                        self.robot_state.root_state.p.itemsize
+                        self.robot_state.root_state.p.element_size()
         
         self.root_q_size = self.robot_state.root_state.q.shape[0] * \
                         self.robot_state.root_state.q.shape[1] * \
-                        self.robot_state.root_state.q.itemsize
+                        self.robot_state.root_state.q.element_size()
         
         self.root_v_size = self.robot_state.root_state.v.shape[0] * \
                         self.robot_state.root_state.v.shape[1] * \
-                        self.robot_state.root_state.v.itemsize
+                        self.robot_state.root_state.v.element_size()
         
         self.root_omega_size = self.robot_state.root_state.omega.shape[0] * \
                         self.robot_state.root_state.omega.shape[1] * \
-                        self.robot_state.root_state.omega.itemsize
+                        self.robot_state.root_state.omega.element_size()
         
         self.jnt_q_size = self.robot_state.jnt_state.q.shape[0] * \
                         self.robot_state.jnt_state.q.shape[1] * \
-                        self.robot_state.jnt_state.q.itemsize
+                        self.robot_state.jnt_state.q.element_size()
         
         self.jnt_v_size = self.robot_state.jnt_state.v.shape[0] * \
                         self.robot_state.jnt_state.v.shape[1] * \
-                        self.robot_state.jnt_state.v.itemsize
+                        self.robot_state.jnt_state.v.element_size()
         
     def _read_state(self):
         
-        self.robot_state.root_state.p = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_p"][self.controller_index], 
+        self.robot_state.root_state.p = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_p"][self.controller_index], 
                                                             self.root_p_size), 
                                         dtype=self.array_dtype).reshape(1, 
                                                             self.robot_state.root_state.p.shape[1])
         
-        self.robot_state.root_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_q"][self.controller_index], 
+        self.robot_state.root_state.q = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_q"][self.controller_index], 
                                                             self.root_q_size), 
                                         dtype=self.array_dtype)[self._to_horizon_quat].reshape(1, 
                                                             self.robot_state.root_state.q.shape[1])
         
-        self.robot_state.root_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_v"][self.controller_index], 
+        self.robot_state.root_state.v = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_v"][self.controller_index], 
                                                             self.root_v_size), 
                                         dtype=self.array_dtype).reshape(1, 
                                                             self.robot_state.root_state.v.shape[1])
         
-        self.robot_state.root_state.omega = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_omega"][self.controller_index],
+        self.robot_state.root_state.omega = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_omega"][self.controller_index],
                                                             self.root_omega_size), 
                                         dtype=self.array_dtype).reshape(1, 
                                                             self.robot_state.root_state.omega.shape[1])
         
-        self.robot_state.jnt_state.q = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_q"][self.controller_index], 
+        self.robot_state.jnt_state.q = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_q"][self.controller_index], 
                                                             self.jnt_q_size), 
                                         dtype=self.array_dtype)[self._to_server].reshape(1, 
                                                                             self.robot_state.jnt_state.q.shape[1]) # with joint remapping to controller's order
         
-        self.robot_state.jnt_state.v = np.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_v"][self.controller_index], 
+        self.robot_state.jnt_state.v = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_v"][self.controller_index], 
                                                             self.jnt_v_size), 
                                         dtype=self.array_dtype)[self._to_server].reshape(1,
                                                                             self.robot_state.jnt_state.v.shape[1]) # with joint remapping to controller's order
@@ -283,23 +343,23 @@ class RHController(ABC):
         
         # writes commands from robot state
         os.write(self.pipes_manager.pipes_fd["cmd_jnt_q"][self.controller_index], 
-                self.robot_cmds.jnt_state.q[0, self._to_client].tobytes()) # with joint remapping to client's order
+                self.robot_cmds.jnt_cmd.q[0, self._to_client].numpy().tobytes()) # with joint remapping to client's order
         os.write(self.pipes_manager.pipes_fd["cmd_jnt_v"][self.controller_index], 
-                self.robot_cmds.jnt_state.v[0, self._to_client].tobytes()) # with joint remapping to client's order
+                self.robot_cmds.jnt_cmd.v[0, self._to_client].numpy().tobytes()) # with joint remapping to client's order
         os.write(self.pipes_manager.pipes_fd["cmd_jnt_eff"][self.controller_index], 
-                self.robot_cmds.jnt_state.effort[0, self._to_client].tobytes()) # with joint remapping to client's order
+                self.robot_cmds.jnt_cmd.effort[0, self._to_client].numpy().tobytes()) # with joint remapping to client's order
 
         # write additional info
-        os.write(self.pipes_manager.pipes_fd["rhc_info"][self.controller_index], self.robot_cmds.slvr_state.info.tobytes())
+        os.write(self.pipes_manager.pipes_fd["rhc_info"][self.controller_index], self.robot_cmds.slvr_state.info.numpy().tobytes())
     
     def _fill_cmds_from_sol(self):
 
         # get data from the solution
-        self.robot_cmds.jnt_state.q = self._get_cmd_jnt_q_from_sol()
+        self.robot_cmds.jnt_cmd.q = self._get_cmd_jnt_q_from_sol()
 
-        self.robot_cmds.jnt_state.v = self._get_cmd_jnt_v_from_sol()
+        self.robot_cmds.jnt_cmd.v = self._get_cmd_jnt_v_from_sol()
 
-        self.robot_cmds.jnt_state.effort = self._get_cmd_jnt_eff_from_sol()
+        self.robot_cmds.jnt_cmd.effort = self._get_cmd_jnt_eff_from_sol()
 
         self.robot_cmds.slvr_state.info = self._get_additional_slvr_info()
 
@@ -352,9 +412,9 @@ class RHController(ABC):
                         self._send_solution() # writes solution on pipe
 
                         # print("cmd debug n." + str(self.controller_index) + "\n" + 
-                        #         "q_cmd: " + str(self.robot_cmds.jnt_state.q) + "\n" + 
-                        #         "v_cmd: " + str(self.robot_cmds.jnt_state.v) + "\n" + 
-                        #         "eff_cmd: " + str(self.robot_cmds.jnt_state.effort))
+                        #         "q_cmd: " + str(self.robot_cmds.jnt_cmd.q) + "\n" + 
+                        #         "v_cmd: " + str(self.robot_cmds.jnt_cmd.v) + "\n" + 
+                        #         "eff_cmd: " + str(self.robot_cmds.jnt_cmd.effort))
 
                         # os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
                         
@@ -424,22 +484,22 @@ class RHController(ABC):
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_q_from_sol(self) -> np.ndarray:
+    def _get_cmd_jnt_q_from_sol(self) -> torch.Tensor:
 
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
-
-        pass
-    
-    @abstractmethod
-    def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
+    def _get_cmd_jnt_v_from_sol(self) -> torch.Tensor:
 
         pass
     
     @abstractmethod
-    def _get_additional_slvr_info(self) -> np.ndarray:
+    def _get_cmd_jnt_eff_from_sol(self) -> torch.Tensor:
+
+        pass
+    
+    @abstractmethod
+    def _get_additional_slvr_info(self) -> torch.Tensor:
 
         pass
 

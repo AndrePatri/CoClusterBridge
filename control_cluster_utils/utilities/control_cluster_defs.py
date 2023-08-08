@@ -51,7 +51,10 @@ class RobotClusterState:
         self.backend = "torch" # forcing torch backend
 
         self.device = device
-
+        
+        self.cluster_size = cluster_size
+        self.n_dofs = n_dofs
+        
         if (self.backend != "torch"):
 
             self.device = torch.device("cpu")
@@ -65,8 +68,34 @@ class RobotClusterState:
                                         device = self.device, 
                                         dtype = self.dtype)
         
-        self.n_dofs = n_dofs
-        self.cluster_size = cluster_size
+        self.aggregate_view = torch.cat([
+            self.root_state.p,
+            self.root_state.q,
+            self.root_state.v,
+            self.root_state.omega,
+            self.jnt_state.q,
+            self.jnt_state.v
+        ], dim=1)
+
+    def update(self, other_cmd: 'RobotClusterState', 
+               synch = False) -> None:
+        
+        if self.cluster_size != other_cmd.cluster_size or \
+                self.n_dofs != other_cmd.n_dofs:
+            
+            exception = f"[{self.__class__.__name__}]"  + f"[{self._exception}]" +  f"[{self.update.__name__}]: " + \
+                        f"dimensions of provided cluster state {other_cmd._cluster_size} x {other_cmd._n_dofs} " + \
+                        f"do not match {self._cluster_size} x {self._n_dofs}"
+            
+            raise ValueError(exception)
+
+        self.aggregate_view.copy_(other_cmd.aggregate_view, 
+                                non_blocking=True) # non-blocking -> we need to synchronize with 
+        # before accessing the copied data
+
+        if synch: 
+            
+            torch.cuda.synchronize()
 
 class RobotClusterCmd:
 
@@ -81,6 +110,9 @@ class RobotClusterCmd:
             self.dtype = dtype
 
             self._device = device
+           
+            self._cluster_size = cluster_size
+            self._n_dofs = n_dofs
 
             self.q = torch.zeros((cluster_size, n_dofs), 
                                 device = self._device, 
@@ -92,6 +124,11 @@ class RobotClusterCmd:
             self.eff = torch.zeros((cluster_size, n_dofs), 
                                 device = self._device, 
                                 dtype=self.dtype) # joint accelerations
+            
+            self._status = "status"
+            self._info = "info"
+            self._warning = "warning"
+            self._exception = "exception"
 
     class RhcInfo:
 
@@ -143,8 +180,41 @@ class RobotClusterCmd:
                                         device=self.device, 
                                         dtype=self.dtype, 
                                         add_data_size = add_data_size)
+                
+                self.aggregate_view = torch.cat([
+                self.jnt_cmd.q,
+                self.jnt_cmd.v,
+                self.jnt_cmd.eff,
+                self.rhc_info.data,
+                ], dim=1)
+        
+        else:
+             
+             self.aggregate_view = torch.cat([
+                self.jnt_cmd.q,
+                self.jnt_cmd.v,
+                self.jnt_cmd.eff,
+                ], dim=1)
+        
+    def update(self, other_cmd: 'RobotClusterCmd', 
+               synch = False) -> None:
+        
+        if self._cluster_size != other_cmd._cluster_size or \
+                self._n_dofs != other_cmd._n_dofs:
+            
+            exception = f"[{self.__class__.__name__}]"  + f"[{self._exception}]" +  f"[{self.update.__name__}]: " + \
+                        f"dimensions of provided cluster command {other_cmd._cluster_size} x {other_cmd._n_dofs} " + \
+                        f"do not match {self._cluster_size} x {self._n_dofs}"
+            
+            raise ValueError(exception)
 
+        self.aggregate_view.copy_(other_cmd.aggregate_view, 
+                                non_blocking=True) # non-blocking -> we need to synchronize with 
+        # before accessing the copied data
 
+        if synch: 
+            
+            torch.cuda.synchronize()
 
 class Action(ABC):
         
