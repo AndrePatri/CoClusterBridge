@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 from control_cluster_utils.controllers.rhc import RHChild
-from control_cluster_utils.utilities.control_cluster_defs import RobotClusterState, ActionChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
@@ -40,8 +39,6 @@ class ControlClusterSrvr(ABC):
         self.cluster_size = -1
 
         self._device = "cpu"
-
-        self._robot_states: RobotClusterState = None
 
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
@@ -130,10 +127,6 @@ class ControlClusterSrvr(ABC):
 
         self.n_dofs = self._controllers[0]._get_ndofs() # we assume all controllers to be for the same robot
         self.server_side_jnt_names = self._controllers[0]._server_side_jnt_names
-
-        self._robot_states = RobotClusterState(n_dofs = self.n_dofs, 
-                                cluster_size = self.cluster_size,
-                                device = self._device)
         
         # we send the joint number to the client 
         jnt_number_srvr_data = struct.pack('i', self.n_dofs)
@@ -141,8 +134,8 @@ class ControlClusterSrvr(ABC):
                                 mode=OMode["O_WRONLY"])
         os.write(self.pipes_manager.pipes_fd["jnt_number_srvr"], jnt_number_srvr_data) # we send this info
         # to the client, which is now guaranteed to be listening on the pipe
-        
-        # we send the joint number to the client 
+
+        # we send the add_data_length to the client 
         add_data_lenght_data = struct.pack('i', self._controllers[0].add_data_lenght)
         self.pipes_manager.open_pipes(selector=["add_data_length"], 
                                 mode=OMode["O_WRONLY"])

@@ -14,6 +14,8 @@ from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
 
+from control_cluster_utils.utilities.shared_mem import SharedMemClient
+
 import copy
 
 from typing import List
@@ -26,29 +28,79 @@ class RobotState:
     class RootState:
 
         def __init__(self, 
-                    dtype = torch.float32, 
-                    device: torch.device = torch.device('cpu')):
+                    mem_manager: SharedMemClient):
             
-            self.p = torch.zeros((1, 3), dtype=dtype, device = device) # floating base position
-            self.q = torch.zeros((1, 4), dtype=dtype, device = device) # floating base orientation (quaternion)
-            self.v = torch.zeros((1, 3), dtype=dtype, device = device) # floating base linear vel
-            self.omega = torch.zeros((1, 3), dtype=dtype, device = device) # floating base angular vel
+            self.p = None # floating base position
+            self.q = None # floating base orientation (quaternion)
+            self.v = None # floating base linear vel
+            self.omega = None # floating base angular vel
+
+            # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "p")
+            self.assign_views(mem_manager, "q")
+            self.assign_views(mem_manager, "v")
+            self.assign_views(mem_manager, "omega")
+
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            # we create views 
+
+            if varname == "p":
+                
+                self.p = mem_manager.create_tensor_view(index=0, 
+                                        length=3)
+
+            if varname == "q":
+                
+                self.q = mem_manager.create_tensor_view(index=3, 
+                                        length=4)
+
+            if varname == "v":
+                
+                self.v = mem_manager.create_tensor_view(index=7, 
+                                        length=3)
+
+            if varname == "omega":
+                
+                self.omega = mem_manager.create_tensor_view(index=10, 
+                                        length=3)
 
     class JntState:
 
         def __init__(self, 
                     n_dofs: int, 
-                    dtype = torch.float32, 
-                    device: torch.device = torch.device('cpu')):
+                    mem_manager: SharedMemClient):
 
-            self.q = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint positions
-            self.v = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint velocities
-            self.a = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint accelerations
-            self.eff = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint efforts
+            self.q = None # joint positions
+            self.v = None # joint velocities
 
+            self.n_dofs = n_dofs
+
+            self.assign_views(mem_manager, "q")
+            self.assign_views(mem_manager, "v")
+
+        def assign_views(self, 
+            mem_manager: SharedMemClient,
+            varname: str):
+            
+            if varname == "q":
+                
+                self.q = mem_manager.create_tensor_view(index=13, 
+                                        length=self.n_dofs)
+                
+            if varname == "v":
+                
+                self.v = mem_manager.create_tensor_view(index=13 + self.n_dofs, 
+                                        length=self.n_dofs)
+                
     def __init__(self, 
                 n_dofs: int, 
-                dtype = torch.float32):
+                cluster_size: int,
+                index: int,
+                dtype = torch.float32, 
+                verbose=False):
 
         self.dtype = dtype
 
@@ -56,22 +108,28 @@ class RobotState:
 
         self.n_dofs = n_dofs
 
-        self.root_state = RobotState.RootState(dtype=self.dtype, 
-                                            device=self.device)
+        # root p, q, v, omega + jnt q, v respectively
+        aggregate_view_columnsize = 3 + \
+            4 + \
+            3 + \
+            3 + \
+            2 * self.n_dofs
+        
+        # this creates the view of the shared data for the robot specificed by index
+        self.shared_memman = SharedMemClient(cluster_size, 
+                        aggregate_view_columnsize, 
+                        index, 
+                        'RobotState', 
+                        self.dtype, 
+                        verbose=verbose) # this blocks untils the server creates the associated memory
+        
+        self.root_state = RobotState.RootState(self.shared_memman)
 
-        self.jnt_state = RobotState.JntState(n_dofs=n_dofs, 
-                                            dtype=self.dtype, 
-                                            device=self.device)
-
-
-        self.aggregate_view = torch.cat([
-            self.root_state.p,
-            self.root_state.q,
-            self.root_state.v,
-            self.root_state.omega,
-            self.jnt_state.q,
-            self.jnt_state.v
-            ], dim=1)
+        self.jnt_state = RobotState.JntState(n_dofs, 
+                                        self.shared_memman)
+        
+        # we now make all the data in root_state and jnt_state a view of the memory viewed by the manager
+        # paying attention to read the right blocks
 
 class RobotCmds:
 
@@ -97,8 +155,11 @@ class RobotCmds:
 
     def __init__(self, 
                 n_dofs: int, 
+                cluster_size: int,
+                index: int,
                 add_info_size: int = None, 
-                dtype = torch.float32):
+                dtype = torch.float32, 
+                verbose=False):
 
         self.dtype = dtype
 
@@ -109,7 +170,7 @@ class RobotCmds:
         self.jnt_cmd = RobotCmds.JntCmd(n_dofs = n_dofs, 
                                         dtype=self.dtype, 
                                         device=self.device)
-
+        
         if add_info_size is not None:
 
             self.slvr_state = RobotCmds.SolverState(dtype=self.dtype, 
@@ -130,6 +191,13 @@ class RobotCmds:
                 self.jnt_cmd.eff
                 ], dim=1)
             
+        self.shared_memman = SharedMemClient(cluster_size, 
+                        self.n_dofs, 
+                        index, 
+                        'RobotCmds', 
+                        self.dtype, 
+                        verbose=verbose) # this blocks untils the server creates the associated memory
+        
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 
 class CntrlCmd(ABC):
@@ -148,6 +216,7 @@ class RHController(ABC):
             urdf_path: str, 
             srdf_path: str,
             config_path: str, 
+            cluster_size: int,
             pipes_manager: NamedPipesHandler,
             controller_index: int,
             termination_flag: mp.Value,
@@ -167,6 +236,8 @@ class RHController(ABC):
 
         self._verbose = verbose
         
+        self.cluster_size = cluster_size
+
         self.urdf_path = urdf_path
         self.srdf_path = srdf_path
         # read urdf and srdf files
@@ -208,6 +279,8 @@ class RHController(ABC):
 
         self._init_problem() # we call the child's initialization method
 
+        self._init_states() # know that the n_dofs are known, we can call the parent method to init robot states and cmds
+
     def _open_pipes(self):
         
         # these are blocking
@@ -246,12 +319,18 @@ class RHController(ABC):
     def _init_states(self):
         
         # to be called after n_dofs is known
-        self.robot_state = RobotState(self.n_dofs, 
-                                    dtype=self.array_dtype) # used for storing state coming FROM robot
+        self.robot_state = RobotState(n_dofs=self.n_dofs, 
+                                    cluster_size=self.cluster_size,
+                                    index=self.controller_index,
+                                    dtype=self.array_dtype, 
+                                    verbose = self._verbose) # used for storing state coming FROM robot
 
         self.robot_cmds = RobotCmds(self.n_dofs, 
+                                cluster_size=self.cluster_size, 
+                                index=self.controller_index,
                                 add_info_size=2, 
-                                dtype=self.array_dtype) # used for storing internal state (i.e. from TO solution)
+                                dtype=self.array_dtype, 
+                                verbose=self._verbose) # used for storing internal state (i.e. from TO solution)
         
         self._init_sizes() # to make reading from pipes easier
 
@@ -354,14 +433,14 @@ class RHController(ABC):
     
     def _fill_cmds_from_sol(self):
 
-        # get data from the solution
-        self.robot_cmds.jnt_cmd.q = self._get_cmd_jnt_q_from_sol()
+        # get data from the solution and updated the view on the shared data
+        self.robot_cmds.jnt_cmd.q[:, :] = self._get_cmd_jnt_q_from_sol()
 
-        self.robot_cmds.jnt_cmd.v = self._get_cmd_jnt_v_from_sol()
+        self.robot_cmds.jnt_cmd.v[:, :] = self._get_cmd_jnt_v_from_sol()
 
-        self.robot_cmds.jnt_cmd.effort = self._get_cmd_jnt_eff_from_sol()
+        self.robot_cmds.jnt_cmd.eff[:, :] = self._get_cmd_jnt_eff_from_sol()
 
-        self.robot_cmds.slvr_state.info = self._get_additional_slvr_info()
+        self.robot_cmds.slvr_state.info[:, :] = self._get_additional_slvr_info()
 
     def solve(self):
         

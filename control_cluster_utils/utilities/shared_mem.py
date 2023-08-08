@@ -99,8 +99,19 @@ class SharedMemClient:
                 n_cols: int,
                 client_index: int, 
                 name = 'shared_memory', 
-                dtype=torch.float32):
+                dtype=torch.float32, 
+                verbose = False, 
+                wait_amount = 0.05):
         
+        self.verbose = verbose
+
+        self.wait_amount = wait_amount
+
+        self.status = "status"
+        self.info = "info"
+        self.exception = "exception"
+        self.warning = "warning"
+
         self.dtype = dtype
 
         self.name = name
@@ -125,7 +136,7 @@ class SharedMemClient:
 
         self.attach_shared_memory()
 
-        self.create_tensor_view()
+        self.tensor_view = self.create_tensor_view()
 
     def __del__(self):
 
@@ -135,6 +146,8 @@ class SharedMemClient:
 
         tensor_size = self.n_rows * self.n_cols * self.element_size
         
+        import time
+
         while True:
 
             try:
@@ -145,6 +158,15 @@ class SharedMemClient:
                 break  # exit loop if attached successfully
 
             except posix_ipc.ExistentialError:
+                
+                if self.verbose: 
+
+                    status = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                    f"[{self.status}]" + ":" + f"waiting for memory at {self.mem_config.mem_path} to be allocated by the server..."
+                    
+                    print(status)
+
+                time.sleep(self.wait_amount)
 
                 continue
 
@@ -152,15 +174,45 @@ class SharedMemClient:
 
         self.shm.close_fd() 
 
-    def create_tensor_view(self):
+    def create_tensor_view(self, 
+                index: int = None, 
+                length: int = None):
 
         if self.memory is not None:
+            
+            if (index is None) or (length is None):
 
-            offset = self.client_index * self.n_cols * self.element_size
-            self.tensor_view = torch.frombuffer(self.memory,
-                                        dtype=self.dtype, 
-                                        count=self.n_cols, 
-                                        offset=offset).view(1, self.n_cols)
+                offset = self.client_index * self.n_cols * self.element_size
+                
+                return torch.frombuffer(self.memory,
+                                dtype=self.dtype, 
+                                count=self.n_cols, 
+                                offset=offset).view(1, self.n_cols)
+            else:
+                
+                if index >= self.n_cols:
+
+                    exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                    f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
+                                    ":" + f"the provided index {index} exceeds {self.n_cols - 1}"
+                
+                    raise ValueError(exception)
+                
+                if length > (self.n_cols - index):
+
+                    exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                    f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
+                                    ":" + f"the provided length {length} exceeds {(self.n_cols - index)}"
+                
+                    raise ValueError(exception)
+                
+                offset = self.client_index * self.n_cols * self.element_size + \
+                    index * self.element_size 
+                
+                return torch.frombuffer(self.memory,
+                                dtype=self.dtype, 
+                                count=length, 
+                                offset=offset).view(1, length)
 
     def detach_shared_memory(self):
 
