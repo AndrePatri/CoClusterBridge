@@ -97,7 +97,7 @@ class ControlClusterClient(ABC):
     def _spawn_processes(self):
         
         # we spawn the handshake() to another process, 
-        # so that it's not blocking
+        # so that it's not blocking wrt the simulator
         self._connection_process = mp.Process(target=self._handshake, 
                                 name = "ControlClusterClient_handshake")
         self._connection_process.start()
@@ -165,32 +165,31 @@ class ControlClusterClient(ABC):
     def _trigger_solution(self, 
                         index: int):
 
-        # solver
-        self.pipes_manager.open_pipes(["trigger_solve"], 
-                                    mode=OMode["O_WRONLY"], 
-                                    index=index) # blocking (non-blocking
+        
         # would throw error if nothing has opened the pipe in read mode)
         
-        while True: # we keep the process alive
+        # while True: # we keep the process alive
 
-            if self._trigger_solve[index] and self.is_cluster_ready.value: # these are set by the parent process
-                
-                msg_bytes = b'1'
-                # Send a signal to perform the solution
-                os.write(self.pipes_manager.pipes_fd["trigger_solve"][index], 
-                    msg_bytes)
+        # if self._trigger_solve[index] and self.is_cluster_ready.value: # these are set by the parent process
 
-                self._trigger_solve[index] = False # we will wait for next signal
+        if self.is_cluster_ready.value: 
+
+            msg_bytes = b'1'
+            # Send a signal to perform the solution
+            
+            os.write(self.pipes_manager.pipes_fd["trigger_solve"][index], 
+                msg_bytes)
+
+                # self._trigger_solve[index] = False # we will wait for next signal
                 # from the main process
             
-            else:
+                # else:
 
-                continue
+                #     continue
 
     def _read_solution(self, 
                     index: int):
 
-        # these are not blocking
         self.pipes_manager.open_pipes(selector=[
                 "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
                 "rhc_info"
@@ -372,7 +371,7 @@ class ControlClusterClient(ABC):
         while not all(not value for value in self._trigger_read):
 
             continue
-    
+
     def _wait_for_state_writing(self):
 
         while not all(not value for value in self._trigger_send_state):
@@ -410,6 +409,13 @@ class ControlClusterClient(ABC):
         
         # things to be done when everything is set but before starting to solve
 
+        # solver
+        for i in range(0, self.cluster_size):
+
+            self.pipes_manager.open_pipes(["trigger_solve"], 
+                                        mode=OMode["O_WRONLY"], 
+                                        index=i) # blocking (non-blocking
+            
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
                                             cluster_size=self.cluster_size,
                                             add_data_size = self.add_data_length.value, 
@@ -427,12 +433,12 @@ class ControlClusterClient(ABC):
 
         for i in range(0, self.cluster_size):
 
-            self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
-                                                    name = "ControlClusterClient_trigger" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution process n." + str(i))
-            self._trigger_processes[i].start()
+            # self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
+            #                                         name = "ControlClusterClient_trigger" + str(i), 
+            #                                         args=(i, )), 
+            #                     )
+            # print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution process n." + str(i))
+            # self._trigger_processes[i].start()
 
             self._solread_processes.append(mp.Process(target=self._read_solution, 
                                                     name = "ControlClusterClient_solread" + str(i), 
@@ -479,7 +485,9 @@ class ControlClusterClient(ABC):
             self._wait_for_state_writing() # we wait until everything was sent (as soon as each controller 
             # receives a state, it solves the TO)
 
-            self._send_sol_trigger() # we send a signal to solve the TO to all controllers
+            for i in range(0, self.cluster_size):
+
+                self._trigger_solution(i) # we send a signal to solve the TO to all controllers            
 
             self._send_read_sols_trigger() # reads from all controllers' solutions (this will automatically update the shared
             # # data buffers)

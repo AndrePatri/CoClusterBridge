@@ -335,9 +335,10 @@ class RHController(ABC):
                             start = time.monotonic()
 
                     msg_bytes = b'1'
+                    t = time.monotonic()
                     signal = os.read(self.pipes_manager.pipes_fd["trigger_solve"][self.controller_index], 
                                     len(msg_bytes)).decode().strip()
-                    
+                    print(str(time.monotonic()-t ))
                     if signal == '1':
                         
                         # read latest states from pipe 
