@@ -54,6 +54,8 @@ class SharedMemSrvr:
 
         self.shm = None
 
+        self.bool_bytearray_view = None
+
         self.torch_to_np_dtype = {
             torch.float16: np.float16,
             torch.float32: np.float32,
@@ -142,7 +144,9 @@ class SharedMemSrvr:
 
         self.bool_bytearray_view = memoryview(self.memory)
 
-        self.bytearray_reset = bytearray(len(self.bool_bytearray_view))
+        self.bytearray_reset_false = bytearray(len(self.bool_bytearray_view))
+
+        self.bytearray_reset_true = bytearray([1] * len(self.bool_bytearray_view))
 
     def all(self):
 
@@ -160,11 +164,17 @@ class SharedMemSrvr:
             raise Exception(exception)
 
     def reset_bool(self, 
-                val: bool = False):
+                to_true: bool = False):
 
         if self.bool_bytearray_view is not None:
+            
+            if to_true:
 
-            self.bool_bytearray_view[:] = self.bytearray_reset
+                self.bool_bytearray_view[:] = self.bytearray_reset_true
+
+            else:
+
+                self.bool_bytearray_view[:] = self.bytearray_reset_false
 
         else:
 
@@ -220,14 +230,21 @@ class SharedMemClient:
 
         self.shm = None
 
-        self.attach_shared_memory()
+        self.bool_bytearray_view = None
 
-        self.tensor_view = self.create_tensor_view()
+        self.attach_shared_memory()
 
         if self.backend == "torch": 
 
             if self.dtype == torch.bool and \
                 (self.n_rows == 1 or self.n_cols == 1):
+                
+                self.is_bool_mode = True
+
+                if self.n_rows == 1:
+
+                    self.client_index = 0 # this way we allow multiple "subscribers"
+                    # to a global boolean var
                 
                 self.create_bytearray_view() # more efficient array view for simple 1D boolean 
                 # arrays
@@ -237,7 +254,16 @@ class SharedMemClient:
             if self.dtype == np.bool and \
                 (self.n_rows == 1 or self.n_cols == 1):
 
+                self.is_bool_mode = True
+                
+                if self.n_rows == 1:
+
+                    self.client_index = 0 # this way we allow multiple "subscribers"
+                    # to a global boolean var
+                    
                 self.create_bytearray_view()
+
+        self.tensor_view = self.create_tensor_view()
 
     def __del__(self):
 
@@ -284,13 +310,14 @@ class SharedMemClient:
             if self.backend == "torch":
 
                 if (index is None) or (length is None):
-
+                
                     offset = self.client_index * self.n_cols * self.element_size
                     
                     return torch.frombuffer(self.memory,
                                     dtype=self.dtype, 
                                     count=self.n_cols, 
                                     offset=offset).view(1, self.n_cols)
+                    
                 else:
                     
                     if index >= self.n_cols:
@@ -356,12 +383,67 @@ class SharedMemClient:
     def create_bytearray_view(self):
 
         self.bool_bytearray_view = memoryview(self.memory)
-
+        
     def set_bool(self, 
                 val: bool = False):
 
-        self.bool_bytearray_view[self.client_index] = val
+        if self.bool_bytearray_view is not None:
+            
+            if self.client_index >= 0 and \
+                self.client_index < len(self.bool_bytearray_view) and \
+                len(self.bool_bytearray_view) > 1:
 
+                self.bool_bytearray_view[self.client_index] = val
+
+            else:
+
+                exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"bool val will not be assigned for dim incompatibility."
+
+                print(exception)
+        
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+    
+    def read_bool(self):
+    
+        if self.bool_bytearray_view is not None:
+            
+            if self.client_index >= 0 and \
+                self.client_index < len(self.bool_bytearray_view) and \
+                len(self.bool_bytearray_view) > 1:
+
+                return self.bool_bytearray_view[self.client_index]
+
+            if self.client_index < 0 or \
+                self.client_index >= len(self.bool_bytearray_view):
+
+                exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"bool val will not be read for dim incompatibility."
+
+                raise Exception(exception)
+
+            if len(self.bool_bytearray_view) == 1:
+
+                return self.bool_bytearray_view[0]
+            
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+        
     def detach_shared_memory(self):
         
         if self.bool_bytearray_view is not None:

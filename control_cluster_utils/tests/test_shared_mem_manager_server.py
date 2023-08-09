@@ -44,13 +44,15 @@ def profile_copy_cuda_cpu():
         t = time.monotonic()
         server_state.tensor_view[:, :] = fake_state.cpu()
         torch.cuda.synchronize()
-        print("time 2 copy from cuda to cpu: " + str(time.monotonic() - t ))
+        t_end = time.monotonic() - t 
+        print("time 2 copy from cuda to cpu: " + str(t_end))
         print(server_state.tensor_view)
 
         t = time.monotonic()
         fake_cmds[:, :] = server_cmds.tensor_view.cuda()
         torch.cuda.synchronize()
-        print("time 2 copy from cpu to cuda: " + str(time.monotonic() - t ))
+        t_end = time.monotonic() - t 
+        print("time 2 copy from cpu to cuda: " + str(t_end))
         print(fake_cmds)
 
         time.sleep(0.1)
@@ -73,14 +75,42 @@ def profile_reading_bool_array():
 
         t = time.monotonic()
         
-        server.all()
-        # server.reset_bool()
+        print(server.all())
 
-        print("time 2 check bool array: " + str(time.monotonic() - t ))
+        t_end = time.monotonic() - t 
+
+        print("time 2 check bool array: " + str(t_end))
+
+        time.sleep(0.1)
+
+def profile_writing_global_bool():
+
+    n_samples = 100
+
+    dtype = torch.bool
+
+    server = SharedMemSrvr(1, 1, "trigger", 
+                    dtype=dtype)
+
+    for i in range(0, n_samples):
+        
+        print("###########################")
+
+        if i > n_samples/2:
+
+            t = time.monotonic()
+
+            server.reset_bool(to_true = True)
+
+            t_end = time.monotonic() - t 
+
+            print("time 2 set global bool array: " + str(t_end))
 
         time.sleep(0.1)
 
 if __name__ == "__main__":
+
+    profile_writing_global_bool()
 
     profile_reading_bool_array()
 
