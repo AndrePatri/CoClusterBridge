@@ -32,6 +32,11 @@ class SharedMemSrvr:
                 dtype=torch.float32, 
                 backend="torch"):
 
+        self.status = "status"
+        self.info = "info"
+        self.exception = "exception"
+        self.warning = "warning"
+
         self.backend = backend
 
         self.dtype = dtype
@@ -105,7 +110,13 @@ class SharedMemSrvr:
 
         self.shm.close_fd() # we can close the file descriptor (memory remains
         # available for use)
-    
+
+        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self.create_shared_memory.__name__}]: " + \
+                        f": created shared memory of datatype {self.dtype}" + \
+                        f", size {self.n_rows} x {self.n_cols} @ {self.mem_config.mem_path}"
+        
+        print(message)
+
     def close_shared_memory(self):
         
         if self.bool_bytearray_view is not None:
@@ -117,6 +128,12 @@ class SharedMemSrvr:
             self.memory.close()
 
             self.memory = None
+
+            message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self.create_shared_memory.__name__}]: " + \
+                        f": closed shared memory of datatype {self.dtype}" + \
+                        f", size {self.n_rows} x {self.n_cols} @ {self.mem_config.mem_path}"
+        
+            print(message)
 
         if self.shm is not None:
 

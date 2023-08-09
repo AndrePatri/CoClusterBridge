@@ -64,20 +64,13 @@ class ControlClusterClient(ABC):
                                             device=self._device, 
                                             dtype=self.torch_dtype) # from robot to controllers
 
-        self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
-                                            cluster_size=self.cluster_size,
-                                            add_data_size = 1, 
-                                            backend=self._backend, 
-                                            device=self._device, 
-                                            dtype=self.torch_dtype)
+        self.controllers_cmds = None # we wait to know the size of the additional data
+        # from the control server
         
-        self.was_cluster_ready = False
+        self._was_cluster_ready = False
         self.is_cluster_ready = mp.Value('b', False)
-        self._trigger_solve = mp.Array('b', self.cluster_size)
-        self._trigger_read = mp.Array('b', self.cluster_size)
-        self._trigger_send_state = mp.Array('b', self.cluster_size)
-
         self.add_data_length = mp.Value('i', 0)
+        self._is_first_control_step = False
 
         self.status = "status"
         self.info = "info"
@@ -86,7 +79,7 @@ class ControlClusterClient(ABC):
     
         self.pipes_manager = NamedPipesHandler()
         self.pipes_manager.create_buildpipes()
-        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining pipes
+        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining runtime pipes
 
         self.solution_time = -1.0
         self.n_sim_step_per_cntrl = -1
@@ -99,9 +92,11 @@ class ControlClusterClient(ABC):
         
         # we spawn the handshake() to another process, 
         # so that it's not blocking wrt the simulator
+
         self._connection_process = mp.Process(target=self._handshake, 
                                 name = "ControlClusterClient_handshake")
         self._connection_process.start()
+
         print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _handshake process")
 
     def _handshake(self):
@@ -166,13 +161,6 @@ class ControlClusterClient(ABC):
     def _trigger_solution(self, 
                         index: int):
 
-        
-        # would throw error if nothing has opened the pipe in read mode)
-        
-        # while True: # we keep the process alive
-
-        # if self._trigger_solve[index] and self.is_cluster_ready.value: # these are set by the parent process
-
         if self.is_cluster_ready.value: 
 
             msg_bytes = b'1'
@@ -181,204 +169,27 @@ class ControlClusterClient(ABC):
             os.write(self.pipes_manager.pipes_fd["trigger_solve"][index], 
                 msg_bytes)
 
-                # self._trigger_solve[index] = False # we will wait for next signal
-                # from the main process
+    def _solved(self, 
+            index: int):
+
+        if self.is_cluster_ready.value: 
+
+            signal = os.read(self.pipes_manager.pipes_fd["solved"][index], 
+                            len(b'1')).decode().strip() # this is blocking
             
-                # else:
-
-                #     continue
-
-    def _read_solution(self, 
-                    index: int):
-
-        self.pipes_manager.open_pipes(selector=[
-                "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
-                "rhc_info"
-                ], 
-                mode = OMode["O_RDONLY"], 
-                index=index)
-
-        while True: # we keep the process alive
-            
-            if self._trigger_read[index] and self.is_cluster_ready.value: # these are set by the parent process
-
-                self._cmd_q_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
-                                np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_q"][index], self.jnt_data_size), 
-                                                dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
-                        
-                self._cmd_v_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
-                    np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_v"][index], self.jnt_data_size),
-                                    dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
+            if signal == '1':
                 
-                self._cmd_eff_buffer[(index * self.n_dofs):(index * self.n_dofs + self.n_dofs)] = \
-                    np.frombuffer(os.read(self.pipes_manager.pipes_fd["cmd_jnt_eff"][index], self.jnt_data_size),
-                                    dtype=self.np_dtype).reshape((1, self.n_dofs)).flatten()
-                
-                self._rhc_info_buffer[(index * self.add_data_length.value):(index * self.add_data_length.value + self.add_data_length.value)] = \
-                    np.frombuffer(os.read(self.pipes_manager.pipes_fd["rhc_info"][index], self._add_info_datasize),
-                                    dtype=self.np_dtype)
-
-                self._trigger_read[index] = False # we will wait for next signal
-                # from the main process
+                return True
             
             else:
-
-                continue
-    
-    def _send_states(self, 
-                    index: int):
-
-        self.pipes_manager.open_pipes(selector=["state_root_p", "state_root_q", 
-                                                "state_root_v", "state_root_omega", 
-                                                "state_jnt_q", "state_jnt_v"
-                                                ], 
-                                                mode = OMode["O_WRONLY"], 
-                                                index=index)
-
-        root_p_size = self.robot_states.root_state.p.shape[1]
-
-        root_q_size = self.robot_states.root_state.q.shape[1]
-        root_v_size = self.robot_states.root_state.v.shape[1]
-        root_omega_size = self.robot_states.root_state.omega.shape[1]
-        jnt_q_size = self.robot_states.jnt_state.q.shape[1]
-        jnt_v_size = self.robot_states.jnt_state.v.shape[1]
-
-        while True: # we keep the process alive
-
-            if self._trigger_send_state[index] and self.is_cluster_ready.value: # these are set by the parent process
                 
-                # root state
-                os.write(self.pipes_manager.pipes_fd["state_root_p"][index], 
-                        np.array(self._state_root_p_buffer, 
-                                dtype=self.np_dtype)[(index * root_p_size):(index * root_p_size + root_p_size)].tobytes())
+                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._solved.__name__}]: " + \
+                    f"received invalid response {signal} from controller n.{index}"
 
-                os.write(self.pipes_manager.pipes_fd["state_root_q"][index], 
-                        np.array(self._state_root_q_buffer, 
-                                dtype=self.np_dtype)[(index * root_q_size):(index * root_q_size + root_q_size)].tobytes())
-                os.write(self.pipes_manager.pipes_fd["state_root_v"][index], 
-                        np.array(self._state_root_v_buffer, 
-                                dtype=self.np_dtype)[(index * root_v_size):(index * root_v_size + root_v_size)].tobytes())
-                os.write(self.pipes_manager.pipes_fd["state_root_omega"][index],
-                        np.array(self._state_root_omega_buffer, 
-                                dtype=self.np_dtype)[(index * root_omega_size):(index * root_omega_size + root_omega_size)].tobytes())
+                print(message)
 
-                # jnt state
-                os.write(self.pipes_manager.pipes_fd["state_jnt_q"][index], 
-                        np.array(self._state_jnt_q_buffer, 
-                                dtype=self.np_dtype)[(index * jnt_q_size):(index * jnt_q_size + jnt_q_size)].tobytes())
-                os.write(self.pipes_manager.pipes_fd["state_jnt_v"][index], 
-                        np.array(self._state_jnt_v_buffer,
-                                dtype=self.np_dtype)[(index * jnt_v_size):(index * jnt_v_size + jnt_v_size)].tobytes())
-
-                self._trigger_send_state[index] = False # we will wait for next signal
-                # from the main process
-            
-            else:
-
-                continue
-    
-    def _create_shared_buffers(self):
+                return False
         
-        buffer_cdtype = np.ctypeslib.as_ctypes_type(self.np_dtype)
-
-        # cmds from controllers to robot
-        self._cmd_q_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.n_dofs)
-        self._cmd_v_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.n_dofs)
-        self._cmd_eff_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.n_dofs) 
-
-        self._add_info_datasize = self.add_data_length.value * self.np_array_itemsize
-
-        # additional info from controllers
-        self._rhc_info_buffer = mp.Array(buffer_cdtype, 
-                                        self.robot_states.cluster_size * self.add_data_length.value) 
-
-        # state from robot to controllers
-        self._state_root_p_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.robot_states.root_state.p.shape[1])
-        self._state_root_q_buffer = mp.Array(buffer_cdtype,
-                                    self.robot_states.cluster_size * self.robot_states.root_state.q.shape[1])
-        self._state_root_v_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.robot_states.root_state.v.shape[1])
-        self._state_root_omega_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.robot_states.root_state.omega.shape[1])
-        self._state_jnt_q_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.robot_states.jnt_state.q.shape[1])
-        self._state_jnt_v_buffer = mp.Array(buffer_cdtype, 
-                                    self.robot_states.cluster_size * self.robot_states.jnt_state.v.shape[1])
-
-    def _fill_cmds_from_buffer(self):
-
-        # HERE IS WHERE COPIES FROM CPU TO GPU ARE MADE (if the used device is GPU)
-
-        self.controllers_cmds.jnt_cmd.q[:, :] = torch.frombuffer(self._cmd_q_buffer.get_obj(), 
-                    dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs)
-        
-        self.controllers_cmds.jnt_cmd.v[:, :] = torch.frombuffer(self._cmd_v_buffer.get_obj(), 
-                    dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs)
-
-        self.controllers_cmds.jnt_cmd.eff[:, :] = torch.frombuffer(self._cmd_eff_buffer.get_obj(), 
-                    dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.controllers_cmds.n_dofs)
-        
-        self.controllers_cmds.rhc_info.data[:, :] = torch.frombuffer(self._rhc_info_buffer.get_obj(),
-                    dtype=self.controllers_cmds.dtype).reshape(self.controllers_cmds.cluster_size, 
-                                                                self.add_data_length.value)
-    
-    def _fill_buffers_with_states(self):
-        
-        # HERE IS WHERE COPIES OF THE STATE FROM GPU TO CPU ARE MADE (if the used device is CPU)
-
-        # root state 
-        self._state_root_p_buffer[:] = self.robot_states.root_state.p.cpu().flatten(start_dim=0).numpy() # we flatten along clusters
-        
-        self._state_root_q_buffer[:] = self.robot_states.root_state.q.cpu().flatten(start_dim=0).numpy()
-        
-        self._state_root_v_buffer[:] = self.robot_states.root_state.v.cpu().flatten(start_dim=0).numpy()
-        
-        self._state_root_omega_buffer[:] = self.robot_states.root_state.omega.cpu().flatten(start_dim=0).numpy()
-        
-        # jnt state
-        self._state_jnt_q_buffer[:] = self.robot_states.jnt_state.q.cpu().flatten(start_dim=0).numpy()
-        
-        self._state_jnt_v_buffer[:] = self.robot_states.jnt_state.v.cpu().flatten(start_dim=0).numpy()
-    
-    def _send_sol_trigger(self):
-
-        for i in range(0, self.cluster_size):
-
-            self._trigger_solve[i] = True # we signal the solution triggger process n.{i} to trigger the solution 
-            # of the associated controller
-
-    def _send_state_trigger(self):
-
-        for i in range(0, self.cluster_size):
-
-            self._trigger_send_state[i] = True # we signal the state process n.{i} to send the state to the 
-            # associated controller
-
-    def _send_read_sols_trigger(self):
-
-        for i in range(self.cluster_size):
-            
-            self._trigger_read[i] = True
-
-    def _wait_for_solutions(self):
-        
-        while not all(not value for value in self._trigger_read):
-
-            continue
-
-    def _wait_for_state_writing(self):
-
-        while not all(not value for value in self._trigger_send_state):
-
-            continue
-
     def _compute_n_control_actions(self):
 
         if self.cluster_dt < self.control_dt:
@@ -410,51 +221,33 @@ class ControlClusterClient(ABC):
         
         # things to be done when everything is set but before starting to solve
 
-        # solver
-        for i in range(0, self.cluster_size):
-
-            self.pipes_manager.open_pipes(["trigger_solve"], 
-                                        mode=OMode["O_WRONLY"], 
-                                        index=i) # blocking (non-blocking
-            
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
                                             cluster_size=self.cluster_size,
                                             add_data_size = self.add_data_length.value, 
                                             backend=self._backend, 
                                             device=self._device, 
                                             dtype=self.torch_dtype) # now that we know add_data_size
-        # we overwrite controllers_cmds
+        # we can initialize the control commands
 
-        self._create_shared_buffers() # used to store the data received by the pipes 
-        # on the child processes
-
-        self._trigger_processes = []
-        self._solread_processes = []
-        self._statesend_processes = []
-
+        # solver
         for i in range(0, self.cluster_size):
+            
+            self.pipes_manager.open_pipes(["trigger_solve"], 
+                                        mode=OMode["O_WRONLY"], 
+                                        index=i) 
+            
+            self.pipes_manager.open_pipes(["solved"], 
+                                        mode=OMode["O_RDONLY"], 
+                                        index=i) 
+    
+    def cluster_ready(self):
 
-            # self._trigger_processes.append(mp.Process(target=self._trigger_solution, 
-            #                                         name = "ControlClusterClient_trigger" + str(i), 
-            #                                         args=(i, )), 
-            #                     )
-            # print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": spawned _trigger_solution process n." + str(i))
-            # self._trigger_processes[i].start()
+        return self._was_cluster_ready and self.is_cluster_ready.value
+    
+    def is_first_control_step(self):
 
-            self._solread_processes.append(mp.Process(target=self._read_solution, 
-                                                    name = "ControlClusterClient_solread" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _read_solution process n." + str(i))
-            self._solread_processes[i].start()
-
-            self._statesend_processes.append(mp.Process(target=self._send_states, 
-                                                    name = "ControlClusterClient_sendstates" + str(i), 
-                                                    args=(i, )), 
-                                )
-            print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _send_states process n." + str(i))
-            self._statesend_processes[i].start()
-
+        return self._is_first_control_step
+    
     def solve(self):
 
         # solve all the TO problems in the control cluster
@@ -467,36 +260,47 @@ class ControlClusterClient(ABC):
 
                 print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": waiting connection to ControlCluster server")
 
-        if (not self.was_cluster_ready) and is_cluster_ready:
+        if self._is_first_control_step:
+                
+                self._is_first_control_step = False
+                
+        if (not self._was_cluster_ready) and is_cluster_ready:
             
             # first time the cluster is ready 
 
             self._finalize_init() # we perform the final initializations
 
-            self.was_cluster_ready = True
+            self._was_cluster_ready = True
+
+            self._is_first_control_step = True
 
         if (is_cluster_ready):
             
             start_time = time.perf_counter() # we profile the whole solution pipeline
             
-            self._fill_buffers_with_states() # we fill the buffers with the states
+            # we send a signal to solve the TO to all controllers      
 
-            self._send_state_trigger() # we send the state to each controller
-            
-            self._wait_for_state_writing() # we wait until everything was sent (as soon as each controller 
-            # receives a state, it solves the TO)
+            self.robot_states.synch() # updates shared tensor with data from states
 
             for i in range(0, self.cluster_size):
 
-                self._trigger_solution(i) # we send a signal to solve the TO to all controllers            
+                self._trigger_solution(i)       
 
-            self._send_read_sols_trigger() # reads from all controllers' solutions (this will automatically update the shared
-            # # data buffers)
-            
-            self._wait_for_solutions() # will wait until all controllers are done solving their TO
-            
-            self._fill_cmds_from_buffer() # copies data from the solution buffers to the robot cmds object
-            
+            # we wait for all controllers to finish      
+            for i in range(0, self.cluster_size):
+
+                success = self._solved(i)
+
+                if not success:
+                    
+                    exception = f"[{self.__class__.__name__}]"  + f"[{self.exception}]: " + f"could not solve properly TO n.{i}"
+
+                    raise Exception(exception)
+                
+            # at this point all controllers are done -> we synchronize the control commands
+            # with the ones written by each controller
+            self.controllers_cmds.synch()
+
             self.solution_counter += 1
 
             self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
@@ -521,15 +325,3 @@ class ControlClusterClient(ABC):
         if self._connection_process is not None:
             
             self._close_process(self._connection_process)
-
-        for process in self._trigger_processes:
-
-            self._close_process(process)
-
-        for process in self._solread_processes:
-
-            self._close_process(process)
-        
-        for process in self._statesend_processes:
-
-            self._close_process(process)

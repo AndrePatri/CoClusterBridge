@@ -1,21 +1,27 @@
 import torch
 
-from typing import TypeVar
+from typing import TypeVar, List
 
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
-
+from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size
+from control_cluster_utils.utilities.defs import states_name, cmds_name
 class RobotState:
 
     class RootState:
 
         def __init__(self, 
-                    mem_manager: SharedMemClient):
+                    mem_manager: SharedMemClient, 
+                    q_remapping: List = None):
             
             self.p = None # floating base position
             self.q = None # floating base orientation (quaternion)
             self.v = None # floating base linear vel
             self.omega = None # floating base angular vel
 
+            self.q_remapping = None
+            if q_remapping is not None:
+                self.q_remapping = torch.tensor(q_remapping)
+                
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "p")
             self.assign_views(mem_manager, "q")
@@ -48,11 +54,34 @@ class RobotState:
                 self.omega = mem_manager.create_tensor_view(index=10, 
                                         length=3)
 
+        def get_p(self):
+            
+            return self.p[:, :]
+        
+        def get_q(self):
+            
+            if self.q_remapping is not None:
+
+                return self.q[:, self.q_remapping]
+            
+            else:
+
+                return self.q[:, :]
+        
+        def get_v(self):
+            
+            return self.v[:, :]
+        
+        def get_omega(self):
+
+            return self.omega[:, :]
+        
     class JntState:
 
         def __init__(self, 
                     n_dofs: int, 
-                    mem_manager: SharedMemClient):
+                    mem_manager: SharedMemClient, 
+                    jnt_remapping: List = None):
 
             self.q = None # joint positions
             self.v = None # joint velocities
@@ -61,6 +90,10 @@ class RobotState:
 
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
+
+            self.jnt_remapping = None
+            if self.jnt_remapping is not None: 
+                self.jnt_remapping = torch.tensor(jnt_remapping)
 
         def assign_views(self, 
             mem_manager: SharedMemClient,
@@ -75,12 +108,34 @@ class RobotState:
                 
                 self.v = mem_manager.create_tensor_view(index=13 + self.n_dofs, 
                                         length=self.n_dofs)
-                
+        
+        def get_q(self):
+            
+            if self.jnt_remapping is not None:
+
+                return self.q[:, self.jnt_remapping]
+            
+            else:
+
+                return self.q[:, :]
+        
+        def get_v(self):
+            
+            if self.jnt_remapping is not None:
+
+                return self.v[self.jnt_remapping]
+
+            else:
+
+                return self.v[:, :]
+        
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int,
                 index: int,
                 dtype = torch.float32, 
+                jnt_remapping: List = None,
+                q_remapping: List = None,
                 verbose=False):
 
         self.dtype = dtype
@@ -88,27 +143,27 @@ class RobotState:
         self.device = torch.device('cpu') # born to live on CPU
 
         self.n_dofs = n_dofs
-
-        # root p, q, v, omega + jnt q, v respectively
-        aggregate_view_columnsize = 3 + \
-            4 + \
-            3 + \
-            3 + \
-            2 * self.n_dofs # hardcoded
+        self.cluster_size = cluster_size
+        aggregate_view_columnsize = aggregate_state_size(self.n_dofs)
         
+        self.jnt_remapping = jnt_remapping
+        self.q_remapping = q_remapping
+
         # this creates the view of the shared data for the robot specificed by index
-        self.shared_memman = SharedMemClient(cluster_size, 
+        self.shared_memman = SharedMemClient(self.cluster_size, 
                         aggregate_view_columnsize, 
                         index, 
-                        'RobotState', 
+                        states_name(), 
                         self.dtype, 
                         verbose=verbose) # this blocks untils the server creates the associated memory
         
-        self.root_state = RobotState.RootState(self.shared_memman) # created as a view of the
+        self.root_state = RobotState.RootState(self.shared_memman, 
+                                    self.q_remapping) # created as a view of the
         # shared memory pointed to by the manager
 
         self.jnt_state = RobotState.JntState(n_dofs, 
-                                        self.shared_memman) # created as a view of the
+                                        self.shared_memman, 
+                                        self.jnt_remapping) # created as a view of the
         # shared memory pointed to by the manager
         
         # we now make all the data in root_state and jnt_state a view of the memory viewed by the manager
@@ -120,21 +175,106 @@ class RobotCmds:
 
         def __init__(self, 
                     n_dofs: int, 
-                    dtype = torch.float32, 
-                    device: torch.device = torch.device('cpu')):
+                    mem_manager: SharedMemClient, 
+                    jnt_remapping: List = None):
 
-            self.q = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint positions
-            self.v = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint velocities
-            self.eff = torch.zeros((1, n_dofs), dtype=dtype, device = device) # joint efforts
+            self.n_dofs = n_dofs
+
+            self.q = None # joint positions
+            self.v = None # joint velocities
+            self.eff = None # joint efforts
+
+            # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "q")
+            self.assign_views(mem_manager, "v")
+            self.assign_views(mem_manager, "eff")
+
+            self.jnt_remapping = torch.tensor(jnt_remapping)
+
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            # we create views 
+
+            if varname == "q":
+                
+                self.q = mem_manager.create_tensor_view(index=0, 
+                                        length=self.n_dofs)
+                
+            if varname == "v":
+                
+                self.v = mem_manager.create_tensor_view(index=self.n_dofs, 
+                                        length=self.n_dofs)
+                
+            if varname == "eff":
+                
+                self.eff = mem_manager.create_tensor_view(index=2 * self.n_dofs, 
+                                        length=self.n_dofs)
+
+        def set_q(self, 
+                q: torch.Tensor):
+            
+            if self.jnt_remapping is not None:
+            
+                self.q[:, :] = q[:, self.jnt_remapping]
+
+            else:
+
+                self.q[:, :] = q
+
+        def set_v(self, 
+                v: torch.Tensor):
+            
+            if self.jnt_remapping is not None:
+
+                self.v[:, :] = v[:, self.jnt_remapping]
+
+            else:
+
+                self.v[:, :] = v
+
+        def set_eff(self, 
+                eff: torch.Tensor):
+            
+            if self.jnt_remapping is not None:
+
+                self.eff[:, :] = eff[:, self.jnt_remapping]
+
+            else:
+
+                self.eff[:, :] = eff
 
     class SolverState:
 
         def __init__(self, 
-                add_info_size = 1, 
-                dtype = torch.float32, 
-                device: torch.device = torch.device('cpu')):
+                add_info_size: int, 
+                n_dofs: int,
+                mem_manager: SharedMemClient):
 
-            self.info = torch.zeros((1, add_info_size), dtype=dtype, device = device)
+            self.info = None
+
+            self.add_info_size = add_info_size
+            
+            self.n_dofs = n_dofs
+
+            self.assign_views(mem_manager, "info")
+
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            # we create views 
+
+            if varname == "info":
+                
+                self.info = mem_manager.create_tensor_view(index= 3 * self.n_dofs, 
+                                        length=self.add_info_size)
+        
+        def set_info(self, 
+                info: torch.Tensor):
+
+            self.info[:, :] = info
 
     def __init__(self, 
                 n_dofs: int, 
@@ -142,6 +282,7 @@ class RobotCmds:
                 index: int,
                 add_info_size: int = None, 
                 dtype = torch.float32, 
+                jnt_remapping: List = None,
                 verbose=False):
 
         self.dtype = dtype
@@ -149,44 +290,38 @@ class RobotCmds:
         self.device = torch.device('cpu') # born to live on CPU
 
         self.n_dofs = n_dofs
-
+        self.cluster_size = cluster_size
         self.add_info_size = add_info_size
 
-        # root p, q, v, omega + jnt q, v respectively
-        aggregate_view_columnsize = \
-            3 * self.n_dofs + \
-            
-            # hardcoded
+        self.jnt_remapping = jnt_remapping
+
+        aggregate_view_columnsize = -1
+
+        if add_info_size is not None:
+
+            aggregate_view_columnsize = aggregate_cmd_size(self.n_dofs, 
+                                                self.add_info_size)
+        else:
+
+            aggregate_view_columnsize = aggregate_cmd_size(self.n_dofs, 
+                                                        0)
         
-        self.jnt_cmd = RobotCmds.JntCmd(n_dofs = n_dofs, 
-                                        dtype=self.dtype, 
-                                        device=self.device)
+        self.shared_memman = SharedMemClient(self.cluster_size, 
+                        aggregate_view_columnsize, 
+                        index, 
+                        cmds_name(), 
+                        self.dtype, 
+                        verbose=verbose) # this blocks untils the server creates the associated memory
+
+        self.jnt_cmd = RobotCmds.JntCmd(self.n_dofs, 
+                                        self.shared_memman, 
+                                        self.jnt_remapping)
         
         if add_info_size is not None:
 
-            self.slvr_state = RobotCmds.SolverState(dtype=self.dtype, 
-                                            device=self.device)
+            self.slvr_state = RobotCmds.SolverState(self.add_info_size, 
+                                            self.n_dofs, 
+                                            self.shared_memman)
             
-            self.aggregate_view = torch.cat([
-                self.jnt_cmd.q,
-                self.jnt_cmd.v,
-                self.jnt_cmd.eff,
-                self.slvr_state.info
-                ], dim=1)
-        
-        else:
-
-            self.aggregate_view = torch.cat([
-                self.jnt_cmd.q,
-                self.jnt_cmd.v,
-                self.jnt_cmd.eff
-                ], dim=1)
-            
-        self.shared_memman = SharedMemClient(cluster_size, 
-                        self.n_dofs, 
-                        index, 
-                        'RobotCmds', 
-                        self.dtype, 
-                        verbose=verbose) # this blocks untils the server creates the associated memory
-        
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
+RobotCmdsChild = TypeVar('RobotCmdsChild', bound='RobotCmds')

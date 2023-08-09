@@ -4,41 +4,99 @@ from abc import ABC
 
 from typing import TypeVar
 
+from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
+
+from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size
+from control_cluster_utils.utilities.defs import states_name, cmds_name
+
 class RobotClusterState:
 
     class RootStates:
 
         def __init__(self, 
-                    cluster_size: int = 1, 
-                    device: torch.device = torch.device("cpu"), 
-                    dtype = torch.float32):
+                cluster_aggregate: torch.Tensor):
             
-            self.dtype = dtype
+            self.p = None # floating base positions
+            self.q = None # floating base orientation (quaternion)
+            self.v = None # floating base linear vel
+            self.omega = None # floating base linear vel
 
-            self._device = device
+            self.cluster_size = cluster_aggregate.shape[0]
 
-            self.p = torch.zeros((cluster_size, 3), device = self._device, dtype=self.dtype) # floating base positions
-            self.q = torch.zeros((cluster_size, 4), device = self._device, dtype=self.dtype) # floating base orientation (quaternion)
-            self.v = torch.zeros((cluster_size , 3), device = self._device, dtype=self.dtype) # floating base linear vel
-            self.omega = torch.zeros((cluster_size , 3), device = self._device, dtype=self.dtype) # floating base linear vel
+            self.assign_views(cluster_aggregate, "p")
+            self.assign_views(cluster_aggregate, "q")
+            self.assign_views(cluster_aggregate, "v")
+            self.assign_views(cluster_aggregate, "omega")
 
+        def assign_views(self, 
+            cluster_aggregate: torch.Tensor,
+            varname: str):
+            
+            if varname == "p":
+
+                # (can only make views of contigous memory)
+
+                offset = 0
+                
+                self.p = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                                                                    3)
+                
+            if varname == "q":
+
+                offset = 3
+                
+                self.q = cluster_aggregate[:, offset:(offset + 4)].view(self.cluster_size, 
+                                                                    4)
+            
+            if varname == "v":
+
+                offset = 7
+                
+                self.v = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                                                                    3)
+                
+            if varname == "omega":
+
+                offset = 10
+                
+                self.omega = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                                                                    3)
     class JntStates:
 
         def __init__(self, 
-                    n_dofs: int, 
-                    cluster_size: int = 1, 
-                    device: str = "cpu", 
-                    dtype = torch.float32):
+                    cluster_aggregate: torch.Tensor,
+                    n_dofs: int):
+        
+            self.n_dofs = n_dofs
 
-            self.dtype = dtype
+            self.cluster_size = cluster_aggregate.shape[0]
+        
+            self.q = None # joint positions
+            self.v = None # joint velocities
 
-            self._device = device
+            self.assign_views(cluster_aggregate, "q")
+            self.assign_views(cluster_aggregate, "v")
 
-            self.q = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint positions
-            self.v = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint velocities
-            self.a = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
-            self.eff = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
+        def assign_views(self, 
+            cluster_aggregate: torch.Tensor,
+            varname: str):
+            
+            if varname == "q":
 
+                # (can only make views of contigous memory)
+
+                offset = 13
+                
+                self.q = cluster_aggregate[:, offset:(offset + self.n_dofs)].view(self.cluster_size, 
+                                                self.n_dofs)
+                
+            if varname == "v":
+                
+                offset = 13 + self.n_dofs
+
+                self.v = cluster_aggregate[:, offset:(offset + self.n_dofs)].view(self.cluster_size, 
+                                                self.n_dofs)
+                
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
@@ -49,105 +107,124 @@ class RobotClusterState:
         self.dtype = dtype
 
         self.backend = "torch" # forcing torch backend
-
         self.device = device
-        
-        self.cluster_size = cluster_size
-        self.n_dofs = n_dofs
-        
         if (self.backend != "torch"):
 
             self.device = torch.device("cpu")
 
-        self.root_state = self.RootStates(cluster_size = cluster_size, 
-                                        device = self.device, 
-                                        dtype = self.dtype)
+        self.cluster_size = cluster_size
+        self.n_dofs = n_dofs
+        cluster_aggregate_columnsize = aggregate_state_size(self.n_dofs)
 
-        self.jnt_state = self.JntStates(n_dofs = n_dofs, 
-                                        cluster_size = cluster_size, 
-                                        device = self.device, 
-                                        dtype = self.dtype)
+        self.cluster_aggregate = torch.zeros(
+                                    (self.cluster_size, 
+                                        cluster_aggregate_columnsize 
+                                    ), 
+                                    dtype=self.dtype, 
+                                    device=self.device)
+
+        # views of cluster_aggregate
+        self.root_state = self.RootStates(self.cluster_aggregate) 
+        self.jnt_state = self.JntStates(self.cluster_aggregate, 
+                                    n_dofs)
         
-        self.aggregate_view = torch.cat([
-            self.root_state.p,
-            self.root_state.q,
-            self.root_state.v,
-            self.root_state.omega,
-            self.jnt_state.q,
-            self.jnt_state.v
-        ], dim=1)
-
-    def update(self, other_cmd: 'RobotClusterState', 
-               synch = False) -> None:
+        # this creates a shared memory block of the right size for the state
+        # and a corresponding view of it
+        self.shared_memman = SharedMemSrvr(self.cluster_size, 
+                                    cluster_aggregate_columnsize, 
+                                    states_name(), 
+                                    self.dtype) # the client will wait until
+        # the memory becomes available
         
-        if self.cluster_size != other_cmd.cluster_size or \
-                self.n_dofs != other_cmd.n_dofs:
-            
-            exception = f"[{self.__class__.__name__}]"  + f"[{self._exception}]" +  f"[{self.update.__name__}]: " + \
-                        f"dimensions of provided cluster state {other_cmd._cluster_size} x {other_cmd._n_dofs} " + \
-                        f"do not match {self._cluster_size} x {self._n_dofs}"
-            
-            raise ValueError(exception)
+        
 
-        self.aggregate_view.copy_(other_cmd.aggregate_view, 
-                                non_blocking=True) # non-blocking -> we need to synchronize with 
-        # before accessing the copied data
+    def synch(self):
 
-        if synch: 
-            
-            torch.cuda.synchronize()
+        # synchs root_state and jnt_state (which will normally live on GPU)
+        # with the shared state data using the aggregate view (normally on CPU)
+
+        # this requires a COPY FROM GPU TO CPU
+        # (better to use the aggregate to exploit parallelization)
+
+        self.shared_memman.tensor_view[:, :] = self.cluster_aggregate.cpu()
+
+        torch.cuda.synchronize() # this way we ensure that after this the state on GPU
+        # is fully updated
 
 class RobotClusterCmd:
 
     class JntCmd:
 
-        def __init__(self, 
-                    n_dofs: int, 
-                    cluster_size: int = 1, 
-                    device: torch.device = torch.device("cpu"), 
-                    dtype = torch.float32):
+        def __init__(self,
+                    cluster_aggregate: torch.Tensor, 
+                    n_dofs: int):
             
-            self.dtype = dtype
+            self._cluster_size = cluster_aggregate.shape[0]
 
-            self._device = device
-           
-            self._cluster_size = cluster_size
             self._n_dofs = n_dofs
 
-            self.q = torch.zeros((cluster_size, n_dofs), 
-                                device = self._device, 
-                                dtype=self.dtype) # joint positions
-            self.v = torch.zeros((cluster_size, n_dofs),
-                                device = self._device, 
-                                dtype=self.dtype) # joint velocities
-        #     self.a = torch.zeros((cluster_size, n_dofs), device = self._device, dtype=self.dtype) # joint accelerations
-            self.eff = torch.zeros((cluster_size, n_dofs), 
-                                device = self._device, 
-                                dtype=self.dtype) # joint accelerations
+            self.q = None # joint positions
+            self.v = None # joint velocities
+            self.eff = None # joint accelerations
             
             self._status = "status"
             self._info = "info"
             self._warning = "warning"
             self._exception = "exception"
 
+            self.assign_views(cluster_aggregate, "q")
+            self.assign_views(cluster_aggregate, "v")
+            self.assign_views(cluster_aggregate, "eff")
+
+        def assign_views(self, 
+            cluster_aggregate: torch.Tensor,
+            varname: str):
+            
+            if varname == "q":
+                
+                # can only make views of contigous memory
+                self.q = cluster_aggregate[:, 0:self._n_dofs].view(self._cluster_size, 
+                                                self._n_dofs)
+                
+            if varname == "v":
+                
+                offset = self._n_dofs
+                self.v = cluster_aggregate[:, offset:(offset + self._n_dofs)].view(self._cluster_size, 
+                                                self._n_dofs)
+            
+            if varname == "eff":
+                
+                offset = 2 * self._n_dofs
+                self.eff = cluster_aggregate[:, offset:(offset + self._n_dofs)].view(self._cluster_size, 
+                                                self._n_dofs)
+                
     class RhcInfo:
 
-        def __init__(self, 
-                    cluster_size: int = 1, 
-                    add_data_size: int = 1,
-                    device: torch.device = torch.device("cpu"), 
-                    dtype = torch.float32):
+        def __init__(self,
+                    cluster_aggregate: torch.Tensor, 
+                    add_data_size: int, 
+                    n_dofs: int):
             
-            self.dtype = dtype
+            self.add_data_size = add_data_size
+            self.n_dofs = n_dofs
 
-            self._device = device
+            self._cluster_size = cluster_aggregate.shape[0]
+
+            self.info = None
+
+            self.assign_views(cluster_aggregate, "info")
+
+        def assign_views(self, 
+            cluster_aggregate: torch.Tensor,
+            varname: str):
             
-            self._add_data_size = add_data_size
-
-            self.data = torch.zeros((cluster_size, self._add_data_size), 
-                                device = self._device,
-                                dtype=self.dtype)
-
+            if varname == "info":
+                
+                offset = 3 * self.n_dofs
+                self.info = cluster_aggregate[:, 
+                                offset:(offset + self.add_data_size)].view(self._cluster_size, 
+                                self.add_data_size)
+                
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
@@ -155,66 +232,70 @@ class RobotClusterCmd:
                 device: torch.device = torch.device("cpu"),  
                 dtype: torch.dtype = torch.float32, 
                 add_data_size: int = None):
-
-        self.n_dofs = n_dofs
-        self.cluster_size = cluster_size
     
         self.dtype = dtype
 
-        self.backend = "torch" # forcing torch backend
-
+        self.backend = "torch" # forcing torch backen
         self.device = device
-
         if (self.backend != "torch"):
 
             self.device = torch.device("cpu")
 
-        self.jnt_cmd = self.JntCmd(n_dofs = self.n_dofs, 
-                                cluster_size = self.cluster_size, 
-                                device = self.device, 
-                                dtype = self.dtype)
+        self.cluster_size = cluster_size
+        self.n_dofs = n_dofs
         
+        cluster_aggregate_columnsize = -1
+
         if add_data_size is not None:
             
-                self.rhc_info = self.RhcInfo(cluster_size=self.cluster_size, 
-                                        device=self.device, 
+            cluster_aggregate_columnsize = aggregate_cmd_size(self.n_dofs, 
+                                                        add_data_size)
+            self.cluster_aggregate = torch.zeros(
+                                        (self.cluster_size, 
+                                           cluster_aggregate_columnsize 
+                                        ), 
                                         dtype=self.dtype, 
-                                        add_data_size = add_data_size)
-                
-                self.aggregate_view = torch.cat([
-                self.jnt_cmd.q,
-                self.jnt_cmd.v,
-                self.jnt_cmd.eff,
-                self.rhc_info.data,
-                ], dim=1)
-        
+                                        device=self.device)
+            
+            self.rhc_info = self.RhcInfo(self.cluster_aggregate,
+                                    add_data_size, 
+                                    self.n_dofs)
+            
         else:
-             
-             self.aggregate_view = torch.cat([
-                self.jnt_cmd.q,
-                self.jnt_cmd.v,
-                self.jnt_cmd.eff,
-                ], dim=1)
+            
+            cluster_aggregate_columnsize = aggregate_cmd_size(self.n_dofs, 
+                                                            0)
+                                                        
+            self.cluster_aggregate = torch.zeros(
+                                        (self.cluster_size,
+                                            cluster_aggregate_columnsize
+                                        ), 
+                                        dtype=self.dtype, 
+                                        device=self.device)
         
-    def update(self, other_cmd: 'RobotClusterCmd', 
-               synch = False) -> None:
+        self.jnt_cmd = self.JntCmd(self.cluster_aggregate,
+                                    n_dofs = self.n_dofs)
         
-        if self._cluster_size != other_cmd._cluster_size or \
-                self._n_dofs != other_cmd._n_dofs:
-            
-            exception = f"[{self.__class__.__name__}]"  + f"[{self._exception}]" +  f"[{self.update.__name__}]: " + \
-                        f"dimensions of provided cluster command {other_cmd._cluster_size} x {other_cmd._n_dofs} " + \
-                        f"do not match {self._cluster_size} x {self._n_dofs}"
-            
-            raise ValueError(exception)
+        # this creates a shared memory block of the right size for the cmds
+        # and a corresponding view of it
+        self.shared_memman = SharedMemSrvr(self.cluster_size, 
+                                    cluster_aggregate_columnsize, 
+                                    cmds_name(), 
+                                    self.dtype) # the client will wait until
+        # the memory becomes available
 
-        self.aggregate_view.copy_(other_cmd.aggregate_view, 
-                                non_blocking=True) # non-blocking -> we need to synchronize with 
-        # before accessing the copied data
+    def synch(self):
 
-        if synch: 
-            
-            torch.cuda.synchronize()
+        # synchs jnt_cmd and rhc_info (which will normally live on GPU)
+        # with the shared cmd data using the aggregate view (normally on CPU)
+
+        # this requires a COPY FROM CPU TO GPU
+        # (better to use the aggregate to exploit parallelization)
+
+        self.cluster_aggregate[:, :] = self.shared_memman.tensor_view.cuda()
+
+        torch.cuda.synchronize() # this way we ensure that after this the state on GPU
+        # is fully updated
 
 class Action(ABC):
         

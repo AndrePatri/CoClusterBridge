@@ -91,8 +91,9 @@ class RHController(ABC):
 
         self._to_server = []
         self._to_client = []
-        self._to_horizon_quat = [1, 2, 3, 0] # mapping from robot quat. to Horizon's quaternion convention
+        self._quat_remap = [1, 2, 3, 0] # mapping from robot quat. to Horizon's quaternion convention
         self._jnt_maps_created = False
+        self._states_initialized = False
 
         self._init()
 
@@ -104,8 +105,6 @@ class RHController(ABC):
 
         self._init_problem() # we call the child's initialization method
 
-        self._init_states() # know that the n_dofs are known, we can call the parent method to init robot states and cmds
-
     def _open_pipes(self):
         
         # these are blocking
@@ -114,165 +113,68 @@ class RHController(ABC):
                 mode = OMode["O_RDONLY_NONBLOCK"], 
                 index=self.controller_index)
 
-        self.pipes_manager.open_pipes(selector=[ 
-                "state_root_p", "state_root_q", "state_root_v", "state_root_omega", 
-                "state_jnt_q", "state_jnt_v"
-                ], 
-                mode = OMode["O_RDONLY_NONBLOCK"], 
-                index=self.controller_index)
-        
         # these are blocking (we read even if the pipe is empty)
-        self.pipes_manager.open_pipes(selector=["success", 
-                "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
-                "rhc_info"
-                ], 
+        self.pipes_manager.open_pipes(selector=["solved"], 
                 mode = OMode["O_WRONLY"], 
                 index=self.controller_index)
         
     def _close_pipes(self):
 
         # we close the pipes
-        self.pipes_manager.close_pipes(selector=["trigger_solve", 
-                "state_root_p", "state_root_q", "state_root_v", "state_root_omega", 
-                "state_jnt_q", "state_jnt_v", 
-                "cmd_jnt_q", "cmd_jnt_v", "cmd_jnt_eff", 
-                "state_jnt_q", "state_jnt_v", 
-                "rhc_info"
-                ], 
+        self.pipes_manager.close_pipes(selector=["trigger_solve", "solved"], 
                 index=self.controller_index)
     
-    def _init_states(self):
+    def init_states(self):
         
         # to be called after n_dofs is known
         self.robot_state = RobotState(n_dofs=self.n_dofs, 
                                     cluster_size=self.cluster_size,
                                     index=self.controller_index,
-                                    dtype=self.array_dtype, 
-                                    verbose = self._verbose) # used for storing state coming FROM robot
+                                    dtype=self.array_dtype,
+                                    jnt_remapping=self._to_client, 
+                                    q_remapping=self._quat_remap, 
+                                    verbose = self._verbose) 
 
         self.robot_cmds = RobotCmds(self.n_dofs, 
                                 cluster_size=self.cluster_size, 
                                 index=self.controller_index,
                                 add_info_size=2, 
                                 dtype=self.array_dtype, 
-                                verbose=self._verbose) # used for storing internal state (i.e. from TO solution)
+                                jnt_remapping=self._to_server,
+                                verbose=self._verbose) 
         
-        self._init_sizes() # to make reading from pipes easier
-
-    def update(self, 
-               current_robot_state: RobotStateChild = None):
-
-        # updates the internal state of the RHC controller. 
-        # this can be done integrating the current internal state
-        # with the computed actions or through sensory feedback
-        
-        success = False
-
-        if current_robot_state is not None:
-            
-            success = self._update_closed_loop(current_robot_state)
-
-        else:
-
-            success = self._update_open_loop()
-
-        return success
-    
-    def get(self):
-        
-        # gets the current control command computed 
-        # after the last call to solve
-
-        return self.cntrl_cmd
-    
-    def _init_sizes(self):
-
-        self.root_p_size = self.robot_state.root_state.p.shape[0] * \
-                        self.robot_state.root_state.p.shape[1] * \
-                        self.robot_state.root_state.p.element_size()
-        
-        self.root_q_size = self.robot_state.root_state.q.shape[0] * \
-                        self.robot_state.root_state.q.shape[1] * \
-                        self.robot_state.root_state.q.element_size()
-        
-        self.root_v_size = self.robot_state.root_state.v.shape[0] * \
-                        self.robot_state.root_state.v.shape[1] * \
-                        self.robot_state.root_state.v.element_size()
-        
-        self.root_omega_size = self.robot_state.root_state.omega.shape[0] * \
-                        self.robot_state.root_state.omega.shape[1] * \
-                        self.robot_state.root_state.omega.element_size()
-        
-        self.jnt_q_size = self.robot_state.jnt_state.q.shape[0] * \
-                        self.robot_state.jnt_state.q.shape[1] * \
-                        self.robot_state.jnt_state.q.element_size()
-        
-        self.jnt_v_size = self.robot_state.jnt_state.v.shape[0] * \
-                        self.robot_state.jnt_state.v.shape[1] * \
-                        self.robot_state.jnt_state.v.element_size()
-        
-    def _read_state(self):
-        
-        self.robot_state.root_state.p = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_p"][self.controller_index], 
-                                                            self.root_p_size), 
-                                        dtype=self.array_dtype).reshape(1, 
-                                                            self.robot_state.root_state.p.shape[1])
-        
-        self.robot_state.root_state.q = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_q"][self.controller_index], 
-                                                            self.root_q_size), 
-                                        dtype=self.array_dtype)[self._to_horizon_quat].reshape(1, 
-                                                            self.robot_state.root_state.q.shape[1])
-        
-        self.robot_state.root_state.v = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_v"][self.controller_index], 
-                                                            self.root_v_size), 
-                                        dtype=self.array_dtype).reshape(1, 
-                                                            self.robot_state.root_state.v.shape[1])
-        
-        self.robot_state.root_state.omega = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_root_omega"][self.controller_index],
-                                                            self.root_omega_size), 
-                                        dtype=self.array_dtype).reshape(1, 
-                                                            self.robot_state.root_state.omega.shape[1])
-        
-        self.robot_state.jnt_state.q = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_q"][self.controller_index], 
-                                                            self.jnt_q_size), 
-                                        dtype=self.array_dtype)[self._to_server].reshape(1, 
-                                                                            self.robot_state.jnt_state.q.shape[1]) # with joint remapping to controller's order
-        
-        self.robot_state.jnt_state.v = torch.frombuffer(os.read(self.pipes_manager.pipes_fd["state_jnt_v"][self.controller_index], 
-                                                            self.jnt_v_size), 
-                                        dtype=self.array_dtype)[self._to_server].reshape(1,
-                                                                            self.robot_state.jnt_state.v.shape[1]) # with joint remapping to controller's order
-
-    def _send_solution(self):
-        
-        # writes commands from robot state
-        os.write(self.pipes_manager.pipes_fd["cmd_jnt_q"][self.controller_index], 
-                self.robot_cmds.jnt_cmd.q[0, self._to_client].numpy().tobytes()) # with joint remapping to client's order
-        os.write(self.pipes_manager.pipes_fd["cmd_jnt_v"][self.controller_index], 
-                self.robot_cmds.jnt_cmd.v[0, self._to_client].numpy().tobytes()) # with joint remapping to client's order
-        os.write(self.pipes_manager.pipes_fd["cmd_jnt_eff"][self.controller_index], 
-                self.robot_cmds.jnt_cmd.effort[0, self._to_client].numpy().tobytes()) # with joint remapping to client's order
-
-        # write additional info
-        os.write(self.pipes_manager.pipes_fd["rhc_info"][self.controller_index], self.robot_cmds.slvr_state.info.numpy().tobytes())
-    
+        self._states_initialized = True
+         
     def _fill_cmds_from_sol(self):
 
-        # get data from the solution and updated the view on the shared data
-        self.robot_cmds.jnt_cmd.q[:, :] = self._get_cmd_jnt_q_from_sol()
+        # gets data from the solution and updates the view on the shared data
 
-        self.robot_cmds.jnt_cmd.v[:, :] = self._get_cmd_jnt_v_from_sol()
+        self.robot_cmds.jnt_cmd.set_q(self._get_cmd_jnt_q_from_sol())
 
-        self.robot_cmds.jnt_cmd.eff[:, :] = self._get_cmd_jnt_eff_from_sol()
+        self.robot_cmds.jnt_cmd.set_v(self._get_cmd_jnt_v_from_sol())
 
-        self.robot_cmds.slvr_state.info[:, :] = self._get_additional_slvr_info()
+        self.robot_cmds.jnt_cmd.set_eff(self._get_cmd_jnt_eff_from_sol())
+
+        self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
 
     def solve(self):
         
         if not self._jnt_maps_created:
 
-            self._create_jnt_maps()
+            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                                f"[{self.exception}]" + f"[{self.solve.__name__}]" + \
+                                ":" + f"jnt maps not initialized. Did you call the create_jnt_maps()?"
 
+            raise Exception(exception)
+
+        if not self._states_initialized:
+
+            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                                f"[{self.exception}]" + f"[{self.solve.__name__}]" + \
+                                ":" + f"states not initialized. Did you call the init_states()?"
+
+            raise Exception(exception)
+        
         if not self._pipe_opened:
             
             # we open here the pipes so that they are opened into 
@@ -284,7 +186,7 @@ class RHController(ABC):
 
         if self._termination_flag.value:
             
-            self.terminate()
+            a = 1
 
         else:
 
@@ -295,32 +197,25 @@ class RHController(ABC):
                 try:
                     
                     if self._verbose:
-
-                            start = time.perf_counter()
+                            
+                        start = time.perf_counter() 
 
                     msg_bytes = b'1'
-                    t = time.perf_counter()
                     signal = os.read(self.pipes_manager.pipes_fd["trigger_solve"][self.controller_index], 
                                     len(msg_bytes)).decode().strip()
-                    print(str(time.perf_counter()-t ))
+                    
                     if signal == '1':
                         
                         # read latest states from pipe 
 
-                        self._read_state()
+                        self._solve() # solve actual TO
 
-                        self._solve()
-
-                        self._fill_cmds_from_sol() # we get data from the solution        
+                        self._fill_cmds_from_sol() # we upd update the views of the cmd
+                        # from the solution
                         
-                        self._send_solution() # writes solution on pipe
-
-                        # print("cmd debug n." + str(self.controller_index) + "\n" + 
-                        #         "q_cmd: " + str(self.robot_cmds.jnt_cmd.q) + "\n" + 
-                        #         "v_cmd: " + str(self.robot_cmds.jnt_cmd.v) + "\n" + 
-                        #         "eff_cmd: " + str(self.robot_cmds.jnt_cmd.effort))
-
-                        # os.write(self.pipes_manager.pipes_fd["success"][self.controller_index], b"success\n")
+                        # we signal the client this controller has finished its job
+                        os.write(self.pipes_manager.pipes_fd["solved"][self.controller_index], 
+                            b'1')
                         
                         if self._verbose:
                             
@@ -339,12 +234,6 @@ class RHController(ABC):
                 except BlockingIOError:
 
                     continue
-        
-    def terminate(self):
-
-        # self._close_pipes()
-        
-        return True
     
     def assign_client_side_jnt_names(self, 
                         jnt_names: List[str]):
@@ -360,7 +249,7 @@ class RHController(ABC):
 
         self._got_jnt_names_server = True
 
-    def _create_jnt_maps(self):
+    def create_jnt_maps(self):
 
         if not self._got_jnt_names_client:
 

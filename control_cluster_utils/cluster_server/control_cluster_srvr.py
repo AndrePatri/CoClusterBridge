@@ -76,10 +76,6 @@ class ControlClusterSrvr(ABC):
 
         self.pipes_manager.close_pipes(selector=["cluster_size", "jnt_number"])
         
-        for i in range(0, self.cluster_size): 
-
-            self._controllers[i].terminate() # send signal to close controller's internal pipes
-
     def _handshake(self):
         
         print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": waiting for handshake with the ControlCluster client...")
@@ -163,8 +159,10 @@ class ControlClusterSrvr(ABC):
             # we assign the client-side joint names to each controller (used for mapping purposes)
             self._controllers[i].assign_client_side_jnt_names(self.client_side_jnt_names)
 
-            self._controllers[i]._create_jnt_maps() # this is called anyway inside the solve, but this way
+            self._controllers[i].create_jnt_maps() # this is called anyway inside the solve, but this way
             # we save a bit of time when spawning the processes
+
+            self._controllers[i].init_states() # initializes states
 
         self._check_jnt_names_compatibility() 
     
