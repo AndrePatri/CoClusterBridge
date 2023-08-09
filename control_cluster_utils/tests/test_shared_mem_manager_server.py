@@ -41,17 +41,17 @@ def profile_copy_cuda_cpu():
         
         print("###########################")
         
-        t = time.monotonic()
+        t = time.perf_counter()
         server_state.tensor_view[:, :] = fake_state.cpu()
         torch.cuda.synchronize()
-        t_end = time.monotonic() - t 
+        t_end = time.perf_counter() - t 
         print("time 2 copy from cuda to cpu: " + str(t_end))
         print(server_state.tensor_view)
 
-        t = time.monotonic()
+        t = time.perf_counter()
         fake_cmds[:, :] = server_cmds.tensor_view.cuda()
         torch.cuda.synchronize()
-        t_end = time.monotonic() - t 
+        t_end = time.perf_counter() - t 
         print("time 2 copy from cpu to cuda: " + str(t_end))
         print(fake_cmds)
 
@@ -73,11 +73,11 @@ def profile_reading_bool_array():
         
         print("###########################")
 
-        t = time.monotonic()
+        t = time.perf_counter()
         
         print(server.all())
 
-        t_end = time.monotonic() - t 
+        t_end = time.perf_counter() - t 
 
         print("time 2 check bool array: " + str(t_end))
 
@@ -98,11 +98,11 @@ def profile_writing_global_bool():
 
         if i > n_samples/2:
 
-            t = time.monotonic()
+            t = time.perf_counter()
 
             server.reset_bool(to_true = True)
 
-            t_end = time.monotonic() - t 
+            t_end = time.perf_counter() - t 
 
             print("time 2 set global bool array: " + str(t_end))
 

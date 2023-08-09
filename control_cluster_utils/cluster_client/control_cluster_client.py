@@ -1,8 +1,9 @@
 import torch
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
-from control_cluster_utils.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd, ActionChild
+from control_cluster_utils.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd
+from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedMemSrvr
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
@@ -476,7 +477,7 @@ class ControlClusterClient(ABC):
 
         if (is_cluster_ready):
             
-            start_time = time.monotonic() # we profile the whole solution pipeline
+            start_time = time.perf_counter() # we profile the whole solution pipeline
             
             self._fill_buffers_with_states() # we fill the buffers with the states
 
@@ -498,7 +499,7 @@ class ControlClusterClient(ABC):
             
             self.solution_counter += 1
 
-            self.solution_time = time.monotonic() - start_time # we profile the whole solution pipeline
+            self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
         
     def close(self):
 
