@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+
 import posix_ipc
 import mmap
 
@@ -27,7 +29,10 @@ class SharedMemSrvr:
                 n_rows: int, 
                 n_cols: int,
                 name = None, 
-                dtype=torch.float32):
+                dtype=torch.float32, 
+                backend="torch"):
+
+        self.backend = backend
 
         self.dtype = dtype
 
@@ -49,9 +54,38 @@ class SharedMemSrvr:
 
         self.shm = None
 
+        self.torch_to_np_dtype = {
+            torch.float16: np.float16,
+            torch.float32: np.float32,
+            torch.float64: np.float64,
+            torch.int8: np.int8,
+            torch.int16: np.int16,
+            torch.int32: np.int32,
+            torch.int64: np.int64,
+            torch.uint8: np.uint8,
+            torch.bool: bool,
+            }
+
         self.create_shared_memory()
 
         self.create_tensor_view()
+        
+        self.bool_bytearray_view = None
+
+        if self.backend == "torch": 
+
+            if self.dtype == torch.bool and \
+                (self.n_rows == 1 or self.n_cols == 1):
+                
+                self.create_bytearray_view() # more efficient array view for simple 1D boolean 
+                # arrays
+
+        if self.backend == "numpy":
+
+            if self.dtype == np.bool and \
+                (self.n_rows == 1 or self.n_cols == 1):
+
+                self.create_bytearray_view()
                 
     def __del__(self):
 
@@ -71,6 +105,10 @@ class SharedMemSrvr:
         # available for use)
     
     def close_shared_memory(self):
+        
+        if self.bool_bytearray_view is not None:
+
+            self.bool_bytearray_view = None
 
         if self.memory is not None:
 
@@ -87,11 +125,56 @@ class SharedMemSrvr:
     def create_tensor_view(self):
 
         if self.memory is not None:
+            
+            if self.backend == "torch":
 
-            self.tensor_view = torch.frombuffer(self.memory,
-                                        dtype=self.dtype, 
-                                        count=self.n_rows * self.n_cols).view(self.n_rows, self.n_cols)
+                self.tensor_view = torch.frombuffer(self.memory,
+                                            dtype=self.dtype, 
+                                            count=self.n_rows * self.n_cols).view(self.n_rows, self.n_cols)
 
+            if self.backend == "numpy":
+
+                self.tensor_view = np.frombuffer(self.memory,
+                                            dtype=self.torch_to_np_dtype[self.dtype], 
+                                            count=self.n_rows * self.n_cols).reshape(self.n_rows, self.n_cols).view()
+    
+    def create_bytearray_view(self):
+
+        self.bool_bytearray_view = memoryview(self.memory)
+
+        self.bytearray_reset = bytearray(len(self.bool_bytearray_view))
+
+    def all(self):
+
+        if self.bool_bytearray_view is not None:
+
+            return all(value == 1 for value in self.bool_bytearray_view)
+        
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+
+    def reset_bool(self, 
+                val: bool = False):
+
+        if self.bool_bytearray_view is not None:
+
+            self.bool_bytearray_view[:] = self.bytearray_reset
+
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+        
 class SharedMemClient:
 
     def __init__(self, 
@@ -100,9 +183,12 @@ class SharedMemClient:
                 client_index: int, 
                 name = 'shared_memory', 
                 dtype=torch.float32, 
+                backend="torch",
                 verbose = False, 
                 wait_amount = 0.05):
         
+        self.backend = backend
+
         self.verbose = verbose
 
         self.wait_amount = wait_amount
@@ -137,6 +223,21 @@ class SharedMemClient:
         self.attach_shared_memory()
 
         self.tensor_view = self.create_tensor_view()
+
+        if self.backend == "torch": 
+
+            if self.dtype == torch.bool and \
+                (self.n_rows == 1 or self.n_cols == 1):
+                
+                self.create_bytearray_view() # more efficient array view for simple 1D boolean 
+                # arrays
+
+        if self.backend == "numpy":
+
+            if self.dtype == np.bool and \
+                (self.n_rows == 1 or self.n_cols == 1):
+
+                self.create_bytearray_view()
 
     def __del__(self):
 
@@ -180,41 +281,92 @@ class SharedMemClient:
 
         if self.memory is not None:
             
-            if (index is None) or (length is None):
+            if self.backend == "torch":
 
-                offset = self.client_index * self.n_cols * self.element_size
-                
-                return torch.frombuffer(self.memory,
-                                dtype=self.dtype, 
-                                count=self.n_cols, 
-                                offset=offset).view(1, self.n_cols)
-            else:
-                
-                if index >= self.n_cols:
+                if (index is None) or (length is None):
 
-                    exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                                    f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
-                                    ":" + f"the provided index {index} exceeds {self.n_cols - 1}"
-                
-                    raise ValueError(exception)
-                
-                if length > (self.n_cols - index):
+                    offset = self.client_index * self.n_cols * self.element_size
+                    
+                    return torch.frombuffer(self.memory,
+                                    dtype=self.dtype, 
+                                    count=self.n_cols, 
+                                    offset=offset).view(1, self.n_cols)
+                else:
+                    
+                    if index >= self.n_cols:
 
-                    exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                                    f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
-                                    ":" + f"the provided length {length} exceeds {(self.n_cols - index)}"
+                        exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                        f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
+                                        ":" + f"the provided index {index} exceeds {self.n_cols - 1}"
+                    
+                        raise ValueError(exception)
+                    
+                    if length > (self.n_cols - index):
+
+                        exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                        f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
+                                        ":" + f"the provided length {length} exceeds {(self.n_cols - index)}"
+                    
+                        raise ValueError(exception)
+                    
+                    offset = self.client_index * self.n_cols * self.element_size + \
+                        index * self.element_size 
+                    
+                    return torch.frombuffer(self.memory,
+                                    dtype=self.dtype, 
+                                    count=length, 
+                                    offset=offset).view(1, length)
                 
-                    raise ValueError(exception)
+            if self.backend == "numpy":
+
+                if (index is None) or (length is None):
+
+                    offset = self.client_index * self.n_cols * self.element_size
+                    
+                    return np.frombuffer(self.memory,
+                                    dtype=self.torch_to_np_dtype[self.dtype], 
+                                    count=self.n_cols, 
+                                    offset=offset).reshape(1, self.n_cols).view()
+                else:
+                    
+                    if index >= self.n_cols:
+
+                        exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                        f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
+                                        ":" + f"the provided index {index} exceeds {self.n_cols - 1}"
+                    
+                        raise ValueError(exception)
+                    
+                    if length > (self.n_cols - index):
+
+                        exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                                        f"[{self.exception}]" + f"[{self.create_tensor_view.__name__}]" + \
+                                        ":" + f"the provided length {length} exceeds {(self.n_cols - index)}"
+                    
+                        raise ValueError(exception)
+                    
+                    offset = self.client_index * self.n_cols * self.element_size + \
+                        index * self.element_size 
+                    
+                    return np.frombuffer(self.memory,
+                                    dtype=self.dtype, 
+                                    count=length, 
+                                    offset=offset).reshape(1, length).view()
                 
-                offset = self.client_index * self.n_cols * self.element_size + \
-                    index * self.element_size 
-                
-                return torch.frombuffer(self.memory,
-                                dtype=self.dtype, 
-                                count=length, 
-                                offset=offset).view(1, length)
+    def create_bytearray_view(self):
+
+        self.bool_bytearray_view = memoryview(self.memory)
+
+    def set_bool(self, 
+                val: bool = False):
+
+        self.bool_bytearray_view[self.client_index] = val
 
     def detach_shared_memory(self):
+        
+        if self.bool_bytearray_view is not None:
+
+            self.bool_bytearray_view = None
 
         if self.memory is not None:
 
