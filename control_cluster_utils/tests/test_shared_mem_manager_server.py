@@ -108,19 +108,21 @@ def profile_writing_global_bool():
 
         time.sleep(0.1)
 
-def test_writing_string_array():
+def test_writing_reading_string_array():
 
     list = ["joint_puzzo", "hai_rotto_il_ca**o", "joint_gnegne£$", "scibijoint0978"]
 
-    string_tensor = SharedStringArray(4, "prova")
+    string_tensor_view = SharedStringArray(16, "JntNames")
     
-    string_tensor.write(list)
+    # string_tensor_view.write(list)
 
-    print(string_tensor.decode())
+    print(string_tensor_view.read())
+    print(string_tensor_view.read())
+    
 
 if __name__ == "__main__":
 
-    test_writing_string_array()
+    test_writing_reading_string_array()
 
     # profile_writing_global_bool()
 

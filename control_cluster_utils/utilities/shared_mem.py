@@ -139,10 +139,16 @@ class SharedMemSrvr:
             print(message)
 
         if self.shm is not None:
+            
+            try:
+                
+                self.shm.unlink()
 
-            self.shm.unlink()
+                self.shm.close_fd()
 
-            self.shm.close_fd()
+            except posix_ipc.ExistentialError:
+
+                pass
 
     def create_tensor_view(self):
 
@@ -344,6 +350,8 @@ class SharedMemClient:
                 self.shm = posix_ipc.SharedMemory(name = self.mem_config.mem_path, 
                                 size=tensor_size)
 
+                time.sleep(self.wait_amount)
+
                 break  # exit loop if attached successfully
 
             except posix_ipc.ExistentialError:
@@ -529,7 +537,8 @@ class SharedStringArray:
 
     def __init__(self, 
             length: int, 
-            name: str):
+            name: str, 
+            init: List[str] = None):
         
         self.length = length
         
@@ -540,7 +549,7 @@ class SharedStringArray:
         import math
         self.n_rows = math.ceil(self.max_string_length / 
                             torch.tensor([0],dtype=self.dtype).element_size())
-        self.basename = f"self.__class__.__name__"
+        self.basename = f"{self.__class__.__name__}"
 
         self.name = self.basename + name
         
@@ -553,7 +562,11 @@ class SharedStringArray:
                                     self.length, 
                                     self.name, 
                                     dtype=self.dtype)
-    
+
+        if init is not None:
+
+            self.write(init)
+
     def split_into_chunks(self, 
                 input_string: str, 
                 chunk_size: int, 
@@ -611,9 +624,7 @@ class SharedStringArray:
 
     def read(self):
 
-        lst = self.check_list(lst)
-
-        return self.decode(lst)
+        return self.decode()
 
     def flatten_recursive(self, 
                     lst: List[str]):

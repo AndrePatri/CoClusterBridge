@@ -1,11 +1,8 @@
 from abc import ABC
 
 from control_cluster_utils.controllers.rhc import RHChild
-from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
-OMode = NamedPipesHandler.OMode
-DSize = NamedPipesHandler.DSize
-# from control_cluster_utils.utilities.
 
+from control_cluster_utils.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
 import os
 import struct
 
@@ -24,9 +21,6 @@ class ControlClusterSrvr(ABC):
 
         # ciao :D
         #        CR 
-        
-        self.pipes_manager = NamedPipesHandler() # object to better handle 
-        self.pipes_manager.create_buildpipes()
 
         self.status = "status"
         self.info = "info"
@@ -42,7 +36,9 @@ class ControlClusterSrvr(ABC):
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
 
-        self._handshake() 
+        self.handshake_srvr = HanshakeDataCntrlSrvr()
+        self.handshake_srvr.handshake()
+        self.cluster_size = self.handshake_srvr.cluster_size.tensor_view[0, 0].item()
 
         self._processes: List[mp.Process] = [] 
 
@@ -68,28 +64,7 @@ class ControlClusterSrvr(ABC):
                 process.terminate()  # Forcefully terminate the process
             
             print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": terminating child process " + str(process.name))
-
-    def _clean_pipes(self):
-
-        self.pipes_manager.close_pipes(selector=["cluster_size", "jnt_number"])
         
-    def _handshake(self):
-        
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": waiting for handshake with the ControlCluster client...")
-
-        # retrieves some important configuration information from the server
-
-        # cluster size
-        self.pipes_manager.open_pipes(["cluster_size"], 
-                                    mode=OMode["O_RDONLY"])
-        cluster_size_raw = os.read(self.pipes_manager.pipes_fd["cluster_size"], DSize["int"])
-        # this will block until we get the info from the client
-        self.cluster_size = struct.unpack('i', cluster_size_raw)[0]
-        
-        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining runtime pipes, now that we now the cluster size
-
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": handshake with ControlCluster client completed.")
-
     def _spawn_processes(self):
 
         if self._controllers_count == self.cluster_size:
@@ -118,38 +93,9 @@ class ControlClusterSrvr(ABC):
 
         print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": performing final initialization steps...")
 
-        self.n_dofs = self._controllers[0]._get_ndofs() # we assume all controllers to be for the same robot
-        self.server_side_jnt_names = self._controllers[0]._server_side_jnt_names
-        
-        # we send the joint number to the client 
-        jnt_number_srvr_data = struct.pack('i', self.n_dofs)
-        self.pipes_manager.open_pipes(selector=["jnt_number_srvr"], 
-                                mode=OMode["O_WRONLY"])
-        os.write(self.pipes_manager.pipes_fd["jnt_number_srvr"], jnt_number_srvr_data) # we send this info
-        # to the client, which is now guaranteed to be listening on the pipe
+        self.handshake_srvr.finalize_init(self._controllers[0].add_data_lenght)
 
-        # we send the add_data_length to the client 
-        add_data_lenght_data = struct.pack('i', self._controllers[0].add_data_lenght)
-        self.pipes_manager.open_pipes(selector=["add_data_length"], 
-                                mode=OMode["O_WRONLY"])
-        os.write(self.pipes_manager.pipes_fd["add_data_length"], add_data_lenght_data) # we send this info
-        # to the client, which is now guaranteed to be listening on the pipe
-        
-        # client-side joint names (e.g. coming from the simulator)
-
-        self.pipes_manager.open_pipes(["n_bytes_jnt_names_client"], 
-                                    mode=OMode["O_RDONLY"])
-        n_bytes_jnt_names_client_raw = os.read(self.pipes_manager.pipes_fd["n_bytes_jnt_names_client"], DSize["int"])
-        # this will block until we get the info from the client
-        n_bytes_jnt_names_client = struct.unpack('i', n_bytes_jnt_names_client_raw)[0]
-     
-        self.pipes_manager.open_pipes(["jnt_names_client"], 
-                                    mode=OMode["O_RDONLY"])
-        jnt_names_client_raw = os.read(self.pipes_manager.pipes_fd["jnt_names_client"], 
-                                n_bytes_jnt_names_client) # reads all the data available
-        jnt_names_client_str = jnt_names_client_raw.decode('utf-8')
-        jnt_names_client_list_raw = jnt_names_client_str.split("\n") # we suppose each joint name to be separated by a newline character
-        self.client_side_jnt_names = [s for s in jnt_names_client_list_raw if s] # remove any empty strings in case there's an extra newline at the end
+        self.client_side_jnt_names = self.handshake_srvr.jnt_names_client.read()
 
         for i in range(0, self.cluster_size):
 
@@ -169,6 +115,10 @@ class ControlClusterSrvr(ABC):
         set_srvr = set(self.server_side_jnt_names)
         set_client  = set(self.client_side_jnt_names)
         
+        print("####################")
+        print(str(self.server_side_jnt_names))
+        print(str(self.client_side_jnt_names))
+        print("#####################")
         if not set_srvr == set_client:
 
             exception = f"[{self.__class__.__name__}]" + f"{self.exception}" + ": server-side and client-side joint names do not match!"

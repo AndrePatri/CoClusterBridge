@@ -95,6 +95,8 @@ class RHController(ABC):
 
         self.array_dtype = array_dtype
 
+        self.add_data_lenght = 0
+
     def _init(self):
 
         self._init_problem() # we call the child's initialization method
@@ -209,7 +211,7 @@ class RHController(ABC):
                         jnt_names: List[str]):
 
         self._client_side_jnt_names = jnt_names
-
+        
         self._got_jnt_names_client = True
 
     def _assign_server_side_jnt_names(self, 

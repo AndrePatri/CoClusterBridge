@@ -42,4 +42,45 @@ def solved_flagname():
     name = "Solved"
 
     return name
-        
+
+def cluster_size_name():
+    
+    name = "ClusterSize"
+
+    return name 
+
+def jnt_number_srvr_name():
+    
+    name = "JntNumber"
+
+    return name
+
+def jnt_names_client_name():
+
+    name = "JntNames"
+
+    return name 
+
+def jnt_number_client_name():
+
+    name = "JntNames"
+
+    return name 
+
+def additional_data_name():
+
+    name = "AddData"
+
+    return name
+
+def srvr_writing_name():
+
+    name = "SrvrWriting"
+
+    return name
+
+def client_writing_name():
+
+    name = "ClientWriting"
+
+    return name
