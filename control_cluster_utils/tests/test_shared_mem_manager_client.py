@@ -1,4 +1,4 @@
-from control_cluster_utils.utilities.shared_mem import SharedMemClient
+from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringTens
 
 import torch
 

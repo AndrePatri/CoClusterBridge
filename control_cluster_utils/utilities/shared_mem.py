@@ -1,4 +1,5 @@
 import torch
+
 import numpy as np
 
 import posix_ipc
@@ -520,3 +521,180 @@ class SharedMemClient:
         if self.shm is not None:
 
             self.shm.close_fd()
+
+class SharedStringArray:
+
+    # not specifically designed to be low-latency
+    # (should be used sporadically or for initialization purposes)
+
+    def __init__(self, 
+            length: int, 
+            name: str):
+        
+        self.length = length
+        
+        self.dtype = torch.int64
+        self.max_string_length = 64 # num of characters for each string
+        self.chunk_size = torch.tensor([0],dtype=self.dtype).element_size()
+
+        import math
+        self.n_rows = math.ceil(self.max_string_length / 
+                            torch.tensor([0],dtype=self.dtype).element_size())
+        self.basename = f"self.__class__.__name__"
+
+        self.name = self.basename + name
+        
+        self.status = "status"
+        self.info = "info"
+        self.exception = "exception"
+        self.warning = "warning"
+    
+        self.mem_manager = SharedMemSrvr(self.n_rows, 
+                                    self.length, 
+                                    self.name, 
+                                    dtype=self.dtype)
+    
+    def split_into_chunks(self, 
+                input_string: str, 
+                chunk_size: int, 
+                num_chunks: int):
+
+        chunks = [input_string[i:i+chunk_size] for i in range(0, len(input_string), chunk_size)]
+        if len(chunks) < num_chunks:
+            chunks.extend([''] * (num_chunks - len(chunks)))
+        return chunks
+
+    def encode(self, 
+            lst: List[str]):
+
+        for i in range(0, self.length):
+            
+            chunks = self.split_into_chunks(lst[i], 
+                        self.chunk_size, 
+                        self.n_rows)
+            
+            for j in range(0, len(chunks)):
+                    
+                int_encoding = int.from_bytes(chunks[j].encode('utf-8'), 
+                                byteorder='big') 
+                
+                self.mem_manager.tensor_view[j, i] = torch.tensor(int_encoding, 
+                                                                dtype=self.dtype) 
+
+    def decode(self):
+        
+        decoded_list = []
+
+        for i in range(0, self.length):
+            
+            chunks = []
+
+            for j in range(0, self.n_rows):
+
+                int_encoding = self.mem_manager.tensor_view[j, i].item()
+
+                bytes_decoded = int_encoding.to_bytes((int_encoding.bit_length() + 7) // 8, byteorder='big')
+
+                chunks.append(bytes_decoded.decode('utf-8'))
+            
+            separator = ''  # Separator between each element
+            decoded_list.append(separator.join(chunks))
+
+        return decoded_list
+    
+    def write(self, 
+            lst: List[str]):
+
+        lst = self.check_list(lst)
+
+        self.encode(lst)
+
+    def read(self):
+
+        lst = self.check_list(lst)
+
+        return self.decode(lst)
+
+    def flatten_recursive(self, 
+                    lst: List[str]):
+        
+        flat_list = []
+
+        for item in lst:
+
+            if isinstance(item, list):
+
+                flat_list.extend(self.flatten_recursive(item))
+
+            else:
+
+                flat_list.append(item)
+
+        return flat_list
+
+    def check_list(self, lst: List[str]):
+
+        if self.is_more_than_one_dimensional(lst):
+            
+            lst = self.flatten_recursive(lst)
+    
+        # we check its dimensions
+        self.is_coherent(lst) # will raise exceptions
+        
+        return lst
+    
+    def is_coherent(self,
+                    lst: List[str]):
+        
+        if len(lst) != self.length:
+
+            exception = "[" + self.__class__.__name__ +  "]"  + \
+                f"[{self.exception}]" + ":" + f" length mismatch in provided list. It's {len(lst)} but should be {self.length}."
+            
+            raise Exception(exception)
+        
+        return True
+        
+    def is_list_uniform(self, 
+                        lst: List[str]):
+
+        # Get the length of the first internal list
+        reference_length = len(lst[0])
+
+        for sublist in lst:
+            if len(sublist) != reference_length:
+
+                return False
+
+        return True
+
+    def get_list_depth(self, 
+                    lst: List[str]):
+
+        if not isinstance(lst, list):
+
+            return 0
+
+        max_depth = 0
+        for item in lst:
+
+            depth = self.get_list_depth(item)
+
+            max_depth = max(max_depth, depth)
+
+        return max_depth + 1
+
+    def is_more_than_one_dimensional(self, 
+                                lst: List[str]):
+
+        return self.get_list_depth(lst) > 1
+
+    def is_two_dimensional(self, 
+                        lst: List[str]):
+
+        return self.get_list_depth(lst) == 2
+
+    def is_one_dimensional(self, 
+                        lst: List[str]):
+
+        return self.get_list_depth(lst) == 1

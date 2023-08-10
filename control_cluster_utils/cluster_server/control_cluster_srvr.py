@@ -1,9 +1,10 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from control_cluster_utils.controllers.rhc import RHChild
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
+# from control_cluster_utils.utilities.
 
 import os
 import struct
@@ -155,8 +156,7 @@ class ControlClusterSrvr(ABC):
             # we assign the client-side joint names to each controller (used for mapping purposes)
             self._controllers[i].assign_client_side_jnt_names(self.client_side_jnt_names)
 
-            self._controllers[i].create_jnt_maps() # this is called anyway inside the solve, but this way
-            # we save a bit of time when spawning the processes
+            self._controllers[i].create_jnt_maps()
 
             self._controllers[i].init_states() # initializes states
 

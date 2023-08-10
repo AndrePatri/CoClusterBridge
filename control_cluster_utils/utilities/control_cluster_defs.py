@@ -296,9 +296,3 @@ class RobotClusterCmd:
 
         torch.cuda.synchronize() # this way we ensure that after this the state on GPU
         # is fully updated
-
-class Action(ABC):
-        
-        pass
-
-ActionChild = TypeVar('ActionChild', bound='Action')

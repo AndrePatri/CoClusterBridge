@@ -1,4 +1,4 @@
-from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
+from control_cluster_utils.utilities.shared_mem import SharedMemSrvr, SharedStringArray
 
 import torch
 
@@ -108,10 +108,22 @@ def profile_writing_global_bool():
 
         time.sleep(0.1)
 
+def test_writing_string_array():
+
+    list = ["joint_puzzo", "hai_rotto_il_ca**o", "joint_gnegne£$", "scibijoint0978"]
+
+    string_tensor = SharedStringArray(4, "prova")
+    
+    string_tensor.write(list)
+
+    print(string_tensor.decode())
+
 if __name__ == "__main__":
 
-    profile_writing_global_bool()
+    test_writing_string_array()
 
-    profile_reading_bool_array()
+    # profile_writing_global_bool()
 
-    profile_copy_cuda_cpu()
+    # profile_reading_bool_array()
+
+    # profile_copy_cuda_cpu()
