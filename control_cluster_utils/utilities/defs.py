@@ -30,4 +30,16 @@ def cmds_name():
     name = "RobotCmds"
 
     return name
+
+def trigger_flagname():
+
+    name = "Trigger"
+
+    return name
+
+def solved_flagname():
+
+    name = "Solved"
+
+    return name
         

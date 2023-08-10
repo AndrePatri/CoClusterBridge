@@ -34,8 +34,6 @@ class ControlClusterSrvr(ABC):
 
         self.processes_basename = processes_basename
 
-        self.termination_flag = mp.Value('i', 0)
-
         self.cluster_size = -1
 
         self._device = "cpu"
@@ -59,9 +57,7 @@ class ControlClusterSrvr(ABC):
     def _close_processes(self):
     
         # Wait for each process to exit gracefully or terminate forcefully
-        
-        self.termination_flag.value = 1
-        
+                
         for process in self._processes:
 
             process.join(timeout=0.2)  # Wait for 5 seconds for each process to exit gracefully

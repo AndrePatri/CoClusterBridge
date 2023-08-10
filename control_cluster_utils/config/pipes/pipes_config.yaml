@@ -4,4 +4,4 @@ build_basenames: [cluster_size, jnt_number_srvr,
               n_bytes_jnt_names_client, jnt_names_client, 
               add_data_length] # these are unique pipes 
 # which are used e.g. for handshake operations
-runtime_basenames: [trigger_solve, solved] # these are pipes which are to be replicated at runtime, depending on the cluster size
+runtime_basenames: [] # these are pipes which are to be replicated at runtime, depending on the cluster size

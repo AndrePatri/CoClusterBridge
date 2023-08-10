@@ -15,8 +15,8 @@ OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
 
 from control_cluster_utils.utilities.rhc_defs import RobotStateChild, RobotCmds, RobotState
-from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedMemSrvr
-
+from control_cluster_utils.utilities.shared_mem import SharedMemClient
+from control_cluster_utils.utilities.defs import trigger_flagname
 import copy
 
 from typing import List
@@ -42,25 +42,21 @@ class RHController(ABC):
             srdf_path: str,
             config_path: str, 
             cluster_size: int,
-            pipes_manager: NamedPipesHandler,
             controller_index: int,
-            termination_flag: mp.Value,
             verbose = False, 
+            debug = False,
             array_dtype = torch.float32):
         
         self.controller_index = controller_index
-
-        self.pipes_manager = copy.deepcopy(pipes_manager) # we make a (deep) copy
 
         self.status = "status"
         self.info = "info"
         self.exception = "exception"
         self.warning = "warning"
 
-        self._termination_flag = termination_flag
-
         self._verbose = verbose
-        
+        self._debug = debug
+
         self.cluster_size = cluster_size
 
         self.urdf_path = urdf_path
@@ -97,32 +93,17 @@ class RHController(ABC):
 
         self._init()
 
-        self._pipe_opened = False
-
         self.array_dtype = array_dtype
 
     def _init(self):
 
         self._init_problem() # we call the child's initialization method
 
-    def _open_pipes(self):
-        
-        # these are blocking
-        self.pipes_manager.open_pipes(selector=["trigger_solve"
-                ], 
-                mode = OMode["O_RDONLY_NONBLOCK"], 
-                index=self.controller_index)
-
-        # these are blocking (we read even if the pipe is empty)
-        self.pipes_manager.open_pipes(selector=["solved"], 
-                mode = OMode["O_WRONLY"], 
-                index=self.controller_index)
-        
-    def _close_pipes(self):
-
-        # we close the pipes
-        self.pipes_manager.close_pipes(selector=["trigger_solve", "solved"], 
-                index=self.controller_index)
+        dtype = torch.bool
+        self.triggger_flag = SharedMemClient(self.cluster_size, 1, 
+                                    self.controller_index, 
+                                    trigger_flagname(), 
+                                    dtype=dtype)
     
     def init_states(self):
         
@@ -174,19 +155,6 @@ class RHController(ABC):
                                 ":" + f"states not initialized. Did you call the init_states()?"
 
             raise Exception(exception)
-        
-        if not self._pipe_opened:
-            
-            # we open here the pipes so that they are opened into 
-            # the child process where the solve() is spawned
-
-            self._open_pipes()
-
-            self._pipe_opened = True
-
-        if self._termination_flag.value:
-            
-            a = 1
 
         else:
 
@@ -196,15 +164,11 @@ class RHController(ABC):
 
                 try:
                     
-                    if self._verbose:
+                    if self._debug:
                             
                         start = time.perf_counter() 
 
-                    msg_bytes = b'1'
-                    signal = os.read(self.pipes_manager.pipes_fd["trigger_solve"][self.controller_index], 
-                                    len(msg_bytes)).decode().strip()
-                    
-                    if signal == '1':
+                    if self.triggger_flag.read_bool():
                         
                         # read latest states from pipe 
 
@@ -214,26 +178,32 @@ class RHController(ABC):
                         # from the solution
                         
                         # we signal the client this controller has finished its job
-                        os.write(self.pipes_manager.pipes_fd["solved"][self.controller_index], 
-                            b'1')
+                        self.triggger_flag.set_bool(False) # this is also necessary to trigger again the solution
+                        # on next loop, unless the client requires it
                         
-                        if self._verbose:
+                        if self._debug:
                             
                             duration = time.perf_counter() - start
+
+                        if self._verbose and self._debug:
 
                             print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                                 f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                         
-                    else:
+                    # else:
 
-                        if self._verbose:
-
-                            print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.warning}]" + ":" + f"received invalid signal {signal} on trigger solve pipe")
+                    #     if self._verbose:
+                            
+                    #         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                    #             f"[{self.warning}]" + ":" + f" waiting for solution trigger...")
                             
                 except BlockingIOError:
 
                     continue
+
+                except KeyboardInterrupt:
+
+                    break
     
     def assign_client_side_jnt_names(self, 
                         jnt_names: List[str]):

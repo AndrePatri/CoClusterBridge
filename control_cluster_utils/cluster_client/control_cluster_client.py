@@ -3,7 +3,9 @@ import torch
 from abc import ABC
 
 from control_cluster_utils.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd
-from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedMemSrvr
+from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
+from control_cluster_utils.utilities.defs import trigger_flagname
+
 from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
 OMode = NamedPipesHandler.OMode
 DSize = NamedPipesHandler.DSize
@@ -29,9 +31,12 @@ class ControlClusterClient(ABC):
             backend = "torch", 
             device = torch.device("cpu"), 
             np_array_dtype = np.float32, 
-            verbose = False):
+            verbose = False, 
+            debug = False):
 
         self._verbose = verbose
+
+        self._debug = debug
 
         self.np_dtype = np_array_dtype
         data_aux = np.zeros((1, 1), dtype=self.np_dtype)
@@ -79,33 +84,35 @@ class ControlClusterClient(ABC):
     
         self.pipes_manager = NamedPipesHandler()
         self.pipes_manager.create_buildpipes()
-        self.pipes_manager.create_runtime_pipes(self.cluster_size) # we create the remaining runtime pipes
 
         self.solution_time = -1.0
         self.n_sim_step_per_cntrl = -1
         self.solution_counter = 0
         self._compute_n_control_actions()
 
+        self._init_shared_flags() # initializes shared memory used for 
+        # communication between the client and server
+
         self._spawn_processes() # we launch all the child processes
 
     def _spawn_processes(self):
         
-        # we spawn the handshake() to another process, 
+        # we spawn the heartbeat() to another process, 
         # so that it's not blocking wrt the simulator
 
-        self._connection_process = mp.Process(target=self._handshake, 
-                                name = "ControlClusterClient_handshake")
+        self._connection_process = mp.Process(target=self._heartbeat, 
+                                name = "ControlClusterClient_heartbeat")
         self._connection_process.start()
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _handshake process")
+        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _heartbeat process")
 
-    def _handshake(self):
+    def _heartbeat(self):
         
-        # THIS RUNS IN A CHILD PROCESS --> we perform the "handshake" with
+        # THIS RUNS IN A CHILD PROCESS --> we perform the "heartbeat" with
         # the server: we exchange crucial info which has to be shared between 
         # them
         
-        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": waiting for handshake with the ControlCluster server...")
+        print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": waiting for heartbeat with the ControlCluster server...")
 
         # retrieves/sends some important configuration information from the server
 
@@ -158,38 +165,31 @@ class ControlClusterClient(ABC):
 
         print(f"[{self.__class__.__name__}]" + f"{self.info}" + ": friendship with ControlCluster server established.")
 
-    def _trigger_solution(self, 
-                        index: int):
+    def _init_shared_flags(self):
+
+        dtype = torch.bool # using a boolean type shared data, 
+        # exposes low-latency boolean writing and reading methods
+
+        self.trigger_flags = SharedMemSrvr(self.cluster_size, 1, 
+                                trigger_flagname(), 
+                                dtype=dtype) 
+    
+    def _trigger_solution(self):
 
         if self.is_cluster_ready.value: 
 
-            msg_bytes = b'1'
-            # Send a signal to perform the solution
-            
-            os.write(self.pipes_manager.pipes_fd["trigger_solve"][index], 
-                msg_bytes)
+            self.trigger_flags.reset_bool(True) # sets all flags
 
-    def _solved(self, 
-            index: int):
+    def _solved(self):
 
         if self.is_cluster_ready.value: 
-
-            signal = os.read(self.pipes_manager.pipes_fd["solved"][index], 
-                            len(b'1')).decode().strip() # this is blocking
             
-            if signal == '1':
-                
-                return True
+            while not self.trigger_flags.none(): # far too much CPU intensive?
+
+                continue
+
+            return True
             
-            else:
-                
-                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._solved.__name__}]: " + \
-                    f"received invalid response {signal} from controller n.{index}"
-
-                print(message)
-
-                return False
-        
     def _compute_n_control_actions(self):
 
         if self.cluster_dt < self.control_dt:
@@ -228,17 +228,6 @@ class ControlClusterClient(ABC):
                                             device=self._device, 
                                             dtype=self.torch_dtype) # now that we know add_data_size
         # we can initialize the control commands
-
-        # solver
-        for i in range(0, self.cluster_size):
-            
-            self.pipes_manager.open_pipes(["trigger_solve"], 
-                                        mode=OMode["O_WRONLY"], 
-                                        index=i) 
-            
-            self.pipes_manager.open_pipes(["solved"], 
-                                        mode=OMode["O_RDONLY"], 
-                                        index=i) 
     
     def cluster_ready(self):
 
@@ -276,34 +265,26 @@ class ControlClusterClient(ABC):
 
         if (is_cluster_ready):
             
-            start_time = time.perf_counter() # we profile the whole solution pipeline
+            if self._debug:
+
+                start_time = time.perf_counter() # we profile the whole solution pipeline
             
-            # we send a signal to solve the TO to all controllers      
+            self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
 
-            self.robot_states.synch() # updates shared tensor with data from states
-
-            for i in range(0, self.cluster_size):
-
-                self._trigger_solution(i)       
+            self._trigger_solution() # triggers solution of all controllers in the cluster 
 
             # we wait for all controllers to finish      
-            for i in range(0, self.cluster_size):
-
-                success = self._solved(i)
-
-                if not success:
-                    
-                    exception = f"[{self.__class__.__name__}]"  + f"[{self.exception}]: " + f"could not solve properly TO n.{i}"
-
-                    raise Exception(exception)
+            solved = self._solved() # this is blocking
                 
-            # at this point all controllers are done -> we synchronize the control commands
-            # with the ones written by each controller
+            # at this point all controllers are done -> we synchronize the control commands on GPU
+            # with the ones written by each controller on CPU
             self.controllers_cmds.synch()
 
             self.solution_counter += 1
 
-            self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
+            if self._debug:
+
+                self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
         
     def close(self):
 

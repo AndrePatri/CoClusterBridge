@@ -8,6 +8,8 @@ import yaml
 
 from control_cluster_utils.utilities.sysutils import PathsGetter
 
+from typing import List
+
 class SharedMemConfig:
 
     def __init__(self):
@@ -179,10 +181,26 @@ class SharedMemSrvr:
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
             raise Exception(exception)
+        
+    def none(self):
+
+        if self.bool_bytearray_view is not None:
+
+            return all(value == 0 for value in self.bool_bytearray_view)
+        
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.none.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
 
     def reset_bool(self, 
                 to_true: bool = False):
 
+        # sets all to either True or False
         if self.bool_bytearray_view is not None:
             
             if to_true:
@@ -192,6 +210,32 @@ class SharedMemSrvr:
             else:
 
                 self.bool_bytearray_view[:] = self.bytearray_reset_false
+
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+        
+    def set_bool(self, 
+                vals: List[bool]):
+
+        # sets all to either True or False
+        if self.bool_bytearray_view is not None:
+            
+            if len(vals) != len(self.bool_bytearray_view):
+
+                exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f" provided boolean list of length {len(vals)} does" + \
+                            f" not match the required lentgh of {len(self.bool_bytearray_view)}"
+
+                raise Exception(exception)
+        
+            self.bool_bytearray_view[:] = bytearray(vals)
 
         else:
 
