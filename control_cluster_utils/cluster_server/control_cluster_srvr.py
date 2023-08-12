@@ -48,15 +48,7 @@ class ControlClusterSrvr(ABC):
         self._controllers_count = 0
 
         self.solution_time = -1.0
-
-    def __del__(self):
-
-        self.close()
     
-    def close(self):
-
-        self.handshake_srvr.terminate()
-
     def _close_processes(self):
     
         # Wait for each process to exit gracefully or terminate forcefully
@@ -141,7 +133,7 @@ class ControlClusterSrvr(ABC):
         self._spawn_processes()
 
     def terminate(self):
-
+        
         print(f"[{self.__class__.__name__}]" + f"[{self.info}]" + ": terminating cluster")
 
         self._close_processes() # we also terminate all the child processes

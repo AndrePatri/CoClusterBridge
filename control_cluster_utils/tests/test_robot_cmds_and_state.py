@@ -57,3 +57,7 @@ if __name__ == "__main__":
     print("Client side info: \n" + str(cluster_cmds.rhc_info.info))
 
     print("Client side tensor view: \n" + str(cluster_cmds.shared_memman.tensor_view[:, :]))
+
+    # for i in range(0, cluster_size):
+
+    #     srv_cmds[i].terminate()

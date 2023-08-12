@@ -18,6 +18,8 @@ class RobotState:
             self.v = None # floating base linear vel
             self.omega = None # floating base angular vel
 
+            self._terminate = False
+
             self.q_remapping = None
             if q_remapping is not None:
                 self.q_remapping = torch.tensor(q_remapping)
@@ -33,13 +35,17 @@ class RobotState:
             self.terminate()
 
         def terminate(self):
+            
+            if not self._terminate:
+                
+                self._terminate = True
 
-            # release any memory view
+                # release any memory view
 
-            self.p = None
-            self.q = None
-            self.v = None
-            self.omega = None
+                self.p = None
+                self.q = None
+                self.v = None
+                self.omega = None
 
         def assign_views(self, 
                     mem_manager: SharedMemClient,
@@ -101,6 +107,8 @@ class RobotState:
 
             self.n_dofs = n_dofs
 
+            self._terminate = False 
+
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
 
@@ -114,10 +122,14 @@ class RobotState:
 
         def terminate(self):
 
-            # we release any memory view
+            if not self._terminate:
+                
+                self._terminate = True
 
-            self.q = None
-            self.v = None
+                # we release any memory view
+
+                self.q = None
+                self.v = None
 
         def assign_views(self, 
             mem_manager: SharedMemClient,
@@ -166,6 +178,8 @@ class RobotState:
 
         self.device = torch.device('cpu') # born to live on CPU
 
+        self._terminate = False
+
         self.n_dofs = n_dofs
         self.cluster_size = cluster_size
         aggregate_view_columnsize = aggregate_state_size(self.n_dofs)
@@ -200,10 +214,15 @@ class RobotState:
 
     def terminate(self):
 
-        self.root_state.terminate()
-        self.jnt_state.terminate()
+        if not self._terminate:
 
-        self.shared_memman.terminate()
+            self._terminate = True
+
+            self.root_state.terminate()
+
+            self.jnt_state.terminate()
+
+            self.shared_memman.terminate()
 
 class RobotCmds:
 
@@ -219,6 +238,8 @@ class RobotCmds:
             self.q = None # joint positions
             self.v = None # joint velocities
             self.eff = None # joint efforts
+
+            self._terminate = False
 
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "q")
@@ -287,11 +308,13 @@ class RobotCmds:
 
         def terminate(self):
             
-            # we release all memory views
+            if not self._terminate:
 
-            self.q = None
-            self.v = None
-            self.eff = None
+                # we release all memory views
+
+                self.q = None
+                self.v = None
+                self.eff = None
 
     class SolverState:
 
@@ -305,6 +328,8 @@ class RobotCmds:
             self.add_info_size = add_info_size
             
             self.n_dofs = n_dofs
+
+            self._terminate = False
 
             self.assign_views(mem_manager, "info")
 
@@ -330,8 +355,10 @@ class RobotCmds:
 
         def terminate(self):
             
-            # we release any memory view
-            self.info = None
+            if not self._terminate:
+
+                # we release any memory view
+                self.info = None
 
     def __init__(self, 
                 n_dofs: int, 
@@ -351,6 +378,8 @@ class RobotCmds:
         self.add_info_size = add_info_size
 
         self.jnt_remapping = jnt_remapping
+
+        self._terminate = False
 
         aggregate_view_columnsize = -1
 
@@ -386,12 +415,14 @@ class RobotCmds:
         self.terminate()
 
     def terminate(self):
+        
+        if not self._terminate:
 
-        self.jnt_cmd.terminate()
+            self.jnt_cmd.terminate()
 
-        self.slvr_state.terminate()
+            self.slvr_state.terminate()
 
-        self.shared_memman.terminate()
+            self.shared_memman.terminate()
 
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 RobotCmdsChild = TypeVar('RobotCmdsChild', bound='RobotCmds')

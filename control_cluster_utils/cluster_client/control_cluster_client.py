@@ -30,6 +30,8 @@ class ControlClusterClient(ABC):
 
         self._verbose = verbose
 
+        self._terminate = False
+
         self._debug = debug
 
         self.np_dtype = np_array_dtype
@@ -57,46 +59,58 @@ class ControlClusterClient(ABC):
         self._backend = backend
         self._device = device
 
-        self.robot_states = RobotClusterState(self.n_dofs, 
-                                            cluster_size=self.cluster_size, 
-                                            backend=self._backend, 
-                                            device=self._device, 
-                                            dtype=self.torch_dtype) # from robot to controllers
+        # shared mem objects
+        self.handshake_manager = None
+        self._handshake_thread = None
+        self.robot_states = None
+        self.controllers_cmds = None
+        self.trigger_flags = None
 
-        self.controllers_cmds = None # we wait to know the size of the additional data
-        # from the control server
-        
+        # flags
         self._was_cluster_ready = False
         self.is_cluster_ready = False
         self._is_first_control_step = False
 
-        self.terminate = False
-
-        self.add_data_length = 0
-
+        # message handling
         self.status = "status"
         self.info = "info"
         self.warning = "warning"
         self.exception = "exception"
 
+        # other data
+        self.add_data_length = 0
+
         self.solution_time = -1.0
-        self.n_sim_step_per_cntrl = -1
         self.solution_counter = 0
-        self._compute_n_control_actions()
+        self.n_sim_step_per_cntrl = -1
 
-        self._init_shared_flags() # initializes shared memory used for 
+        # performs some initialization steps
+        self._setup()
+        
+    def _setup(self):
+
+        self._compute_n_control_actions() # necessary ti apply control input only at 
+        # a specific rate
+
+        self._init_shared_mem() # initializes shared memory used for 
         # communication between the client and server
+        self._start_shared_mem() # starts memory servers and clients
 
-        self._handshake_thread = None
-        self._spawn_threads() # we launch all the child processes
+    def _start_shared_mem(self):
 
-    def _spawn_threads(self):
+        self.robot_states.start()
+
+        self.trigger_flags.start()
+
+        self._spawn_handshake() # we launch all the child processes
+
+    def _spawn_handshake(self):
         
         # we spawn the heartbeat() to another process, 
         # so that it's not blocking wrt the simulator
 
-        self._handshake_thread =  threading.Thread(target=self.handshake_manager.handshake, 
-                                args=(), 
+        self._handshake_thread =  threading.Thread(target=self.handshake_manager.start, 
+                                args=(self.cluster_size, self.jnt_names, ), 
                                 kwargs={})
         
         self._handshake_thread.start()
@@ -104,10 +118,15 @@ class ControlClusterClient(ABC):
         print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
             ": spawned _heartbeat thread")
 
-    def _init_shared_flags(self):
+    def _init_shared_mem(self):
         
-        self.handshake_manager = HanshakeDataCntrlClient(self.cluster_size, 
-                                                self.jnt_names) # handles handshake process
+        self.robot_states = RobotClusterState(self.n_dofs, 
+                                            cluster_size=self.cluster_size, 
+                                            backend=self._backend, 
+                                            device=self._device, 
+                                            dtype=self.torch_dtype) # from robot to controllers
+
+        self.handshake_manager = HanshakeDataCntrlClient(self.n_dofs) # handles handshake process
         # between client and server
 
         dtype = torch.bool # using a boolean type shared data, 
@@ -129,13 +148,17 @@ class ControlClusterClient(ABC):
             
             while not self.trigger_flags.none(): # far too much CPU intensive?
 
-                if not self.terminate and \
+                if (not self._terminate) and \
                     (self.trigger_flags.get_clients_count() == self.cluster_size):
 
                     continue
+                
+                else:
 
+                    break
+                
             return True
-            
+        
     def _compute_n_control_actions(self):
 
         if self.cluster_dt < self.control_dt:
@@ -176,6 +199,7 @@ class ControlClusterClient(ABC):
                                             device=self._device, 
                                             dtype=self.torch_dtype) # now that we know add_data_size
         # we can initialize the control commands
+        self.controllers_cmds.start()
     
     def cluster_ready(self):
 
@@ -222,6 +246,7 @@ class ControlClusterClient(ABC):
             
             self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
 
+            print("UUUU:" + str(self.trigger_flags.get_clients_count()))
             self._trigger_solution() # triggers solution of all controllers in the cluster 
 
             # we wait for all controllers to finish      
@@ -236,35 +261,47 @@ class ControlClusterClient(ABC):
             if self._debug:
 
                 self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
-
+            
     def close(self):
-
-        self.terminate = True
-
-        self.handshake_manager.terminate() # will close/detach all shared memory 
-
-        self.robot_states.terminate()
-
-        self.trigger_flags.terminate()
-
-        if self.controllers_cmds is not None:
+        
+        if not self._terminate:
             
-            self.controllers_cmds.terminate()
+            self._terminate = True
+            
+            if self.robot_states is not None:
+                
+                self.robot_states.terminate()
 
+            if self.trigger_flags is not None:
+                
+                self.trigger_flags.terminate()
+
+            if self.controllers_cmds is not None:
+                
+                self.controllers_cmds.terminate()
+
+        self._close_handshake()
+
+    def _close_handshake(self):
+
+        if self.handshake_manager is not None:
+                
+                self.handshake_manager.terminate() # will close/detach all shared memory 
+                
         if self._handshake_thread is not None:
-            
-            self._close_thread(self._handshake_thread) # we wait for thread to exit, if still alive
-    
+                
+            self._close_thread(self._handshake_thread) # we first wait for thread to exit, if still alive
+
     def _close_thread(self, 
                     thread):
         
         if thread.is_alive():
                         
             print(f"[{self.__class__.__name__}]"  + f"[{self.info}]" + \
-                ": terminating child process " + str(thread.name))
+                ": terminating child thread " + str(thread.name))
         
             thread.join() # wait for thread to join
 
     def __del__(self):
-
+                
         self.close()

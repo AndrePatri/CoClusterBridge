@@ -84,3 +84,21 @@ def client_writing_name():
     name = "ClientWriting"
 
     return name
+
+def shared_clients_count_name():
+
+    name = "clients_counter"
+
+    return name
+
+def shared_sem_srvr_name():
+
+    name = "semaphore_srvr"
+
+    return name
+
+def shared_sem_clients_count_name():
+
+    name = "semaphore_clients_count"
+
+    return name

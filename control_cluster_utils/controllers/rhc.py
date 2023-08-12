@@ -58,14 +58,13 @@ class RHController(ABC):
 
         self.config_path = config_path
 
-        self.rhc_cmd: RHCCmdChild = RHCCmd()
-
-        self.cntrl_cmd: CntrlCmdChild =  CntrlCmd()
-
         self.n_dofs = None
 
-        self.robot_state: RobotStateChild = None 
-        
+        # shared mem
+        self.robot_state = None 
+        self.trigger_flag = None
+        self.robot_cmds = None
+
         self._client_side_jnt_names = []
         self._server_side_jnt_names = []
         self._got_jnt_names_client = False
@@ -88,11 +87,18 @@ class RHController(ABC):
         self._terminate()
 
     def _terminate(self):
+        
+        if self.trigger_flag is not None:
 
-        self.trigger_flag.terminate()
-
-        self.robot_cmds.terminate()
-        self.robot_state.terminate()
+            self.trigger_flag.terminate()
+        
+        if self.robot_cmds is not None:
+            
+            self.robot_cmds.terminate()
+        
+        if self.robot_state is not None:
+            
+            self.robot_state.terminate()
 
     def _init(self):
 

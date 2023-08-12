@@ -9,6 +9,9 @@ import struct
 import yaml
 
 from control_cluster_utils.utilities.sysutils import PathsGetter
+from control_cluster_utils.utilities.defs import shared_clients_count_name
+from control_cluster_utils.utilities.defs import shared_sem_srvr_name
+from control_cluster_utils.utilities.defs import shared_sem_clients_count_name
 
 from typing import List
 
@@ -52,7 +55,8 @@ class SharedMemSrvr:
         self.n_rows = n_rows
         self.n_cols = n_cols
 
-        self._terminate = True 
+        self._terminate = False 
+        self._started = False
 
         self.mem_config = SharedMemConfig()
 
@@ -62,32 +66,30 @@ class SharedMemSrvr:
                 self.name
             
             self.mem_path_clients_counter = "/" + self.mem_config.basename + \
-                self.name + "_clients_counter"
+                self.name + "_" + shared_clients_count_name()
             
-            self.mem_path_server_counter = "/" + self.mem_config.basename + \
-                self.name + "_servers_counter"
+            self.mem_path_server_sem = "/" + self.mem_config.basename + \
+                self.name + "_" + shared_sem_srvr_name()
             
-            self.mem_path_sempahore = "/" + self.mem_config.basename + \
-                self.name + "_semaphore"
+            self.mem_path_clients_n_sem = "/" + self.mem_config.basename + \
+                self.name + "_" + shared_sem_clients_count_name()
             
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
         # shared mem fd
         self.shm = None
         self.shm_clients_counter = None
-        self.shm_servers_counter = None
-        self.sem = None
+        self.sem_server = None
+        self.sem_client_n = None
 
         # mem maps
         self.memory = None
         self.memory_clients_counter = None
-        self.memory_servers_counter = None
 
         # views
         self.bool_bytearray_view = None
         self.tensor_view = None
         self.n_clients = None
-        self.n_servers = None
 
         self.torch_to_np_dtype = {
             torch.float16: np.float16,
@@ -103,6 +105,12 @@ class SharedMemSrvr:
 
         self._create_shared_memory()
 
+    def start(self):
+        
+        if not self.is_server_unique():
+                        
+            raise Exception(self.mult_srvrs_error())
+        
         self._create_tensor_view()
         
         self.bool_bytearray_view = None
@@ -121,16 +129,20 @@ class SharedMemSrvr:
                 (self.n_rows == 1 or self.n_cols == 1):
 
                 self._create_bytearray_view()
+        
+        self._started = True
                 
     def __del__(self):
-        
-        self._close_shared_memory()
+
+        self.terminate()
 
     def terminate(self):
+        
+        if not self._terminate:
 
-        self._terminate = True
+            self._terminate = True
 
-        self._close_shared_memory()
+            self._close_shared_memory()
 
     def print_created_mem(self, 
                         path: str):
@@ -148,54 +160,37 @@ class SharedMemSrvr:
 
         return error
         
-    def _create_semaphore(self):
+    def _create_semaphores(self):
 
-        self.sem = posix_ipc.Semaphore(self.mem_path_sempahore, 
+        self.sem_client_n = posix_ipc.Semaphore(self.mem_path_clients_n_sem, 
                             flags=posix_ipc.O_CREAT, 
                             initial_value=1)
         
-        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_semaphore.__name__}]: " + \
-                    f"created/opened sempaphore @ {self.mem_path_sempahore}"
+        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_semaphores.__name__}]: " + \
+                    f"created/opened sempaphore @ {self.mem_path_clients_n_sem}"
         
         print(message)
 
-    def _create_server_checker(self):
-        
-        self.shm_servers_counter = posix_ipc.SharedMemory(name = self.mem_path_server_counter, 
+        self.sem_server = posix_ipc.Semaphore(self.mem_path_server_sem, 
                             flags=posix_ipc.O_CREAT, 
-                            size=8) 
-
-        self.memory_servers_counter = mmap.mmap(self.shm_servers_counter.fd, self.shm_servers_counter.size)
-
-        self.shm_servers_counter.close_fd()
-
-        self.n_servers = memoryview(self.memory_servers_counter)
+                            initial_value=1)
         
-        if not self.is_server_unique():
-            
-            raise Exception(self.mult_srvrs_error())
-    
+        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_semaphores.__name__}]: " + \
+                    f"created/opened sempaphore @ {self.mem_path_server_sem}"
+        
+        print(message)
+
     def is_server_unique(self):
         
-        check = -1
+        try:
 
-        if self.n_servers is not None:
+            self.sem_server.acquire(timeout=0.1)
 
-            check = struct.unpack('q', self.n_servers[:8])[0]
-
-            if check != 1:
-                
-                self.sem.acquire()
-
-                self.n_servers[:8] = struct.pack('q', 1) # other servers cannot be created from now
-
-                self.sem.release()
-
-                return True
+            return True
+        
+        except posix_ipc.BusyError: # failed to acquire --> another server
             
-            else:
-
-                return False
+            return False
         
     def _create_clients_counter(self):
 
@@ -210,19 +205,29 @@ class SharedMemSrvr:
         self.n_clients = memoryview(self.memory_clients_counter)
 
         message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_clients_counter.__name__}]: " + \
-                    f"created/opened cleints counter @ {self.mem_path_clients_counter}"
+                    f"created/opened clients counter @ {self.mem_path_clients_counter}"
         
         print(message)
 
     def get_clients_count(self):
         
-        count = -1
-
         if self.n_clients is not None:
+            
+            while not self._terminate:
 
-            count = struct.unpack('q', self.n_clients[:8])[0]
+                try:
 
-            return count 
+                    self.sem_client_n.acquire(timeout=0.0)
+
+                    count = struct.unpack('q', self.n_clients[:8])[0]
+                    
+                    self.sem_client_n.release()
+
+                    return count 
+                
+                except posix_ipc.BusyError:
+
+                    continue
         
     def _create_data_memory(self, 
                     tensor_size: int):
@@ -242,10 +247,7 @@ class SharedMemSrvr:
         tensor_size = self.n_rows * self.n_cols * self.element_size
 
         # semaphore
-        self._create_semaphore()
-
-        # server checker (must be unique)
-        self._create_server_checker()
+        self._create_semaphores()
     
         # clients counter
         self._create_clients_counter()
@@ -262,10 +264,6 @@ class SharedMemSrvr:
         if self.tensor_view is not None:
 
             self.tensor_view = None
-
-        if self.n_servers is not None:
-
-            self.n_servers = None
         
         if self.n_clients is not None:
 
@@ -295,17 +293,46 @@ class SharedMemSrvr:
                         f"closed clients counter @ {self.mem_path_clients_counter}"
         
             print(message)
+
+    def _close_sems(self):
+
+        if self.sem_server is not None:
+            
+            try:
+                
+                self.sem_server.release()
+
+                self.sem_server.close()
+
+                self.sem_server.unlink()
+
+            except posix_ipc.ExistentialError:
+                
+                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
+                        f"could not close semaphor @ {self.mem_path_server_sem}. Probably something already did."
+
+                print(message)
+
+                pass
         
-        if self.memory_servers_counter is not None:
+        if self.sem_client_n is not None:
 
-            self.memory_servers_counter.close()
+            try:
+                
+                self.sem_client_n.release()
 
-            self.memory_servers_counter = None
+                self.sem_client_n.close()
 
-            message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._close_mmaps.__name__}]: " + \
-                        f"closed clients counter @ {self.mem_path_server_counter}"
-        
-            print(message)
+                self.sem_client_n.unlink() # should we unlink it?
+
+            except posix_ipc.ExistentialError:
+                
+                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
+                        f"could not close semaphor @ {self.mem_path_clients_n_sem}. Probably something already did."
+
+                print(message)
+
+                pass
 
     def _unlink(self):
 
@@ -333,7 +360,7 @@ class SharedMemSrvr:
 
             try:
 
-                self.shm_clients_counter.unlink()
+                # self.shm_clients_counter.unlink() # should we unlink it?
 
                 self.shm_clients_counter.close_fd()
 
@@ -347,43 +374,11 @@ class SharedMemSrvr:
                 print(message)
 
                 pass
-        
-        if self.shm_servers_counter is not None:
-            
-            try:
-
-                self.shm_servers_counter.unlink()
-
-                self.shm_servers_counter.close_fd()
-
-                self.shm_servers_counter = None
-
-            except posix_ipc.ExistentialError:
-
-                message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._close_fds.__name__}]: " + \
-                            f"could not unlink servers counter @ {self.mem_path_server_counter}"
-            
-                print(message)
-
-        if self.sem is not None:
-            
-            try:
-                
-                self.sem.unlink()
-
-                self.sem = None
-
-            except posix_ipc.ExistentialError:
-                
-                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
-                        f"could not unlink semaphor @ {self.mem_path_sempahore}. Probably something already did."
-
-                print(message)
-
-                pass
 
     def _close_shared_memory(self):
         
+        self._close_sems()
+
         self._detach_vars()
 
         self._close_mmaps()
@@ -533,16 +528,16 @@ class SharedMemClient:
                 self.name
             
             self.mem_path_clients_counter = "/" + self.mem_config.basename + \
-                self.name + "_clients_counter"
+                self.name + "_" + shared_clients_count_name()
             
             self.mem_path_clients_semaphore = "/" + self.mem_config.basename + \
-                self.name + "_semaphore"
+                self.name + "_" + shared_sem_clients_count_name()
         
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
         self.memory = None
         self.memory_clients_counter = None
-        self.sem = None
+        self.sem_client_n = None
 
         self.shm = None
         self.shm_clients_counter = None
@@ -552,62 +547,70 @@ class SharedMemClient:
         self.n_clients = None
 
         self._terminate = False
-        self._started = False
+        self._attached = False
 
     def __del__(self):
-
+        
         self.terminate()
 
     def terminate(self):
 
-        self._terminate = True
+        if not self._terminate:
+            
+            self._decrement_client_count()
 
-        self.decrement_client_count()
+            self._terminate = True
 
-        self._detach_shared_memory()
+            self._detach_shared_memory()
 
     def attach(self):
         
         self._attach_shared_memory()
-
-        if self.backend == "torch": 
-
-            if self.dtype == torch.bool and \
-                (self.n_rows == 1 or self.n_cols == 1):
-                
-                self.is_bool_mode = True
-
-                if self.n_rows == 1:
-
-                    self.client_index = 0 # this way we allow multiple "subscribers"
-                    # to a global boolean var
-                
-                self._create_bytearray_view() # more efficient array view for simple 1D boolean 
-                # arrays
-
-        if self.backend == "numpy":
-
-            if self.dtype == np.bool and \
-                (self.n_rows == 1 or self.n_cols == 1):
-
-                self.is_bool_mode = True
-                
-                if self.n_rows == 1:
-
-                    self.client_index = 0 # this way we allow multiple "subscribers"
-                    # to a global boolean var
-                    
-                self._create_bytearray_view()
         
-        if self.client_index is not None:
-            
-            self.tensor_view = self.create_partial_tensor_view() # creates a view of a whole row
+        if self._attached:
 
+            if self.backend == "torch": 
+
+                if self.dtype == torch.bool and \
+                    (self.n_rows == 1 or self.n_cols == 1):
+                    
+                    self.is_bool_mode = True
+
+                    if self.n_rows == 1:
+
+                        self.client_index = 0 # this way we allow multiple "subscribers"
+                        # to a global boolean var
+                    
+                    self._create_bytearray_view() # more efficient array view for simple 1D boolean 
+                    # arrays
+
+            if self.backend == "numpy":
+
+                if self.dtype == np.bool and \
+                    (self.n_rows == 1 or self.n_cols == 1):
+
+                    self.is_bool_mode = True
+                    
+                    if self.n_rows == 1:
+
+                        self.client_index = 0 # this way we allow multiple "subscribers"
+                        # to a global boolean var
+                        
+                    self._create_bytearray_view()
+            
+            if self.client_index is not None:
+                
+                self.tensor_view = self.create_partial_tensor_view() # creates a view of a whole row
+
+            else:
+                
+                self.tensor_view = self._create_tensor_view()
+
+            return True
+        
         else:
-            
-            self.tensor_view = self._create_tensor_view()
 
-        self._started = True
+            return False
 
     def _print_wait(self, 
                 path: str):
@@ -619,7 +622,7 @@ class SharedMemClient:
                     
         print(status)
     
-    def print_attached(self, 
+    def _print_attached(self, 
                     path: str):
 
         index = "" if self.client_index is None else self.client_index
@@ -628,7 +631,7 @@ class SharedMemClient:
         
         print(message)
 
-    def print_detached(self, 
+    def _print_detached(self, 
                     path: str):
 
         index = "" if self.client_index is None else self.client_index
@@ -645,7 +648,7 @@ class SharedMemClient:
             self._print_wait(path)
             
         time.sleep(self.wait_amount)
-    
+
     def _attach_clients_counter(self):
 
         while not self._terminate:
@@ -654,17 +657,17 @@ class SharedMemClient:
 
                 self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_path_clients_counter, 
                             size=8) # each client will increment this counter
-    
-                self.print_attached(self.mem_path_clients_counter)
+
+                self._print_attached(self.mem_path_clients_counter)
 
                 self.memory_clients_counter = mmap.mmap(self.shm_clients_counter.fd, self.shm_clients_counter.size)
                 self.shm_clients_counter.close_fd()
                 
+                time.sleep(self.wait_amount)
+
                 self.n_clients = memoryview(self.memory_clients_counter)
 
-                self.increment_client_count()
-
-                break
+                return True
 
             except posix_ipc.ExistentialError: 
             
@@ -672,25 +675,35 @@ class SharedMemClient:
 
                 continue
 
+            except KeyboardInterrupt:
+
+                self.terminate()
+            
     def _attach_semaphore(self):
         
         while not self._terminate:
 
             try:
 
-                self.sem = posix_ipc.Semaphore(self.mem_path_clients_semaphore, 
+                self.sem_client_n = posix_ipc.Semaphore(self.mem_path_clients_semaphore, 
                     initial_value=1)
 
-                self.print_attached(self.mem_path_clients_semaphore)
+                self._print_attached(self.mem_path_clients_semaphore)
 
-                break
+                time.sleep(self.wait_amount)
+
+                return True
 
             except posix_ipc.ExistentialError:
             
                 self._handle_posix_error(self.mem_path_clients_semaphore)
-
+                
                 continue
-    
+
+            except KeyboardInterrupt:
+
+                self.terminate()
+            
     def _attach_shared_data(self, 
                     tensor_size: int):
 
@@ -705,27 +718,41 @@ class SharedMemClient:
 
                 self.shm.close_fd() 
                 
-                self.print_attached(self.mem_config.mem_path)
+                self._print_attached(self.mem_config.mem_path)
                                     
                 time.sleep(self.wait_amount)
 
-                break  # exit loop if attached successfully
+                return True
 
             except posix_ipc.ExistentialError: 
             
                 self._handle_posix_error(self.mem_config.mem_path)
                     
                 continue
-        
+
+            except KeyboardInterrupt:
+
+                self.terminate()
+                
     def _attach_shared_memory(self):
 
         tensor_size = self.n_rows * self.n_cols * self.element_size
 
-        self._attach_semaphore()
+        success_sem = self._attach_semaphore()
 
-        self._attach_clients_counter()
+        success_counter = self._attach_clients_counter()
                 
-        self._attach_shared_data(tensor_size)
+        success_data = self._attach_shared_data(tensor_size)
+
+        if success_sem and success_counter and success_data:
+
+            self._attached = True
+        
+        else:
+
+            self._attached = False
+
+        self._increment_client_count() # only works if successfully attached
         
     def _create_tensor_view(self):
 
@@ -901,25 +928,75 @@ class SharedMemClient:
 
             raise Exception(exception)
     
-    def increment_client_count(self):
-
-        self.sem.acquire()
-
-        current_value = struct.unpack('q', self.n_clients[:8])[0]  # we read the whole int64 (8 bytes)
-
-        self.n_clients[:8] = struct.pack('q', current_value + 1) 
+    def _increment_client_count(self):
         
-        self.sem.release()
+        if self._attached:
+                        
+            while not self._terminate:
+                
+                try:
+                    
+                    self.sem_client_n.acquire(timeout=0)
 
-    def decrement_client_count(self):
+                    current_value = struct.unpack('q', self.n_clients[:8])[0]  # we read the whole int64 (8 bytes)
 
-        self.sem.acquire()
+                    self.n_clients[:8] = struct.pack('q', current_value + 1) 
 
-        current_value = struct.unpack('q', self.n_clients[:8])[0]  # we read the whole int64 (8 bytes)
+                    self.sem_client_n.release()
 
-        self.n_clients[:8] = struct.pack('q', current_value - 1) 
+                    break
 
-        self.sem.release()
+                except posix_ipc.BusyError: 
+                    
+                    time.sleep(self.wait_amount)
+
+                    if self.verbose:
+                        
+                        index = "" if self.client_index is None else self.client_index
+
+                        message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
+                                f"[{self.status}]" +  f"[{self._increment_client_count.__name__}]" + ": " + \
+                                f" failed to acquire semaphore @ {self.mem_path_clients_semaphore}." + \
+                                " Retrying ..."
+
+                        print(message)
+
+                        continue
+
+    def _decrement_client_count(self):
+        
+        if self._attached:
+
+            while not self._terminate:
+                
+                try:
+
+                    self.sem_client_n.acquire(timeout=0)
+
+                    current_value = struct.unpack('q', self.n_clients[:8])[0]  # we read the whole int64 (8 bytes)
+
+                    self.n_clients[:8] = struct.pack('q', current_value - 1) 
+
+                    self.sem_client_n.release()
+
+                    break
+                
+                except posix_ipc.BusyError: 
+
+                    time.sleep(self.wait_amount)
+
+                    if self.verbose:
+                        
+                        index = "" if self.client_index is None else self.client_index
+
+                        message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
+                                f"[{self.status}]" +  f"[{self._decrement_client_count.__name__}]" + ": " + \
+                                f" failed to acquire semaphore @ {self.mem_path_clients_semaphore}." + \
+                                " Retrying ..."
+
+                        print(message)
+
+                        continue
 
     def _detach_shared_memory(self):
         
@@ -941,7 +1018,7 @@ class SharedMemClient:
 
             self.memory = None
 
-            self.print_detached(self.mem_config.mem_path)
+            self._print_detached(self.mem_config.mem_path)
             
         if self.shm is not None:
 
@@ -955,17 +1032,17 @@ class SharedMemClient:
 
             self.memory_clients_counter = None
 
-            self.print_detached(self.mem_path_clients_counter)
+            self._print_detached(self.mem_path_clients_counter)
                 
         if self.shm_clients_counter is not None:
 
             self.shm_clients_counter.close_fd()
 
-        if self.sem is not None:
+        if self.sem_client_n is not None:
             
-            self.sem = None
+            self.sem_client_n = None
 
-            self.print_detached(self.mem_path_clients_semaphore)
+            self._print_detached(self.mem_path_clients_semaphore)
             
 class SharedStringArray:
 
@@ -985,6 +1062,8 @@ class SharedStringArray:
         self.length = length
         
         self.is_server = is_server
+
+        self._terminate = False
 
         self.dtype = torch.int64
         self.max_string_length = 64 # num of characters for each string
@@ -1016,9 +1095,17 @@ class SharedStringArray:
                                         dtype=self.dtype, 
                                         verbose=verbose, 
                                         wait_amount=wait_amount)
+    
+    def start(self, 
+            init: List[str] = None):
+
+        if self.is_server:
+
+            self.mem_manager.start()
+
+        else:
+
             self.mem_manager.attach()
-            
-        self._terminate = False
 
         if init is not None:
 
@@ -1026,15 +1113,37 @@ class SharedStringArray:
 
     def __del__(self):
 
-        self.mem_manager.terminate()
-
+        self.terminate()
+    
     def terminate(self):
-
-        self._terminate = True
-
-        self.mem_manager.terminate()
         
-    def split_into_chunks(self, 
+        if not self._terminate:
+
+            self._terminate = True
+            
+            self.mem_manager.terminate()
+
+    def write(self, 
+        lst: List[str]):
+
+        if self.is_server:
+
+            lst = self._check_list(lst)
+
+            self._encode(lst)
+
+        else:
+
+            message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self.write.__name__}]: " + \
+                        f"can only call the write() method on server!!"
+        
+            print(message)
+
+    def read(self):
+
+        return self._decode()
+
+    def _split_into_chunks(self, 
                 input_string: str, 
                 chunk_size: int, 
                 num_chunks: int):
@@ -1049,7 +1158,7 @@ class SharedStringArray:
 
         for i in range(0, self.length):
             
-            chunks = self.split_into_chunks(lst[i], 
+            chunks = self._split_into_chunks(lst[i], 
                         self.chunk_size, 
                         self.n_rows)
             
@@ -1082,27 +1191,7 @@ class SharedStringArray:
 
         return decoded_list
     
-    def write(self, 
-            lst: List[str]):
-
-        if self.is_server:
-
-            lst = self.check_list(lst)
-
-            self._encode(lst)
-
-        else:
-
-            message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self.write.__name__}]: " + \
-                        f"can only call the write() method on server!!"
-        
-            print(message)
-
-    def read(self):
-
-        return self._decode()
-
-    def flatten_recursive(self, 
+    def _flatten_recursive(self, 
                     lst: List[str]):
         
         flat_list = []
@@ -1111,7 +1200,7 @@ class SharedStringArray:
 
             if isinstance(item, list):
 
-                flat_list.extend(self.flatten_recursive(item))
+                flat_list.extend(self._flatten_recursive(item))
 
             else:
 
@@ -1119,18 +1208,18 @@ class SharedStringArray:
 
         return flat_list
 
-    def check_list(self, lst: List[str]):
+    def _check_list(self, lst: List[str]):
 
-        if self.is_more_than_one_dimensional(lst):
+        if self._is_more_than_one_dimensional(lst):
             
-            lst = self.flatten_recursive(lst)
+            lst = self._flatten_recursive(lst)
     
         # we check its dimensions
-        self.is_coherent(lst) # will raise exceptions
+        self._is_coherent(lst) # will raise exceptions
         
         return lst
     
-    def is_coherent(self,
+    def _is_coherent(self,
                     lst: List[str]):
         
         if len(lst) != self.length:
@@ -1142,7 +1231,7 @@ class SharedStringArray:
         
         return True
         
-    def is_list_uniform(self, 
+    def _is_list_uniform(self, 
                         lst: List[str]):
 
         # Get the length of the first internal list
@@ -1155,7 +1244,7 @@ class SharedStringArray:
 
         return True
 
-    def get_list_depth(self, 
+    def _get_list_depth(self, 
                     lst: List[str]):
 
         if not isinstance(lst, list):
@@ -1165,23 +1254,23 @@ class SharedStringArray:
         max_depth = 0
         for item in lst:
 
-            depth = self.get_list_depth(item)
+            depth = self._get_list_depth(item)
 
             max_depth = max(max_depth, depth)
 
         return max_depth + 1
 
-    def is_more_than_one_dimensional(self, 
+    def _is_more_than_one_dimensional(self, 
                                 lst: List[str]):
 
-        return self.get_list_depth(lst) > 1
+        return self._get_list_depth(lst) > 1
 
-    def is_two_dimensional(self, 
+    def _is_two_dimensional(self, 
                         lst: List[str]):
 
-        return self.get_list_depth(lst) == 2
+        return self._get_list_depth(lst) == 2
 
-    def is_one_dimensional(self, 
+    def _is_one_dimensional(self, 
                         lst: List[str]):
 
-        return self.get_list_depth(lst) == 1
+        return self._get_list_depth(lst) == 1
