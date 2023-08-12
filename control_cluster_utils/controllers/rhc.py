@@ -1,27 +1,13 @@
-import numpy as np
-
 from abc import ABC, abstractmethod
 
-from typing import TypeVar
-
-import os 
-
 import time 
-
-import multiprocess as mp
-
-from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
-OMode = NamedPipesHandler.OMode
-DSize = NamedPipesHandler.DSize
 
 from control_cluster_utils.utilities.rhc_defs import RobotStateChild, RobotCmds, RobotState
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import trigger_flagname
-import copy
 
-from typing import List
+from typing import List, TypeVar
 
-import numpy as np
 import torch
 
 
@@ -97,15 +83,27 @@ class RHController(ABC):
 
         self.add_data_lenght = 0
 
+    def __del__(self):
+        
+        self._terminate()
+
+    def _terminate(self):
+
+        self.trigger_flag.terminate()
+
+        self.robot_cmds.terminate()
+        self.robot_state.terminate()
+
     def _init(self):
 
         self._init_problem() # we call the child's initialization method
 
         dtype = torch.bool
-        self.triggger_flag = SharedMemClient(self.cluster_size, 1, 
-                                    self.controller_index, 
-                                    trigger_flagname(), 
+        self.trigger_flag = SharedMemClient(n_rows=self.cluster_size, n_cols=1, 
+                                    name=trigger_flagname(), 
+                                    client_index=self.controller_index, 
                                     dtype=dtype)
+        self.trigger_flag.attach()
     
     def init_states(self):
         
@@ -114,7 +112,7 @@ class RHController(ABC):
                                     cluster_size=self.cluster_size,
                                     index=self.controller_index,
                                     dtype=self.array_dtype,
-                                    jnt_remapping=self._to_client, 
+                                    jnt_remapping=self._to_server, 
                                     q_remapping=self._quat_remap, 
                                     verbose = self._verbose) 
 
@@ -123,15 +121,15 @@ class RHController(ABC):
                                 index=self.controller_index,
                                 add_info_size=2, 
                                 dtype=self.array_dtype, 
-                                jnt_remapping=self._to_server,
+                                jnt_remapping=self._to_client,
                                 verbose=self._verbose) 
-        
+
         self._states_initialized = True
          
     def _fill_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
-
+        
         self.robot_cmds.jnt_cmd.set_q(self._get_cmd_jnt_q_from_sol())
 
         self.robot_cmds.jnt_cmd.set_v(self._get_cmd_jnt_v_from_sol())
@@ -169,8 +167,8 @@ class RHController(ABC):
                     if self._debug:
                             
                         start = time.perf_counter() 
-
-                    if self.triggger_flag.read_bool():
+                    
+                    if self.trigger_flag.read_bool():
                         
                         # read latest states from pipe 
 
@@ -180,17 +178,17 @@ class RHController(ABC):
                         # from the solution
                         
                         # we signal the client this controller has finished its job
-                        self.triggger_flag.set_bool(False) # this is also necessary to trigger again the solution
+                        self.trigger_flag.set_bool(False) # this is also necessary to trigger again the solution
                         # on next loop, unless the client requires it
                         
                         if self._debug:
                             
                             duration = time.perf_counter() - start
 
-                        if self._verbose and self._debug:
+                        # if self._verbose and self._debug:
 
-                            print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+                        print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                            f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                         
                     # else:
 
@@ -198,10 +196,6 @@ class RHController(ABC):
                             
                     #         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                     #             f"[{self.warning}]" + ":" + f" waiting for solution trigger...")
-                            
-                except BlockingIOError:
-
-                    continue
 
                 except KeyboardInterrupt:
 
@@ -221,7 +215,21 @@ class RHController(ABC):
 
         self._got_jnt_names_server = True
 
+    def _check_jnt_names_compatibility(self):
+
+        set_srvr = set(self._server_side_jnt_names)
+        set_client  = set(self._client_side_jnt_names)
+
+        if not set_srvr == set_client:
+
+            exception = f"[{self.__class__.__name__}]" + f"{self.controller_index}" + f"{self.exception}" + \
+                ": server-side and client-side joint names do not match!"
+
+            raise Exception(exception)
+        
     def create_jnt_maps(self):
+
+        self._check_jnt_names_compatibility() # will raise exception
 
         if not self._got_jnt_names_client:
 
@@ -240,7 +248,7 @@ class RHController(ABC):
         self._to_server = [self._client_side_jnt_names.index(element) for element in self._server_side_jnt_names]
 
         self._to_client = [self._server_side_jnt_names.index(element) for element in self._client_side_jnt_names]
-
+        
         self._jnt_maps_created = True
 
     @abstractmethod

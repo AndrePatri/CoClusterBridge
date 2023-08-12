@@ -3,8 +3,6 @@ from abc import ABC
 from control_cluster_utils.controllers.rhc import RHChild
 
 from control_cluster_utils.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
-import os
-import struct
 
 from typing import List
 
@@ -17,10 +15,13 @@ ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterSrvr')
 class ControlClusterSrvr(ABC):
 
     def __init__(self, 
-                processes_basename: str = "controller"):
+                processes_basename: str = "controller", 
+                verbose: bool = False):
 
         # ciao :D
         #        CR 
+
+        self.verbose = verbose
 
         self.status = "status"
         self.info = "info"
@@ -36,7 +37,7 @@ class ControlClusterSrvr(ABC):
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
 
-        self.handshake_srvr = HanshakeDataCntrlSrvr()
+        self.handshake_srvr = HanshakeDataCntrlSrvr(self.verbose)
         self.handshake_srvr.handshake()
         self.cluster_size = self.handshake_srvr.cluster_size.tensor_view[0, 0].item()
 
@@ -48,8 +49,13 @@ class ControlClusterSrvr(ABC):
 
         self.solution_time = -1.0
 
-        self.client_side_jnt_names = []
-        self.server_side_jnt_names = []
+    def __del__(self):
+
+        self.close()
+    
+    def close(self):
+
+        self.handshake_srvr.terminate()
 
     def _close_processes(self):
     
@@ -67,6 +73,8 @@ class ControlClusterSrvr(ABC):
         
     def _spawn_processes(self):
 
+        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": spawning processes...")
+
         if self._controllers_count == self.cluster_size:
             
             for i in range(0, self.cluster_size):
@@ -82,6 +90,8 @@ class ControlClusterSrvr(ABC):
                 process.start()
 
             self._is_cluster_ready = True
+
+            print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": processes spawned.")
                 
         else:
 
@@ -94,37 +104,18 @@ class ControlClusterSrvr(ABC):
         print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": performing final initialization steps...")
 
         self.handshake_srvr.finalize_init(self._controllers[0].add_data_lenght)
-
-        self.client_side_jnt_names = self.handshake_srvr.jnt_names_client.read()
-
+        
         for i in range(0, self.cluster_size):
 
             # we assign the client-side joint names to each controller (used for mapping purposes)
-            self._controllers[i].assign_client_side_jnt_names(self.client_side_jnt_names)
+            self._controllers[i].assign_client_side_jnt_names(self.handshake_srvr.jnt_names_client.read())
 
             self._controllers[i].create_jnt_maps()
 
             self._controllers[i].init_states() # initializes states
-
-        self._check_jnt_names_compatibility() 
     
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": final initialization steps completed.")
+        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": final initialization steps completed.")
 
-    def _check_jnt_names_compatibility(self):
-
-        set_srvr = set(self.server_side_jnt_names)
-        set_client  = set(self.client_side_jnt_names)
-        
-        print("####################")
-        print(str(self.server_side_jnt_names))
-        print(str(self.client_side_jnt_names))
-        print("#####################")
-        if not set_srvr == set_client:
-
-            exception = f"[{self.__class__.__name__}]" + f"{self.exception}" + ": server-side and client-side joint names do not match!"
-
-            raise Exception(exception)
-    
     def add_controller(self, controller: RHChild):
 
         if self._controllers_count < self.cluster_size:
@@ -154,5 +145,3 @@ class ControlClusterSrvr(ABC):
         print(f"[{self.__class__.__name__}]" + f"[{self.info}]" + ": terminating cluster")
 
         self._close_processes() # we also terminate all the child processes
-
-        self._clean_pipes() # we close all the used pipes

@@ -7,10 +7,6 @@ from control_cluster_utils.utilities.control_cluster_defs import HanshakeDataCnt
 from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
 from control_cluster_utils.utilities.defs import trigger_flagname
 
-from control_cluster_utils.utilities.pipe_utils import NamedPipesHandler
-OMode = NamedPipesHandler.OMode
-DSize = NamedPipesHandler.DSize
-
 import time
 
 import numpy as np
@@ -72,16 +68,16 @@ class ControlClusterClient(ABC):
         
         self._was_cluster_ready = False
         self.is_cluster_ready = False
-        self.add_data_length = 0
         self._is_first_control_step = False
+
+        self.terminate = False
+
+        self.add_data_length = 0
 
         self.status = "status"
         self.info = "info"
         self.warning = "warning"
         self.exception = "exception"
-    
-        self.pipes_manager = NamedPipesHandler()
-        self.pipes_manager.create_buildpipes()
 
         self.solution_time = -1.0
         self.n_sim_step_per_cntrl = -1
@@ -91,6 +87,7 @@ class ControlClusterClient(ABC):
         self._init_shared_flags() # initializes shared memory used for 
         # communication between the client and server
 
+        self._handshake_thread = None
         self._spawn_threads() # we launch all the child processes
 
     def _spawn_threads(self):
@@ -99,16 +96,18 @@ class ControlClusterClient(ABC):
         # so that it's not blocking wrt the simulator
 
         self._handshake_thread =  threading.Thread(target=self.handshake_manager.handshake, 
-                                args=(self.cluster_size, self.jnt_names), 
+                                args=(), 
                                 kwargs={})
         
         self._handshake_thread.start()
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": spawned _heartbeat process")
+        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+            ": spawned _heartbeat thread")
 
     def _init_shared_flags(self):
         
-        self.handshake_manager = HanshakeDataCntrlClient() # handles handshake process
+        self.handshake_manager = HanshakeDataCntrlClient(self.cluster_size, 
+                                                self.jnt_names) # handles handshake process
         # between client and server
 
         dtype = torch.bool # using a boolean type shared data, 
@@ -121,7 +120,7 @@ class ControlClusterClient(ABC):
     def _trigger_solution(self):
 
         if self.is_cluster_ready: 
-
+            
             self.trigger_flags.reset_bool(True) # sets all flags
 
     def _solved(self):
@@ -130,7 +129,10 @@ class ControlClusterClient(ABC):
             
             while not self.trigger_flags.none(): # far too much CPU intensive?
 
-                continue
+                if not self.terminate and \
+                    (self.trigger_flags.get_clients_count() == self.cluster_size):
+
+                    continue
 
             return True
             
@@ -138,7 +140,8 @@ class ControlClusterClient(ABC):
 
         if self.cluster_dt < self.control_dt:
 
-            print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + ": cluster_dt has to be >= control_dt")
+            print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + \
+                ": cluster_dt has to be >= control_dt")
 
             self.n_sim_step_per_cntrl = 1
         
@@ -147,7 +150,8 @@ class ControlClusterClient(ABC):
             self.n_sim_step_per_cntrl = round(self.cluster_dt / self.control_dt)
             self.cluster_dt = self.control_dt * self.n_sim_step_per_cntrl
 
-        message = f"[{self.__class__.__name__}]"  + f"[{self.info}]" + ": the cluster controllers will run at a rate of " + \
+        message = f"[{self.__class__.__name__}]"  + f"[{self.info}]" + \
+                ": the cluster controllers will run at a rate of " + \
                 str(1.0 / self.cluster_dt) + " Hz"\
                 ", while the low level control will run at " + str(1.0 / self.control_dt) + "Hz.\n" + \
                 "Number of sim steps per control steps: " + str(self.n_sim_step_per_cntrl)
@@ -185,19 +189,20 @@ class ControlClusterClient(ABC):
 
         # solve all the TO problems in the control cluster
 
-        is_cluster_ready = self.handshake_manager.handshake_done
+        handshake_done = self.handshake_manager.handshake_done
 
-        if not is_cluster_ready:
+        if not handshake_done or (self.trigger_flags.get_clients_count() != self.cluster_size):
 
             if self._verbose: 
 
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + ": waiting connection to ControlCluster server")
+                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+                    ": waiting connection to ControlCluster server")
 
         if self._is_first_control_step:
                 
-                self._is_first_control_step = False
+            self._is_first_control_step = False
                 
-        if (not self._was_cluster_ready) and is_cluster_ready:
+        if (not self._was_cluster_ready) and handshake_done:
             
             # first time the cluster is ready 
 
@@ -207,7 +212,9 @@ class ControlClusterClient(ABC):
 
             self._is_first_control_step = True
 
-        if (is_cluster_ready):
+            self.is_cluster_ready = True
+
+        if self.is_cluster_ready:
             
             if self._debug:
 
@@ -229,22 +236,35 @@ class ControlClusterClient(ABC):
             if self._debug:
 
                 self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
-        
+
     def close(self):
 
-        self.__del__()
+        self.terminate = True
+
+        self.handshake_manager.terminate() # will close/detach all shared memory 
+
+        self.robot_states.terminate()
+
+        self.trigger_flags.terminate()
+
+        if self.controllers_cmds is not None:
+            
+            self.controllers_cmds.terminate()
+
+        if self._handshake_thread is not None:
+            
+            self._close_thread(self._handshake_thread) # we wait for thread to exit, if still alive
     
     def _close_thread(self, 
                     thread):
         
         if thread.is_alive():
                         
-            print(f"[{self.__class__.__name__}]"  + f"[{self.info}]" + ": terminating child process " + str(thread.name))
+            print(f"[{self.__class__.__name__}]"  + f"[{self.info}]" + \
+                ": terminating child process " + str(thread.name))
         
-            thread.join()
-        
+            thread.join() # wait for thread to join
+
     def __del__(self):
-        
-        if self._handshake_thread is not None:
-            
-            self._close_thread(self._handshake_thread)
+
+        self.close()

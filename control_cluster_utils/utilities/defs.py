@@ -51,7 +51,7 @@ def cluster_size_name():
 
 def jnt_number_srvr_name():
     
-    name = "JntNumber"
+    name = "JntNumberSrvr"
 
     return name
 
@@ -63,7 +63,7 @@ def jnt_names_client_name():
 
 def jnt_number_client_name():
 
-    name = "JntNames"
+    name = "JntNumberClient"
 
     return name 
 

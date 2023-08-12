@@ -112,13 +112,14 @@ def test_writing_reading_string_array():
 
     list = ["joint_puzzo", "hai_rotto_il_ca**o", "joint_gnegne£$", "scibijoint0978"]
 
-    string_tensor_view = SharedStringArray(16, "JntNames")
-    
+    string_tensor_srvr = SharedStringArray(4, "ttttttTTy", True, init=list)
+    string_tensor_client = SharedStringArray(4, "ttttttTTy", False)
     # string_tensor_view.write(list)
 
-    print(string_tensor_view.read())
-    print(string_tensor_view.read())
-    
+    print(string_tensor_client.read())    
+
+    # string_tensor_srvr.terminate()
+    # string_tensor_client.terminate()
 
 if __name__ == "__main__":
 

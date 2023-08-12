@@ -134,13 +134,11 @@ class RobotClusterState:
         
         # this creates a shared memory block of the right size for the state
         # and a corresponding view of it
-        self.shared_memman = SharedMemSrvr(self.cluster_size, 
-                                    cluster_aggregate_columnsize, 
-                                    states_name(), 
-                                    self.dtype) # the client will wait until
+        self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
+                                    n_cols=cluster_aggregate_columnsize, 
+                                    name=states_name(), 
+                                    dtype=self.dtype) # the client will wait until
         # the memory becomes available
-        
-        
 
     def synch(self):
 
@@ -154,6 +152,14 @@ class RobotClusterState:
 
         torch.cuda.synchronize() # this way we ensure that after this the state on GPU
         # is fully updated
+
+    def terminate(self):
+
+        self.shared_memman.terminate()
+
+    def __del__(self):
+
+        self.shared_memman.terminate()
 
 class RobotClusterCmd:
 
@@ -282,10 +288,10 @@ class RobotClusterCmd:
         
         # this creates a shared memory block of the right size for the cmds
         # and a corresponding view of it
-        self.shared_memman = SharedMemSrvr(self.cluster_size, 
-                                    cluster_aggregate_columnsize, 
-                                    cmds_name(), 
-                                    self.dtype) # the client will wait until
+        self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
+                                    n_cols=cluster_aggregate_columnsize, 
+                                    name=cmds_name(), 
+                                    dtype=self.dtype) # the client will wait until
         # the memory becomes available
 
     def synch(self):
@@ -301,43 +307,60 @@ class RobotClusterCmd:
         torch.cuda.synchronize() # this way we ensure that after this the state on GPU
         # is fully updated
 
+    def terminate(self):
+
+        self.shared_memman.terminate()
+
+    def __del__(self):
+
+        self.shared_memman.terminate()
+
 class HanshakeDataCntrlSrvr:
 
-    def __init__(self):
+    def __init__(self, 
+                verbose = False):
         
         # for now we use the wait amount to make race conditions practically 
-        # impossible
+        # impossible 
         
+        self.verbose = verbose
         self.status = "status"
         self.info = "info"
         self.warning = "warning"
         self.exception = "exception"
 
         self.handshake_done = False
+        self._terminate = False
 
         self.wait_amount = 0.1
 
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating shared memory servers")
-
+        self.cluster_size = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=cluster_size_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        
+        self.jnt_number_client = SharedMemClient(n_rows=1, n_cols=1,
+                                        name=jnt_number_client_name(), 
+                                        dtype=torch.int64, 
+                                        wait_amount=self.wait_amount, 
+                                        verbose=self.verbose)
+        
     def handshake(self):
         
         # first of all, we need to know the size of the cluster
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": executing handshake")
+        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": executing handshake")
 
-        self.cluster_size = SharedMemClient(1, 1, 0, 
-                                    cluster_size_name(), 
-                                    torch.int64, 
-                                    wait_amount=self.wait_amount)
-        
-        self.jnt_number_client = SharedMemClient(1, 1, 0, 
-                                        jnt_number_client_name(), 
-                                        torch.int64, 
-                                        wait_amount=self.wait_amount)
-        
-        self.jnt_names_client = SharedStringArray(self.jnt_number_client.tensor_view[0, 0].item(), 
-                                    jnt_names_client_name())
+        self.cluster_size.attach()
+        self.jnt_number_client.attach()
 
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": handshake terminated")
+        self.jnt_names_client = SharedStringArray(length=self.jnt_number_client.tensor_view[0, 0].item(), 
+                                    name=jnt_names_client_name(), 
+                                    is_server=False, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+
+        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": handshake terminated")
 
         self.handshake_done = True
 
@@ -349,26 +372,40 @@ class HanshakeDataCntrlSrvr:
 
             # we create the clients (will wait for the memory to be 
             # created by the server)
-            print(f"[{self.__class__.__name__}]" + f"{self.status}" + \
+            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + \
                 f"{self.finalize_init.__name__}" + ": executing finalization steps")
             
             # we first create the servers (non-blocking)
 
-            self.add_data_length = SharedMemSrvr(1, 1, 
-                                    additional_data_name(), 
-                                    torch.int64)
+            self.add_data_length = SharedMemSrvr(n_rows=1, n_cols=1, 
+                                    name=additional_data_name(), 
+                                    dtype=torch.int64)
             self.add_data_length.tensor_view[0, 0] = add_data_length
         
         else:
 
-            exception = f"[{self.__class__.__name__}]" + f"{self.status}" + \
+            exception = f"[{self.__class__.__name__}]" + f"[{self.status}]" + \
                     f"{self.finalize_init.__name__}" + ": did you remember to call handshake() before?"
         
             raise Exception(exception)
+        
+    def terminate(self):
+       
+        self._terminate = True
+
+        self.cluster_size.terminate()
+
+        self.jnt_names_client.terminate()
+
+        self.jnt_number_client.terminate()
+
+        self.add_data_length.terminate()
 
 class HanshakeDataCntrlClient:
 
-    def __init__(self):
+    def __init__(self, 
+            cluster_size: int, 
+            jnt_names: int):
         
         # for now we use the wait amount to make race conditions practically 
         # impossible 
@@ -382,34 +419,52 @@ class HanshakeDataCntrlClient:
 
         self.wait_amount = 0.1
 
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": creating shared memory servers")
-        
-    def handshake(self, 
-            cluster_size: int, 
-            jnt_names: int):
-        
-        # first of all, we need to know the size of the cluster
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": executing handshake")
+        self.jnt_names_client = SharedStringArray(length=len(jnt_names), 
+                                    name=jnt_names_client_name(), 
+                                    is_server=True, 
+                                    init=jnt_names)
 
-        self.jnt_names_client = SharedStringArray(len(jnt_names), 
-                                    jnt_names_client_name(), 
-                                    jnt_names)
-
-        self.cluster_size = SharedMemSrvr(1, 1, 
-                                    cluster_size_name(), 
-                                    torch.int64)
+        self.cluster_size = SharedMemSrvr(n_rows=1, n_cols=1, 
+                                    name=cluster_size_name(), 
+                                    dtype=torch.int64)
         self.cluster_size.tensor_view[0, 0] = cluster_size
 
-        self.jnt_number_client = SharedMemSrvr(1, 1, 
-                                    jnt_number_client_name(), 
-                                    torch.int64)
+        self.jnt_number_client = SharedMemSrvr(n_rows=1, n_cols=1, 
+                                    name=jnt_number_client_name(), 
+                                    dtype=torch.int64)
         self.jnt_number_client.tensor_view[0, 0] = len(jnt_names)
 
-        self.add_data_length = SharedMemClient(1, 1, 0, 
-                                    additional_data_name(), 
-                                    torch.int64, 
-                                    wait_amount=self.wait_amount)
+        self.add_data_length = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=additional_data_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        
+        self._terminate = False
 
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": handshake terminated")
+    def handshake(self):
+        
+        # first of all, we need to know the size of the cluster
+        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": executing handshake")
+
+        self.add_data_length.attach()
 
         self.handshake_done = True
+
+        if not self._terminate:
+
+            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": handshake terminated")
+
+    def terminate(self):
+        
+        self._terminate = True
+
+        self.jnt_names_client.terminate() 
+
+        self.cluster_size.terminate()
+
+        self.jnt_number_client.terminate()
+
+        self.add_data_length.terminate() # exists the initialiation loop, if still running
+
+

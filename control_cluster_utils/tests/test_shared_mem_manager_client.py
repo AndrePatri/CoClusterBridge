@@ -1,4 +1,4 @@
-from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringTens
+from control_cluster_utils.utilities.shared_mem import SharedMemClient
 
 import torch
 
@@ -23,9 +23,10 @@ def profile_read_write_cmds_states():
         print("Creating client n." + str(i))
         clients_state.append(SharedMemClient(n_envs, 
                                     n_jnts, 
-                                    i, 
                                     'state', 
+                                    i, 
                                     dtype))
+        clients_state[i].attach()
         
     clients_cmds = []
 
@@ -34,10 +35,10 @@ def profile_read_write_cmds_states():
         print("Creating client n." + str(i))
         clients_cmds.append(SharedMemClient(n_envs, 
                                     n_jnts, 
-                                    i, 
                                     'cmds', 
+                                    i, 
                                     dtype))
-    
+        clients_cmds[i].attach()
     
     a = np.zeros((clients_state[0].tensor_view.shape[0], \
                 clients_state[0].tensor_view.shape[1]), dtype=dtype_np)
@@ -78,9 +79,11 @@ def profile_writing_bool_array():
 
     for i in range(0, n_envs):
 
-        clients.append(SharedMemClient(n_envs, n_jnts, i, 
+        clients.append(SharedMemClient(n_envs, n_jnts,
                         "solved", 
+                        i,
                         dtype=dtype))
+        clients[i].attach()
 
     for i in range(0, n_samples):
         
@@ -112,10 +115,12 @@ def profile_reading_global_bool():
 
     for i in range(0, n_envs):
 
-        clients.append(SharedMemClient(1, 1, i, 
+        clients.append(SharedMemClient(1, 1,
                         "trigger", 
+                        i, 
                         dtype=dtype))
-
+        clients[i].attach()
+        
     for i in range(0, n_samples):
         
         print("###########################")
