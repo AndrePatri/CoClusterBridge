@@ -144,6 +144,8 @@ class ControlClusterClient(ABC):
 
     def _solved(self):
 
+        solved = False
+
         if self.is_cluster_ready: 
             
             while not self.trigger_flags.none(): # far too much CPU intensive?
@@ -154,10 +156,14 @@ class ControlClusterClient(ABC):
                     continue
                 
                 else:
+                    
+                    solved = False
 
                     break
-                
-            return True
+            
+            solved = True
+
+        return solved
         
     def _compute_n_control_actions(self):
 
@@ -177,24 +183,26 @@ class ControlClusterClient(ABC):
                 ": the cluster controllers will run at a rate of " + \
                 str(1.0 / self.cluster_dt) + " Hz"\
                 ", while the low level control will run at " + str(1.0 / self.control_dt) + "Hz.\n" + \
-                "Number of sim steps per control steps: " + str(self.n_sim_step_per_cntrl)
+                "Number of sim steps per control step: " + str(self.n_sim_step_per_cntrl)
 
         print(message)
     
     def is_cluster_instant(self, 
                         control_index: int):
         
-        # control_index is, e.g., the current simulation loop number (0-based)
+        # control_index the current simulation loop number (0-based)
 
-        return (control_index+1) % self.n_sim_step_per_cntrl == 0
+        return (control_index + 1) % self.n_sim_step_per_cntrl == 0
     
     def _finalize_init(self):
         
         # things to be done when everything is set but before starting to solve
 
+        add_data_length_from_server = self.handshake_manager.add_data_length.tensor_view[0, 0].item()
+
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
                                             cluster_size=self.cluster_size,
-                                            add_data_size = self.add_data_length, 
+                                            add_data_size = add_data_length_from_server, 
                                             backend=self._backend, 
                                             device=self._device, 
                                             dtype=self.torch_dtype) # now that we know add_data_size
@@ -246,7 +254,6 @@ class ControlClusterClient(ABC):
             
             self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
 
-            print("UUUU:" + str(self.trigger_flags.get_clients_count()))
             self._trigger_solution() # triggers solution of all controllers in the cluster 
 
             # we wait for all controllers to finish      

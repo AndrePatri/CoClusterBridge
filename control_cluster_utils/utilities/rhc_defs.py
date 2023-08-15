@@ -5,6 +5,7 @@ from typing import TypeVar, List
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_utils.utilities.defs import states_name, cmds_name
+
 class RobotState:
 
     class RootState:

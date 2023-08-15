@@ -57,7 +57,7 @@ def jnt_number_srvr_name():
 
 def jnt_names_client_name():
 
-    name = "JntNames"
+    name = "JntNamesClient"
 
     return name 
 
@@ -70,18 +70,6 @@ def jnt_number_client_name():
 def additional_data_name():
 
     name = "AddData"
-
-    return name
-
-def srvr_writing_name():
-
-    name = "SrvrWriting"
-
-    return name
-
-def client_writing_name():
-
-    name = "ClientWriting"
 
     return name
 

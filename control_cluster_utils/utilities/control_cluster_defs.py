@@ -9,9 +9,8 @@ from control_cluster_utils.utilities.shared_mem import SharedMemSrvr, SharedMemC
 from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_utils.utilities.defs import states_name, cmds_name
 from control_cluster_utils.utilities.defs import cluster_size_name, additional_data_name
-from control_cluster_utils.utilities.defs import jnt_number_client_name, jnt_number_srvr_name
+from control_cluster_utils.utilities.defs import jnt_number_client_name
 from control_cluster_utils.utilities.defs import jnt_names_client_name
-from control_cluster_utils.utilities.defs import client_writing_name, srvr_writing_name
 
 class RobotClusterState:
 
@@ -455,8 +454,6 @@ class HanshakeDataCntrlClient:
         self.warning = "warning"
         self.exception = "exception"
 
-        self.handshake_done = False
-
         self.wait_amount = 0.1
 
         self.jnt_names_client = SharedStringArray(length=self.n_jnts, 
@@ -470,7 +467,6 @@ class HanshakeDataCntrlClient:
         self.jnt_number_client = SharedMemSrvr(n_rows=1, n_cols=1, 
                                     name=jnt_number_client_name(), 
                                     dtype=torch.int64)
-        
 
         self.add_data_length = SharedMemClient(n_rows=1, n_cols=1, 
                                     name=additional_data_name(), 
@@ -479,6 +475,8 @@ class HanshakeDataCntrlClient:
                                     verbose=True)
         
         self._terminate = False
+
+        self.handshake_done = False
 
     def start(self, 
             cluster_size: int, 
@@ -501,9 +499,10 @@ class HanshakeDataCntrlClient:
                 + f"[{self._handshake.__name__}]" +  f": provided jnt names lenght {len(jnt_names)} does not match {self.n_jnts}"
 
             raise Exception(exception)
-        self.jnt_names_client.start(init=jnt_names)
+        
+        self.jnt_names_client.start(init=jnt_names) # start server
 
-        self.cluster_size.start()
+        self.cluster_size.start() # start server and immediately write value to it
         self.cluster_size.tensor_view[0, 0] = cluster_size
 
         self.jnt_number_client.start()

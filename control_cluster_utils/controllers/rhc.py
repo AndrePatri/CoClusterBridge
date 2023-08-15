@@ -122,7 +122,7 @@ class RHController(ABC):
                                     q_remapping=self._quat_remap, 
                                     verbose = self._verbose) 
 
-        self.robot_cmds = RobotCmds(self.n_dofs, 
+        self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
                                 cluster_size=self.cluster_size, 
                                 index=self.controller_index,
                                 add_info_size=2, 
@@ -143,7 +143,7 @@ class RHController(ABC):
         self.robot_cmds.jnt_cmd.set_eff(self._get_cmd_jnt_eff_from_sol())
 
         self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
-
+        
     def solve(self):
         
         if not self._jnt_maps_created:
@@ -316,6 +316,4 @@ class RHController(ABC):
         pass
    
 RHChild = TypeVar('RHChild', bound='RHController')
-CntrlCmdChild = TypeVar('CntrlCmdChild', bound='CntrlCmd')
-
 
