@@ -169,39 +169,33 @@ class RHController(ABC):
                 # we are always listening for a trigger signal from the client 
 
                 try:
-                    
-                    if self._debug:
-                            
-                        start = time.perf_counter() 
+                
                     
                     if self.trigger_flag.read_bool():
                         
-                        # read latest states from pipe 
+                        if self._debug:
+                            
+                            start = time.perf_counter()
+
+                        # latest state is employed
 
                         self._solve() # solve actual TO
 
                         self._fill_cmds_from_sol() # we upd update the views of the cmd
                         # from the solution
-                        
+
                         # we signal the client this controller has finished its job
                         self.trigger_flag.set_bool(False) # this is also necessary to trigger again the solution
                         # on next loop, unless the client requires it
-                        
+
                         if self._debug:
                             
                             duration = time.perf_counter() - start
 
-                        # if self._verbose and self._debug:
+                        if self._verbose and self._debug:
 
-                        print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                            f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
-                        
-                    # else:
-
-                    #     if self._verbose:
-                            
-                    #         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                    #             f"[{self.warning}]" + ":" + f" waiting for solution trigger...")
+                            print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                                f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
 
                 except KeyboardInterrupt:
 

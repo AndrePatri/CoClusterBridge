@@ -217,11 +217,11 @@ class SharedMemSrvr:
 
                 try:
 
-                    self.sem_client_n.acquire(timeout=0.0)
+                    # self.sem_client_n.acquire(timeout=0.0) 
 
                     count = struct.unpack('q', self.n_clients[:8])[0]
                     
-                    self.sem_client_n.release()
+                    # self.sem_client_n.release()
 
                     return count 
                 
@@ -936,7 +936,7 @@ class SharedMemClient:
                 
                 try:
                     
-                    self.sem_client_n.acquire(timeout=0)
+                    self.sem_client_n.acquire(timeout=0) # we ensure exclusive access when writing 
 
                     current_value = struct.unpack('q', self.n_clients[:8])[0]  # we read the whole int64 (8 bytes)
 
@@ -971,7 +971,7 @@ class SharedMemClient:
                 
                 try:
 
-                    self.sem_client_n.acquire(timeout=0)
+                    self.sem_client_n.acquire(timeout=0) # we ensure exclusive access when writing
 
                     current_value = struct.unpack('q', self.n_clients[:8])[0]  # we read the whole int64 (8 bytes)
 

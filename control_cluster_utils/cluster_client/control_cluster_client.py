@@ -152,7 +152,7 @@ class ControlClusterClient(ABC):
 
                 if (not self._terminate) and \
                     (self.trigger_flags.get_clients_count() == self.cluster_size):
-
+                    
                     continue
                 
                 else:
