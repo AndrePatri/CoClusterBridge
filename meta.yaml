@@ -1,6 +1,6 @@
 package:
   name: control_cluster_utils
-  version: 0.0.1
+  version: '1.0_py{{ py }}'
 
 source:
   path: .
@@ -17,4 +17,4 @@ build:
 about:
   home: https://github.com/AndPatr/ControlClusterUtils
   license: MIT
-  summary: Utilities to create a CPU-based controllers cluster to be interfaced with GPU-based simulators 
+  summary: Utilities to create a CPU-based controllers cluster to be interfaced with GPU-based simulators
