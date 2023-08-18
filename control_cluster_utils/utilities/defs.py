@@ -19,6 +19,19 @@ def aggregate_cmd_size(internal_jnt_number: int,
 
     return aggregate_dim
 
+def aggregate_refs_size(contact_n: int):
+
+    # hardcoded
+    phase_id = contact_n + 1
+    base_pose = 3 + 4
+    com_pos = 3
+    
+    refs_size = phase_id + \
+            base_pose + \
+            com_pos
+
+    return refs_size
+
 def states_name():
     
     name = "RobotState"
@@ -28,6 +41,12 @@ def states_name():
 def cmds_name():
     
     name = "RobotCmds"
+
+    return name
+
+def task_refs_name():
+    
+    name = "TaskRefs"
 
     return name
 
@@ -70,6 +89,12 @@ def jnt_number_client_name():
 def additional_data_name():
 
     name = "AddData"
+
+    return name
+
+def n_contacts_name():
+
+    name = "NContacts"
 
     return name
 

@@ -5,6 +5,9 @@ from typing import TypeVar, List
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_utils.utilities.defs import states_name, cmds_name
+from control_cluster_utils.utilities.defs import aggregate_refs_size, task_refs_name
+
+from abc import ABC, abstractmethod
 
 class RobotState:
 
@@ -197,11 +200,11 @@ class RobotState:
                         verbose=verbose) 
         self.shared_memman.attach() # this blocks untils the server creates the associated memory
 
-        self.root_state = RobotState.RootState(self.shared_memman, 
+        self.root_state = self.RootState(self.shared_memman, 
                                     self.q_remapping) # created as a view of the
         # shared memory pointed to by the manager
 
-        self.jnt_state = RobotState.JntState(n_dofs, 
+        self.jnt_state = self.JntState(n_dofs, 
                                         self.shared_memman, 
                                         self.jnt_remapping) # created as a view of the
         # shared memory pointed to by the manager
@@ -401,13 +404,13 @@ class RobotCmds:
                         verbose=verbose) # this blocks untils the server creates the associated memory
         self.shared_memman.attach()
         
-        self.jnt_cmd = RobotCmds.JntCmd(n_dofs=self.n_dofs, 
+        self.jnt_cmd = self.JntCmd(n_dofs=self.n_dofs, 
                                         mem_manager=self.shared_memman, 
                                         jnt_remapping=self.jnt_remapping)
         
         if add_info_size is not None:
 
-            self.slvr_state = RobotCmds.SolverState(self.add_info_size, 
+            self.slvr_state = self.SolverState(self.add_info_size, 
                                             self.n_dofs, 
                                             self.shared_memman)
     
@@ -425,5 +428,294 @@ class RobotCmds:
 
             self.shared_memman.terminate()
 
+class RhcTaskRefs:
+
+    class PhaseId:
+
+        def __init__(self, 
+                    mem_manager: SharedMemClient, 
+                    n_contacts: int,
+                    dtype = torch.float32):
+            
+            self.phase_id = None # type of current phase (-1 custom, ...)
+            self.is_contact = None # array of contact flags for each contact
+
+            self.dtype = dtype
+
+            self.n_contacts = n_contacts
+
+            self._terminate = False
+            
+            # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "phase_id")
+            self.assign_views(mem_manager, "is_contact")
+
+        def __del__(self):
+
+            self.terminate()
+
+        def terminate(self):
+            
+            if not self._terminate:
+                
+                self._terminate = True
+
+                # release any memory view
+
+                self.phase_id = None
+    
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            # we create views 
+
+            if varname == "phase_id":
+                
+                self.phase_id = mem_manager.create_partial_tensor_view(index=0, 
+                                        length=1)
+
+                self.phase_id[:, :] = -1.0 # by default we run in custom mode
+                
+            if varname == "is_contact":
+                
+                self.is_contact = mem_manager.create_partial_tensor_view(index=1, 
+                                        length=self.n_contacts)
+                
+                self.is_contact[:, :] = torch.full(size=(1, self.n_contacts), 
+                                                fill_value=1.0, 
+                                                dtype=self.dtype) # by default contact
+                
+        def get_phase_id(self):
+            
+            return self.phase_id[:, :].item()
+        
+        def get_contacts(self):
+            
+            return self.is_contact[:, :]
+          
+    class BasePose:
+
+        def __init__(self, 
+                    mem_manager: SharedMemClient, 
+                    n_contacts: int,
+                    q_remapping: List[int] = None,
+                    dtype = torch.float32):
+            
+            self.dtype = dtype
+
+            self.p = None # base position
+            self.q = None # base orientation (quaternion)
+            self.pose = None # full pose [p, q]
+
+            self.n_contacts = n_contacts
+
+            self._terminate = False
+
+            self.q_remapping = None
+
+            if q_remapping is not None:
+                self.q_remapping = torch.tensor(q_remapping)
+                
+            # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "p")
+            self.assign_views(mem_manager, "q")
+            self.assign_views(mem_manager, "pose")
+
+        def __del__(self):
+
+            self.terminate()
+
+        def terminate(self):
+            
+            if not self._terminate:
+                
+                self._terminate = True
+
+                # release any memory view
+
+                self.p = None
+                self.q = None
+                self.pose = None
+
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            # we create views 
+
+            if varname == "p":
+                
+                self.p = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts, 
+                                        length=3)
+
+                self.p[:, :] = torch.full(size=(1, 3), 
+                                        fill_value=0.0,
+                                        dtype=self.dtype)
+                
+            if varname == "q":
+                
+                self.q = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 3, 
+                                        length=4)
+
+                init = torch.full(size=(1, 4), 
+                                fill_value=0.0,
+                                dtype=self.dtype)
+                init[0, 0] = 1.0
+
+                self.q[:, :] = init
+
+            if varname == "pose":
+                
+                self.pose = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts, 
+                                        length=7)
+
+                init = torch.full(size=(1, 7), 
+                                fill_value=0.0,
+                                dtype=self.dtype)
+                init[0, 3] = 1.0
+
+                self.pose[:, :] = init
+
+        def get_q(self):
+            
+            if self.q_remapping is not None:
+
+                return self.q[:, self.q_remapping]
+            
+            else:
+
+                return self.q[:, :]
+        
+        def get_p(self):
+
+            return self.p[:, :]
+        
+        def get_pose(self):
+
+            return self.pose[:, :]
+        
+        def get_base_xy(self):
+
+            return self.p[0:2]
+        
+    class ComPos:
+        
+        def __init__(self, 
+                    mem_manager: SharedMemClient, 
+                    n_contacts: int,
+                    dtype = torch.float32):
+            
+            self.dtype = dtype
+
+            self.n_contacts = n_contacts
+
+            self.com_pos = None # full com position
+
+            self._terminate = False
+            
+            # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "com_pos")
+
+        def __del__(self):
+
+            self.terminate()
+
+        def terminate(self):
+            
+            if not self._terminate:
+                
+                self._terminate = True
+
+                # release any memory view
+
+                self.com_pos = None
+    
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            # we create views 
+
+            if varname == "com_pos":
+                
+                self.com_pos = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
+                                        length=3)
+
+                self.com_pos[:, 2] = 0.4
+
+        def get_com_height(self):
+            
+            return self.com_pos[:, 2].item()
+        
+        def get_com_pos(self):
+            
+            return self.com_pos[:, :]
+        
+    def __init__(self, 
+                cluster_size: int,
+                n_contacts: int,
+                index: int,
+                q_remapping: List[int] = None,
+                dtype = torch.float32, 
+                verbose=False):
+
+        self.dtype = dtype
+
+        self.device = torch.device('cpu') # born to live on CPU
+
+        self._terminate = False
+
+        self.cluster_size = cluster_size
+        self.n_contacts = n_contacts
+        aggregate_view_columnsize = aggregate_refs_size(self.n_contacts)
+        
+        self.q_remapping = q_remapping
+
+        # this creates the view of the shared refs data for the robot specificed by index
+        self.shared_memman = SharedMemClient(n_rows=self.cluster_size, 
+                        n_cols=aggregate_view_columnsize, 
+                        client_index=index, 
+                        name=task_refs_name(), 
+                        dtype=self.dtype, 
+                        verbose=verbose) 
+        self.shared_memman.attach() # this blocks untils the server creates the associated memory
+
+        self.phase_id = self.PhaseId(mem_manager=self.shared_memman, 
+                                    n_contacts=self.n_contacts,
+                                    dtype=self.dtype) # created as a view of the
+        # shared memory pointed to by the manager
+
+        self.base_pose = self.BasePose(mem_manager=self.shared_memman, 
+                                    n_contacts=self.n_contacts,
+                                    q_remapping=self.q_remapping, 
+                                    dtype=self.dtype)
+
+        self.com_pos = self.ComPos(mem_manager=self.shared_memman, 
+                                n_contacts=self.n_contacts,
+                                dtype=self.dtype)
+
+    def __del__(self):
+
+        self.terminate()
+
+    def terminate(self):
+
+        if not self._terminate:
+
+            self._terminate = True
+
+            self.phase_id.terminate()
+
+            self.base_pose.terminate()
+
+            self.com_pos.terminate()
+
+    @abstractmethod
+    def update(self):
+
+        pass
+
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 RobotCmdsChild = TypeVar('RobotCmdsChild', bound='RobotCmds')
+RhcTaskRefsChild = TypeVar('RhcTaskRefsChild', bound='RhcTaskRefs')

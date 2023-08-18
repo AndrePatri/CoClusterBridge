@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 
 import time 
 
-from control_cluster_utils.utilities.rhc_defs import RobotStateChild, RobotCmds, RobotState
+from control_cluster_utils.utilities.rhc_defs import RobotCmds, RobotState
+from control_cluster_utils.utilities.rhc_defs import RhcTaskRefsChild
+
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import trigger_flagname
 
@@ -64,23 +66,27 @@ class RHController(ABC):
         self.robot_state = None 
         self.trigger_flag = None
         self.robot_cmds = None
+        self.rhc_task_refs:RhcTaskRefsChild = None
 
+        # jnt names
         self._client_side_jnt_names = []
         self._server_side_jnt_names = []
         self._got_jnt_names_client = False
         self._got_jnt_names_server = False
 
+        # data maps
         self._to_server = []
         self._to_client = []
         self._quat_remap = [1, 2, 3, 0] # mapping from robot quat. to Horizon's quaternion convention
         self._jnt_maps_created = False
+        
         self._states_initialized = False
-
-        self._init()
 
         self.array_dtype = array_dtype
 
         self.add_data_lenght = 0
+
+        self._init()
 
     def __del__(self):
         
@@ -111,6 +117,10 @@ class RHController(ABC):
                                     dtype=dtype)
         self.trigger_flag.attach()
     
+    def init_rhc_task_cmds(self):
+        
+        self.rhc_task_refs = self._init_rhc_task_cmds()
+        
     def init_states(self):
         
         # to be called after n_dofs is known
@@ -162,44 +172,49 @@ class RHController(ABC):
 
             raise Exception(exception)
 
-        else:
+        if self.rhc_task_refs is None:
 
-            while True:
-                
-                # we are always listening for a trigger signal from the client 
+            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                                f"[{self.exception}]" + f"[{self.solve.__name__}]" + \
+                                ":" + f"RHC task references non initialized. Did you call init_rhc_task_cmds()?"
 
-                try:
-                
+            raise Exception(exception)
+        
+        while True:
+            
+            # we are always listening for a trigger signal from the client 
+
+            try:
+            
+                if self.trigger_flag.read_bool():
                     
-                    if self.trigger_flag.read_bool():
+                    if self._debug:
                         
-                        if self._debug:
-                            
-                            start = time.perf_counter()
+                        start = time.perf_counter()
 
-                        # latest state is employed
+                    # latest state is employed
 
-                        self._solve() # solve actual TO
+                    self._solve() # solve actual TO
 
-                        self._fill_cmds_from_sol() # we upd update the views of the cmd
-                        # from the solution
+                    self._fill_cmds_from_sol() # we upd update the views of the cmd
+                    # from the solution
 
-                        # we signal the client this controller has finished its job
-                        self.trigger_flag.set_bool(False) # this is also necessary to trigger again the solution
-                        # on next loop, unless the client requires it
+                    # we signal the client this controller has finished its job
+                    self.trigger_flag.set_bool(False) # this is also necessary to trigger again the solution
+                    # on next loop, unless the client requires it
 
-                        if self._debug:
-                            
-                            duration = time.perf_counter() - start
+                    if self._debug:
+                        
+                        duration = time.perf_counter() - start
 
-                        if self._verbose and self._debug:
+                    if self._verbose and self._debug:
 
-                            print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+                        print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
+                            f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
 
-                except KeyboardInterrupt:
+            except KeyboardInterrupt:
 
-                    break
+                break
     
     def assign_client_side_jnt_names(self, 
                         jnt_names: List[str]):
@@ -250,6 +265,11 @@ class RHController(ABC):
         self._to_client = [self._server_side_jnt_names.index(element) for element in self._client_side_jnt_names]
         
         self._jnt_maps_created = True
+
+    @abstractmethod
+    def _init_rhc_task_cmds(self) -> RhcTaskRefsChild:
+
+        pass
 
     @abstractmethod
     def _get_robot_jnt_names(self) -> List[str]:

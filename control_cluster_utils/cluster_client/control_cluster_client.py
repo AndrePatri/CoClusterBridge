@@ -4,6 +4,8 @@ from abc import ABC
 
 from control_cluster_utils.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd
 from control_cluster_utils.utilities.control_cluster_defs import HanshakeDataCntrlClient
+from control_cluster_utils.utilities.control_cluster_defs import RhcClusterTaskRefs
+
 from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
 from control_cluster_utils.utilities.defs import trigger_flagname
 
@@ -196,9 +198,13 @@ class ControlClusterClient(ABC):
     
     def _finalize_init(self):
         
+        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+                    ": connecting to server...")
+        
         # things to be done when everything is set but before starting to solve
 
         add_data_length_from_server = self.handshake_manager.add_data_length.tensor_view[0, 0].item()
+        n_contacts_from_server = self.handshake_manager.n_contacts.tensor_view[0, 0].item()
 
         self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
                                             cluster_size=self.cluster_size,
@@ -208,7 +214,17 @@ class ControlClusterClient(ABC):
                                             dtype=self.torch_dtype) # now that we know add_data_size
         # we can initialize the control commands
         self.controllers_cmds.start()
-    
+
+        self.rhc_task_refs = RhcClusterTaskRefs(n_contacts=n_contacts_from_server, 
+                                    cluster_size=self.cluster_size, 
+                                    device=self._device, 
+                                    backend=self._backend, 
+                                    dtype=self.torch_dtype)
+        self.rhc_task_refs.start()
+        
+        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+                    ": connection achieved.")
+        
     def cluster_ready(self):
 
         return self._was_cluster_ready and self.handshake_manager.handshake_done
@@ -286,6 +302,10 @@ class ControlClusterClient(ABC):
             if self.controllers_cmds is not None:
                 
                 self.controllers_cmds.terminate()
+
+            if self.rhc_task_refs is not None:
+
+                self.rhc_task_refs.terminate()
 
         self._close_handshake()
 
