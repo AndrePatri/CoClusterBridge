@@ -7,9 +7,15 @@ from PyQt5.QtWidgets import QHBoxLayout, QFrame
 from PyQt5.QtWidgets import QScrollArea, QPushButton, QScrollBar, QSpacerItem, QSizePolicy, QSlider
 from PyQt5.QtWidgets import QSplitter, QLabel, QGridLayout
 
+from PyQt5.QtGui import QIcon, QPixmap
+
 import pyqtgraph as pg
 
 from typing import List, Callable
+
+from control_cluster_utils.utilities.sysutils import PathsGetter
+
+import os
 
 class RealTimePlotApp(QMainWindow):
 
@@ -43,12 +49,19 @@ class RtPlotWidget(pg.PlotWidget):
                 n_data: int,  
                 update_dt: float, 
                 base_name: str, 
-                parent: QWidget = None):
+                parent: QWidget = None, 
+                xlabel = "t [s]", 
+                ylabel = ""):
 
         super().__init__(title=base_name,
                     parent=parent)
         
-        self.timestamps_red_factor = 10
+        self.x_label = xlabel
+        self.y_label = ylabel
+
+        self.paused = False
+
+        self.ntimestamps_per_window = 10
         
         self.n_data = n_data
 
@@ -67,7 +80,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.data = np.zeros((self.n_data, self.window_buffer_size))
 
-        self.timestamps = np.arange(self.window_buffer_size)
+        self.elapsed_times = [0 for i in range(self.window_buffer_size)]
 
         self.labels = [] 
         self.lines = []
@@ -117,8 +130,8 @@ class RtPlotWidget(pg.PlotWidget):
         self.colors = [pg.intColor(i, self.n_data, 255) for i in range(self.n_data)]
 
         # Add axis labels
-        self.plotItem.setLabel('left', '')
-        self.plotItem.setLabel('bottom', 't [s]')
+        self.plotItem.setLabel('left', self.y_label)
+        self.plotItem.setLabel('bottom', self.x_label)
 
     def _init_timers(self):
         
@@ -144,18 +157,20 @@ class RtPlotWidget(pg.PlotWidget):
 
         if current_time - self.last_update_time >= self.update_dt:
 
-            rolled_data = np.roll(self.data, -1, axis=1)
-            self.data = rolled_data
-            self.data[:, -1] = new_data.flatten()
-            
-            for i in range(0, self.data.shape[0]):
+            if not self.paused:
 
-                self.lines[i].setData(self.data[i, :])
+                rolled_data = np.roll(self.data, -1, axis=1)
+                self.data = rolled_data
+                self.data[:, -1] = new_data.flatten()
+                
+                for i in range(0, self.data.shape[0]):
 
-            elapsed_times = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
-            elapsed_times = elapsed_times[::-1]
+                    self.lines[i].setData(self.data[i, :])
 
-            self._update_timestams_ticks(elapsed_times) 
+                self.elapsed_times = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
+                self.elapsed_times = self.elapsed_times[::-1]
+
+            self._update_timestams_ticks(self.elapsed_times) 
 
             # x_range = (self.window_buffer_size - 1 - self.window_size, 
             #     self.window_buffer_size - 1) 
@@ -167,11 +182,12 @@ class RtPlotWidget(pg.PlotWidget):
                         elapsed_times: List[float]):
         
         # display only some of the x-axis timestamps to avoid overlap
-        step_size = max(1, len(elapsed_times) // self.timestamps_red_factor) 
+        step_size = max(1, int(self.window_size // self.ntimestamps_per_window))
+
         selected_labels = elapsed_times[::step_size]
 
         x_tick_vals = [i for i, _ in enumerate(elapsed_times) if i % step_size == 0]
-        x_tick_names = [f'{t:.1f}s' for t in selected_labels]
+        x_tick_names = [f'{t:.2f}s' for t in selected_labels]
 
         x_ticks = []
         for i in range(0, len(selected_labels)):
@@ -194,13 +210,21 @@ class RtPlotWidget(pg.PlotWidget):
     def update_window_offset(self, 
                     offset: int = 0):
         
-        current_window_buffer_factor = int(self.window_buffer_duration // self.window_size)
+        if offset > self.window_buffer_size - self.window_size:
 
-        if offset >= current_window_buffer_factor:
-
-            offset = current_window_buffer_factor - 1
+            offset = self.window_buffer_size - self.window_size
 
         self.window_offset = offset
+
+        x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset, 
+            self.window_buffer_size - 1 - self.window_offset) 
+        
+        self.setXRange(*x_range)
+
+    def update_timestamps_res(self, 
+                    res: int = 10):
+        
+        self.ntimestamps_per_window = res
         
 class SettingsWidget():
 
@@ -224,6 +248,19 @@ class SettingsWidget():
         self.min_labels = []
         self.max_labels = []
         self.val_sliders = []
+
+        self.clicked_iconpaths = []
+        self.unclicked_iconpaths = []
+        self.iconed_button_frames = []
+        self.iconed_button_layouts = []
+        self.iconed_buttons = []
+        self.icones_buttons_clicked = []
+        self.icones_buttons_unclicked = []
+        self.pixmaps_clicked = []
+        self.pixmaps_unclicked = []
+        self.button_descrs = []
+
+        self.paused = False
 
         self.init_ui()
 
@@ -286,8 +323,70 @@ class SettingsWidget():
         self.val_sliders.append(val_slider)
         self.current_vals.append(current_val)
 
+    def _create_iconed_button(self, 
+                        parent: QWidget, 
+                        icon_basepath: str, 
+                        clicked_icon: str,
+                        unclicked_icon: str, 
+                        descr: str = ""):
+        
+        clicked_iconpath = os.path.join(icon_basepath, 
+                                   clicked_icon + ".svg")
+        unclicked_iconpath = os.path.join(icon_basepath, 
+                                   unclicked_icon + ".svg")
+        
+        button_frame = QFrame(parent)
+        button_frame.setFrameShape(QFrame.StyledPanel)
+        button_frame_color = button_frame.palette().color(self.frame.backgroundRole()).name()
+        button_layout = QHBoxLayout(button_frame)  # Use QVBoxLayout here
+        button_layout.setContentsMargins(2, 2, 2, 2)
+
+        button_descr = QLabel(descr)
+        button_descr.setAlignment(Qt.AlignLeft | Qt.AlignCenter)
+
+        button = QPushButton(button_frame)
+        button.setGeometry(100, 100, 100, 50)
+        button.setStyleSheet(f"background-color: {button_frame_color};")
+        pixmap_clicked = QPixmap(clicked_iconpath)
+        pixmap_unclicked = QPixmap(unclicked_icon)
+
+        clicked_icon = QIcon(pixmap_clicked)
+        unclicked_icon = QIcon(pixmap_unclicked)
+
+        button.setIcon(unclicked_icon)
+        button.setFixedSize(30, 30)
+        button.setIconSize(button.size())
+        
+        button.clicked.connect(self.change_pause_state)
+        
+        self.clicked_iconpaths.append(clicked_iconpath)
+        self.unclicked_iconpaths.append(unclicked_iconpath)
+
+        self.iconed_button_frames.append(button_frame)
+        self.iconed_button_layouts.append(button_layout)
+        self.iconed_buttons.append(button)
+        self.icones_buttons_clicked.append(clicked_icon)
+        self.icones_buttons_unclicked.append(unclicked_icon)
+
+        self.pixmaps_clicked.append(pixmap_clicked)
+        self.pixmaps_unclicked.append(pixmap_unclicked)
+        
+        self.button_descrs.append(button_descr)
+
+        button_layout.addWidget(button_descr)
+        button_layout.addWidget(button)
+        self.settings_frame_layout.addWidget(button_frame)
+
     def init_ui(self):
- 
+        
+        paths = PathsGetter()
+        icon_basepath = paths.GUI_ICONS_PATH
+        self._create_iconed_button(parent=self.frame, 
+                            icon_basepath=icon_basepath, 
+                            clicked_icon="pause", 
+                            unclicked_icon="unpause", 
+                            descr="freeze/unfreeze")
+        
         # create slider for window size
 
         self._generate_complex_slider(title="window size [s]: ", 
@@ -310,6 +409,16 @@ class SettingsWidget():
                                 init_val_shown =f'{self.rt_plot_widget.window_offset}', 
                                 init=self.rt_plot_widget.window_offset)
         
+        self._generate_complex_slider(title="timestamps resolution: ", 
+                                parent=self.frame, 
+                                callback=self.update_timestamps_res, 
+                                min_shown=f'{1}', 
+                                min = 1,
+                                max_shown=f'{self.rt_plot_widget.window_size}', 
+                                max = self.rt_plot_widget.window_size,
+                                init_val_shown =f'{self.rt_plot_widget.window_offset}', 
+                                init=self.rt_plot_widget.window_offset)
+
         # Create a frame for the plot selector
         self.plot_selector_frame = QFrame(self.frame)
         self.plot_selector_frame.setFrameShape(QFrame.StyledPanel)
@@ -335,13 +444,35 @@ class SettingsWidget():
         self.settings_frame_layout.addWidget(self.plot_selector_frame)
         self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
+    def change_pause_state(self):
+        
+        self.paused = not self.paused
+        
+        if self.paused: 
+            
+            self.iconed_buttons[0].setIcon(self.icones_buttons_unclicked[0])
+        
+        else:
+
+            self.iconed_buttons[0].setIcon(self.icones_buttons_clicked[0])
+
+        self.rt_plot_widget.paused = self.paused
+
     def update_window_size(self, 
                     new_size: int):
 
         self.rt_plot_widget.update_window_size(new_size)
 
-        self.max_labels[1].setText(f'{int(self.rt_plot_widget.window_buffer_duration // self.rt_plot_widget.window_size)}')
-        self.val_sliders[1].setMaximum(int(self.rt_plot_widget.window_buffer_duration // self.rt_plot_widget.window_size))
+        # updated offset label
+        max_offset_current = int(self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size)
+        self.max_labels[1].setText(f'{max_offset_current}')
+        self.val_sliders[1].setMaximum(max_offset_current)
+
+        # updates resolution label
+        self.max_labels[2].setText(f'{int(self.rt_plot_widget.window_size)}')
+        self.val_sliders[2].setMaximum(int(self.rt_plot_widget.window_size))
+
+        # updates displayed window size
         self.current_vals[0].setText(f'{self.rt_plot_widget.update_dt * self.rt_plot_widget.window_size:.2f}')
 
     def update_window_offset(self, 
@@ -350,6 +481,13 @@ class SettingsWidget():
         self.rt_plot_widget.update_window_offset(offset)
 
         self.current_vals[1].setText(f'{self.rt_plot_widget.window_offset}')
+
+    def update_timestamps_res(self, 
+                    res: int):
+
+        self.rt_plot_widget.update_timestamps_res(res)
+
+        self.current_vals[2].setText(f'{self.rt_plot_widget.ntimestamps_per_window}')
 
     def toggle_line_visibility(self, label):
 

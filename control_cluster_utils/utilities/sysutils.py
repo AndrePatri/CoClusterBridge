@@ -27,3 +27,8 @@ class PathsGetter:
 
         self.UTILS_PATH = os.path.join(self.PACKAGE_ROOT_DIR, 
                                             'utilities')
+        
+        self.GUI_ICONS_PATH = os.path.join(self.PACKAGE_ROOT_DIR, 
+                                            'docs', 
+                                            'images', 
+                                            'gui_icons')
