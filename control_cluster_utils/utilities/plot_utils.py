@@ -17,31 +17,6 @@ from control_cluster_utils.utilities.sysutils import PathsGetter
 
 import os
 
-class RealTimePlotApp(QMainWindow):
-
-    def __init__(self):
-
-        super().__init__()
-
-        n_data = 5
-        update_dt = 0.05
-        window_duration = 3 # [s]
-
-        # main window widget
-        self.central_widget = QWidget(self)
-        self.setCentralWidget(self.central_widget)
-        self.layout = QHBoxLayout(self.central_widget)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-
-        self.rt_plot_widget = RtPlotWindow(n_data, 
-                                update_dt, 
-                                window_duration, 
-                                main_window=self)
-        
-        self.central_widget.setLayout(self.layout)
-
-        self.show()
-   
 class RtPlotWidget(pg.PlotWidget):
 
     def __init__(self, 
@@ -90,6 +65,8 @@ class RtPlotWidget(pg.PlotWidget):
         self._init_lines()
 
         self.update_window_size(self.window_size)
+
+        self.update_timestamps_res(self.ntimestamps_per_window)
         
         self._init_timers()
     
@@ -172,10 +149,6 @@ class RtPlotWidget(pg.PlotWidget):
 
             self._update_timestams_ticks(self.elapsed_times) 
 
-            # x_range = (self.window_buffer_size - 1 - self.window_size, 
-            #     self.window_buffer_size - 1) 
-            # self.setXRange(*x_range)
-
             self.last_update_time = current_time
 
     def _update_timestams_ticks(self, 
@@ -250,16 +223,14 @@ class SettingsWidget():
         self.val_sliders = []
 
         self.clicked_iconpaths = []
-        self.unclicked_iconpaths = []
         self.iconed_button_frames = []
         self.iconed_button_layouts = []
         self.iconed_buttons = []
-        self.icones_buttons_clicked = []
-        self.icones_buttons_unclicked = []
-        self.pixmaps_clicked = []
-        self.pixmaps_unclicked = []
+        self.icones_buttons = []
+        self.pixmaps = []
         self.button_descrs = []
-
+        self.iconpaths = []
+        
         self.paused = False
 
         self.init_ui()
@@ -326,14 +297,11 @@ class SettingsWidget():
     def _create_iconed_button(self, 
                         parent: QWidget, 
                         icon_basepath: str, 
-                        clicked_icon: str,
-                        unclicked_icon: str, 
+                        icon: str,
                         descr: str = ""):
         
-        clicked_iconpath = os.path.join(icon_basepath, 
-                                   clicked_icon + ".svg")
-        unclicked_iconpath = os.path.join(icon_basepath, 
-                                   unclicked_icon + ".svg")
+        iconpath = os.path.join(icon_basepath, 
+                                   icon + ".svg")
         
         button_frame = QFrame(parent)
         button_frame.setFrameShape(QFrame.StyledPanel)
@@ -347,35 +315,59 @@ class SettingsWidget():
         button = QPushButton(button_frame)
         button.setGeometry(100, 100, 100, 50)
         button.setStyleSheet(f"background-color: {button_frame_color};")
-        pixmap_clicked = QPixmap(clicked_iconpath)
-        pixmap_unclicked = QPixmap(unclicked_icon)
+        pixmap = QPixmap(iconpath)
 
-        clicked_icon = QIcon(pixmap_clicked)
-        unclicked_icon = QIcon(pixmap_unclicked)
+        button_icon = QIcon(pixmap)
 
-        button.setIcon(unclicked_icon)
+        button.setIcon(button_icon)
         button.setFixedSize(30, 30)
         button.setIconSize(button.size())
         
         button.clicked.connect(self.change_pause_state)
         
-        self.clicked_iconpaths.append(clicked_iconpath)
-        self.unclicked_iconpaths.append(unclicked_iconpath)
+        self.iconpaths.append(iconpath)
 
         self.iconed_button_frames.append(button_frame)
         self.iconed_button_layouts.append(button_layout)
         self.iconed_buttons.append(button)
-        self.icones_buttons_clicked.append(clicked_icon)
-        self.icones_buttons_unclicked.append(unclicked_icon)
+        self.icones_buttons.append(button_icon)
+        self.pixmaps.append(pixmap)
 
-        self.pixmaps_clicked.append(pixmap_clicked)
-        self.pixmaps_unclicked.append(pixmap_unclicked)
-        
         self.button_descrs.append(button_descr)
 
         button_layout.addWidget(button_descr)
         button_layout.addWidget(button)
         self.settings_frame_layout.addWidget(button_frame)
+    
+    def _create_plot_selector(self):
+        
+        self.plot_selector_scroll_area = QScrollArea(parent=self.frame)
+        self.plot_selector_scroll_area.setWidgetResizable(True)
+
+        # Create a frame for the plot selector
+        
+        self.selectors_frame = QFrame(self.plot_selector_scroll_area)
+        self.selectors_frame.setFrameShape(QFrame.StyledPanel)
+        self.selectors_layout = QVBoxLayout(self.selectors_frame)
+        self.selectors_layout.setContentsMargins(2, 2, 2, 2)
+
+        # Add title label to the plot selector frame
+        plot_selector_title = QLabel("plot selector")
+        self.selectors_layout.addWidget(plot_selector_title, 
+                                alignment=Qt.AlignHCenter)
+
+        self.legend_buttons = []
+
+        # Add legend buttons to the plot selector frame
+        for label in self.rt_plot_widget.labels:
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.setChecked(True)
+            button.clicked.connect(lambda checked, l=label: self.toggle_line_visibility(l))
+            self.legend_buttons.append(button)
+            self.selectors_layout.addWidget(button)
+        
+        self.plot_selector_scroll_area.setWidget(self.selectors_frame)
 
     def init_ui(self):
         
@@ -383,8 +375,7 @@ class SettingsWidget():
         icon_basepath = paths.GUI_ICONS_PATH
         self._create_iconed_button(parent=self.frame, 
                             icon_basepath=icon_basepath, 
-                            clicked_icon="pause", 
-                            unclicked_icon="unpause", 
+                            icon="pause", 
                             descr="freeze/unfreeze")
         
         # create slider for window size
@@ -399,17 +390,17 @@ class SettingsWidget():
                                 init_val_shown =f'{self.rt_plot_widget.update_dt * self.rt_plot_widget.window_size}', 
                                 init=self.rt_plot_widget.window_size)
 
-        self._generate_complex_slider(title="window offset [n.windows]: ", 
+        self._generate_complex_slider(title="window offset [n.samples]: ", 
                                 parent=self.frame, 
                                 callback=self.update_window_offset, 
                                 min_shown=f'{0}', 
                                 min = 0,
-                                max_shown=f'{self.rt_plot_widget.window_buffer_factor - 1}', 
-                                max = self.rt_plot_widget.window_buffer_factor - 1,
+                                max_shown=f'{self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size}', 
+                                max = self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size,
                                 init_val_shown =f'{self.rt_plot_widget.window_offset}', 
                                 init=self.rt_plot_widget.window_offset)
         
-        self._generate_complex_slider(title="timestamps resolution: ", 
+        self._generate_complex_slider(title="n. timestamps: ", 
                                 parent=self.frame, 
                                 callback=self.update_timestamps_res, 
                                 min_shown=f'{1}', 
@@ -419,42 +410,21 @@ class SettingsWidget():
                                 init_val_shown =f'{self.rt_plot_widget.window_offset}', 
                                 init=self.rt_plot_widget.window_offset)
 
-        # Create a frame for the plot selector
-        self.plot_selector_frame = QFrame(self.frame)
-        self.plot_selector_frame.setFrameShape(QFrame.StyledPanel)
-        self.plot_selector_layout = QVBoxLayout(self.plot_selector_frame)
-        self.plot_selector_layout.setContentsMargins(2, 2, 2, 2)
-
-        # Add title label to the plot selector frame
-        plot_selector_title = QLabel("plot selector")
-        self.plot_selector_layout.addWidget(plot_selector_title, 
-                                alignment=Qt.AlignHCenter)
-
-        self.legend_buttons = []
-
-        # Add legend buttons to the plot selector frame
-        for label in self.rt_plot_widget.labels:
-            button = QPushButton(label)
-            button.setCheckable(True)
-            button.setChecked(True)
-            button.clicked.connect(lambda checked, l=label: self.toggle_line_visibility(l))
-            self.legend_buttons.append(button)
-            self.plot_selector_layout.addWidget(button)
-        
-        self.settings_frame_layout.addWidget(self.plot_selector_frame)
-        self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self._create_plot_selector()
+ 
+        self.settings_frame_layout.addWidget(self.plot_selector_scroll_area)
 
     def change_pause_state(self):
         
         self.paused = not self.paused
         
-        if self.paused: 
+        # if self.paused: 
             
-            self.iconed_buttons[0].setIcon(self.icones_buttons_unclicked[0])
+            
         
-        else:
+        # else:
 
-            self.iconed_buttons[0].setIcon(self.icones_buttons_clicked[0])
+        #     self.iconed_buttons[0].setIcon(self.icones_buttons_clicked[0])
 
         self.rt_plot_widget.paused = self.paused
 
@@ -464,7 +434,7 @@ class SettingsWidget():
         self.rt_plot_widget.update_window_size(new_size)
 
         # updated offset label
-        max_offset_current = int(self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size)
+        max_offset_current = self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size
         self.max_labels[1].setText(f'{max_offset_current}')
         self.val_sliders[1].setMaximum(max_offset_current)
 
@@ -519,18 +489,14 @@ class SettingsWidget():
                     self.settings_scroll_content.width(), 
                     self.settings_scroll_content.height())
 
-class RtPlotWindow(QWidget):
+class RtPlotWindow():
 
     def __init__(self, 
             n_data: int, 
             update_dt: float, 
             window_duration: float, 
-            main_window: RealTimePlotApp,
+            parent: QWidget,
             base_name: str = ""):
-
-        super().__init__()
-
-        self.main_window = main_window
 
         self.n_data = n_data
         self.update_dt = update_dt
@@ -539,8 +505,8 @@ class RtPlotWindow(QWidget):
         self.base_name = base_name
         
         # use a QSplitter to handle resizable width between plot and legend frames
-        self.splitter_frame = QFrame()
-        self.splitter_frame.setFrameShape(QFrame.StyledPanel)
+        self.base_frame = QFrame(parent=parent)
+        self.base_frame.setFrameShape(QFrame.StyledPanel)
 
         self.splitter = QSplitter(Qt.Horizontal)
 
@@ -563,29 +529,19 @@ class RtPlotWindow(QWidget):
         # Set up the layout
         self.splitter_layout = QVBoxLayout()
         self.splitter_layout.addWidget(self.splitter)
-        self.splitter_frame.setLayout(self.splitter_layout)
-        
-        # Set the central widget of the main window
-        self.main_window.setCentralWidget(self.splitter_frame)
-
-        # this thread will handle the update of the plot
-        self.data_thread = DataThread(self.rt_plot_widget, 
-                                self.n_data)
-        self.data_thread.data_updated.connect(self.rt_plot_widget.update,
-                                        Qt.QueuedConnection)
-        self.data_thread.start()
+        self.base_frame.setLayout(self.splitter_layout)        
         
 class DataThread(QThread):
 
     data_updated = pyqtSignal(np.ndarray)
 
     def __init__(self, 
-                rt_plotter: RtPlotWidget, 
+                update_dt: float, 
                 n_data: int):
         
         super().__init__()
 
-        self.rt_plot_widget = rt_plotter
+        self.update_dt = update_dt
 
         self.n_data = n_data
 
@@ -597,8 +553,36 @@ class DataThread(QThread):
 
             self.data_updated.emit(new_data)
 
-            time.sleep(self.rt_plot_widget.update_dt)
+            time.sleep(self.update_dt)
 
+class RealTimePlotApp(QMainWindow):
+
+    def __init__(self):
+
+        super().__init__()
+
+        n_data = 15
+        update_dt_thread = 0.001
+        update_dt_debug= 0.05
+        window_duration = 3 # [s]
+
+        # main window widget
+
+        self.rt_plot_window = RtPlotWindow(n_data, 
+                                update_dt_debug, 
+                                window_duration, 
+                                parent=self)
+        self.setCentralWidget(self.rt_plot_window.base_frame)
+
+        # this thread will handle the update of the plot
+        self.data_thread = DataThread(update_dt_thread, 
+                                self.rt_plot_window.n_data)
+        self.data_thread.data_updated.connect(self.rt_plot_window.rt_plot_widget.update,
+                                        Qt.QueuedConnection)
+        self.data_thread.start()
+
+        self.show()
+   
 if __name__ == "__main__":  
 
     app = QApplication(sys.argv)
