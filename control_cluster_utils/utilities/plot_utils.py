@@ -26,7 +26,8 @@ class RtPlotWidget(pg.PlotWidget):
                 base_name: str, 
                 parent: QWidget = None, 
                 xlabel = "t [s]", 
-                ylabel = ""):
+                ylabel = "", 
+                window_buffer_factor: int = 2):
 
         super().__init__(title=base_name,
                     parent=parent)
@@ -45,7 +46,7 @@ class RtPlotWidget(pg.PlotWidget):
         self.window_size = int(window_duration // update_dt) + 1 # floor division
         self.window_duration = window_duration
 
-        self.window_buffer_factor = 2
+        self.window_buffer_factor = window_buffer_factor
         self.window_buffer_size = self.window_buffer_factor * self.window_size
         self.window_buffer_duration = self.window_buffer_factor * self.window_duration
 
@@ -230,7 +231,7 @@ class SettingsWidget():
         self.pixmaps = []
         self.button_descrs = []
         self.iconpaths = []
-        
+
         self.paused = False
 
         self.init_ui()
@@ -368,7 +369,8 @@ class SettingsWidget():
             self.selectors_layout.addWidget(button)
         
         self.plot_selector_scroll_area.setWidget(self.selectors_frame)
-
+        self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        
     def init_ui(self):
         
         paths = PathsGetter()
@@ -496,7 +498,8 @@ class RtPlotWindow():
             update_dt: float, 
             window_duration: float, 
             parent: QWidget,
-            base_name: str = ""):
+            base_name: str = "", 
+            window_buffer_factor: int = 2):
 
         self.n_data = n_data
         self.update_dt = update_dt
@@ -516,7 +519,8 @@ class RtPlotWindow():
             update_dt=self.update_dt,
             n_data=self.n_data,
             base_name=self.base_name,
-            parent=None
+            parent=None, 
+            window_buffer_factor=window_buffer_factor
         )
         # we create the settings widget 
         self.settings_widget = SettingsWidget(rt_plotter=self.rt_plot_widget, 
