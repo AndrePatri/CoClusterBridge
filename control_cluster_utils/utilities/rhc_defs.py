@@ -15,7 +15,7 @@ class RobotState:
 
         def __init__(self, 
                     mem_manager: SharedMemClient, 
-                    q_remapping: List[int]):
+                    q_remapping: List[int] = None):
             
             self.p = None # floating base position
             self.q = None # floating base orientation (quaternion)
@@ -173,8 +173,8 @@ class RobotState:
                 n_dofs: int, 
                 cluster_size: int,
                 index: int,
-                jnt_remapping: List[int],
-                q_remapping: List[int],
+                jnt_remapping: List[int] = None,
+                q_remapping: List[int] = None,
                 dtype = torch.float32, 
                 verbose=False):
 
@@ -235,7 +235,7 @@ class RobotCmds:
         def __init__(self, 
                     n_dofs: int, 
                     mem_manager: SharedMemClient, 
-                    jnt_remapping: List[int]):
+                    jnt_remapping: List[int] = None):
 
             self.n_dofs = n_dofs
 
@@ -245,12 +245,16 @@ class RobotCmds:
 
             self._terminate = False
 
+            self.jnt_remapping = None
+
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
             self.assign_views(mem_manager, "eff")
 
-            self.jnt_remapping = torch.tensor(jnt_remapping)
+            if jnt_remapping is not None:
+
+                self.jnt_remapping = torch.tensor(jnt_remapping)
 
         def __del__(self):
 
@@ -368,7 +372,7 @@ class RobotCmds:
                 n_dofs: int, 
                 cluster_size: int,
                 index: int,
-                jnt_remapping: List[int],
+                jnt_remapping: List[int] = None,
                 add_info_size: int = None, 
                 dtype = torch.float32, 
                 verbose=False):
@@ -381,8 +385,8 @@ class RobotCmds:
         self.cluster_size = cluster_size
         self.add_info_size = add_info_size
 
-        self.jnt_remapping = jnt_remapping
-
+        self.jnt_remapping = jnt_remapping 
+        
         self._terminate = False
 
         aggregate_view_columnsize = -1

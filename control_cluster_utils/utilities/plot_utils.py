@@ -24,14 +24,28 @@ class RtPlotWidget(pg.PlotWidget):
                 n_data: int,  
                 update_dt: float, 
                 base_name: str, 
+                legend_list: List[str] = None,
                 parent: QWidget = None, 
                 xlabel = "t [s]", 
                 ylabel = "", 
                 window_buffer_factor: int = 2):
 
+        self.warning = "warning"
+
         super().__init__(title=base_name,
                     parent=parent)
         
+        if legend_list is not None and len(legend_list) != n_data:
+            
+            warning = "[{self.__class__.__name__}]" + f"[{self.warning}]" \
+                + f": provided legend list length {len(legend_list)} does not match data dimension {n_data}"
+            
+            print(warning)
+
+            self.legend_list = None
+
+        self.legend_list = legend_list
+
         self.x_label = xlabel
         self.y_label = ylabel
 
@@ -74,8 +88,15 @@ class RtPlotWidget(pg.PlotWidget):
     def _init_lines(self):
 
         for i in range(0, self.n_data):
+            
+            if self.legend_list is None:
 
-            label = f"{self.base_name}_{i}"  # generate label for each line
+                label = f"{self.base_name}_{i}"  # generate label for each line
+
+            else:
+                
+                label = self.legend_list[i]
+
             self.labels.append(label)
 
             color = pg.mkColor(self.colors[i])  # Convert intColor to QColor
@@ -98,7 +119,7 @@ class RtPlotWidget(pg.PlotWidget):
         self.getAxis('bottom').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
 
         title_style = {'color': 'k', 'size': '14pt'}
-        self.plotItem.setTitle(title="Prova", **title_style)
+        self.plotItem.setTitle(title=self.base_name, **title_style)
         # Set grid color to black
         self.showGrid(x=True, y=True, alpha=1.0)  # Full opacity for grid lines
         self.getAxis('left').setGrid(255)  # Black grid lines for Y axis
@@ -498,6 +519,7 @@ class RtPlotWindow():
             update_dt: float, 
             window_duration: float, 
             parent: QWidget,
+            legend_list: List[str] = None,
             base_name: str = "", 
             window_buffer_factor: int = 2):
 
@@ -506,7 +528,8 @@ class RtPlotWindow():
         self.window_duration = window_duration
 
         self.base_name = base_name
-        
+        self.legend_list = legend_list
+
         # use a QSplitter to handle resizable width between plot and legend frames
         self.base_frame = QFrame(parent=parent)
         self.base_frame.setFrameShape(QFrame.StyledPanel)
@@ -520,7 +543,8 @@ class RtPlotWindow():
             n_data=self.n_data,
             base_name=self.base_name,
             parent=None, 
-            window_buffer_factor=window_buffer_factor
+            window_buffer_factor=window_buffer_factor, 
+            legend_list=legend_list
         )
         # we create the settings widget 
         self.settings_widget = SettingsWidget(rt_plotter=self.rt_plot_widget, 
@@ -534,7 +558,127 @@ class RtPlotWindow():
         self.splitter_layout = QVBoxLayout()
         self.splitter_layout.addWidget(self.splitter)
         self.base_frame.setLayout(self.splitter_layout)        
+
+class GridFrameWidget():
+
+    def __init__(self, 
+            rows, 
+            cols, 
+            parent: QWidget = None):
         
+        self.base_frame = QFrame(parent = parent)
+
+        self.rows = rows
+        self.cols = cols
+
+        row_layout = QVBoxLayout(self.base_frame)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        self.base_frame.setLayout(row_layout)
+        
+        row_splitter = QSplitter(Qt.Vertical)
+        row_splitter.setHandleWidth(0.1)
+        row_layout.addWidget(row_splitter)
+
+        self.frames = []
+        self.col_layouts = []
+        self.atomic_layouts = []
+        
+        for row in range(rows):
+            
+            col_frames = []
+            atomic_layouts_tmp = []
+
+            row_frame = QFrame(parent=self.base_frame)
+            row_frame.setFrameShape(QFrame.StyledPanel)
+
+            col_layout = QHBoxLayout(row_frame)
+            col_layout.setContentsMargins(0, 0, 0, 0)
+            row_frame.setLayout(col_layout)
+            col_splitter = QSplitter(Qt.Horizontal)
+            col_splitter.setHandleWidth(0.2)
+            col_layout.addWidget(col_splitter)
+            row_layout.addWidget(row_frame)
+            row_splitter.addWidget(row_frame)
+
+            for col in range(cols):
+                col_frame = QFrame(parent=row_frame)
+                col_frame.setFrameShape(QFrame.StyledPanel)
+                atomic_layout = QVBoxLayout()
+                atomic_layout.setContentsMargins(0, 0, 0, 0)
+                col_frame.setLayout(atomic_layout)
+                atomic_layouts_tmp.append(atomic_layout)
+
+                col_layout.addWidget(col_frame)
+                col_splitter.addWidget(col_frame)
+
+                col_frames.append(col_frame)
+
+            self.frames.append(col_frames)
+            self.col_layouts.append(col_layout)
+            self.atomic_layouts.append(atomic_layouts_tmp)
+            
+            col_frames = [] # reset
+            atomic_layouts_tmp = []
+
+    def addFrame(self,
+            frame: QWidget, 
+            row_idx: int, 
+            col_idx: int):
+        
+        if row_idx < self.rows and \
+            col_idx < self.cols:
+
+            self.atomic_layouts[row_idx][col_idx].addWidget(frame)
+
+class RhcTaskRefWindow():
+
+    def __init__(self, 
+            n_contacts: int,
+            update_dt: int,
+            window_duration: int,
+            window_buffer_factor: int = 2,
+            parent: QWidget = None):
+
+        self.grid = GridFrameWidget(2, 2, 
+                parent=parent)
+        
+        self.base_frame = self.grid.base_frame
+
+        self.rt_plotters = []
+
+        self.rt_plotters.append(RtPlotWindow(n_data=n_contacts, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Contact flags", 
+                    window_buffer_factor=window_buffer_factor))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=1, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Task mode", 
+                    window_buffer_factor=window_buffer_factor))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=6, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Base pose", 
+                    window_buffer_factor=window_buffer_factor))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=3, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="CoM pos", 
+                    window_buffer_factor=window_buffer_factor))
+        
+        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+
 class DataThread(QThread):
 
     data_updated = pyqtSignal(np.ndarray)
@@ -568,7 +712,7 @@ class RealTimePlotApp(QMainWindow):
         n_data = 15
         update_dt_thread = 0.001
         update_dt_debug= 0.05
-        window_duration = 3 # [s]
+        window_duration = 10 # [s]
 
         # main window widget
 
