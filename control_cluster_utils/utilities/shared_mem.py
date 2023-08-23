@@ -17,6 +17,8 @@ from typing import List
 
 import time
 
+from perf_sleep.pyperfsleep import PerfSleep
+
 class SharedMemConfig:
 
     def __init__(self):
@@ -40,6 +42,8 @@ class SharedMemSrvr:
                 name = None, 
                 dtype=torch.float32, 
                 backend="torch"):
+
+        self.perf_timer = PerfSleep()
 
         self.status = "status"
         self.info = "info"
@@ -500,6 +504,8 @@ class SharedMemClient:
                 verbose = False, 
                 wait_amount = 0.05):
         
+        self.perf_timer = PerfSleep()
+
         self.backend = backend
 
         self.verbose = verbose
@@ -647,7 +653,7 @@ class SharedMemClient:
                 
             self._print_wait(path)
             
-        time.sleep(self.wait_amount)
+        time.sleep(self.wait_amount) # nano secs
 
     def _attach_clients_counter(self):
 
@@ -663,7 +669,7 @@ class SharedMemClient:
                 self.memory_clients_counter = mmap.mmap(self.shm_clients_counter.fd, self.shm_clients_counter.size)
                 self.shm_clients_counter.close_fd()
                 
-                time.sleep(self.wait_amount)
+                time.sleep(self.wait_amount) # nano secs
 
                 self.n_clients = memoryview(self.memory_clients_counter)
 
@@ -690,7 +696,7 @@ class SharedMemClient:
 
                 self._print_attached(self.mem_path_clients_semaphore)
 
-                time.sleep(self.wait_amount)
+                time.sleep(self.wait_amount) # nano secs
 
                 return True
 
@@ -720,7 +726,7 @@ class SharedMemClient:
                 
                 self._print_attached(self.mem_config.mem_path)
                                     
-                time.sleep(self.wait_amount)
+                time.sleep(self.wait_amount) # nano secs
 
                 return True
 
@@ -948,7 +954,7 @@ class SharedMemClient:
 
                 except posix_ipc.BusyError: 
                     
-                    time.sleep(self.wait_amount)
+                    time.sleep(self.wait_amount) # nano secs
 
                     if self.verbose:
                         
@@ -983,7 +989,7 @@ class SharedMemClient:
                 
                 except posix_ipc.BusyError: 
 
-                    time.sleep(self.wait_amount)
+                    time.sleep(self.wait_amount) # nano secs
 
                     if self.verbose:
                         

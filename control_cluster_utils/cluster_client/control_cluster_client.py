@@ -17,6 +17,8 @@ import threading
 
 from typing import List
 
+from perf_sleep.pyperfsleep import PerfSleep
+
 class ControlClusterClient(ABC):
 
     def __init__(self, 
@@ -29,6 +31,8 @@ class ControlClusterClient(ABC):
             np_array_dtype = np.float32, 
             verbose = False, 
             debug = False):
+
+        self.perf_timer = PerfSleep()
 
         self._verbose = verbose
 
@@ -67,6 +71,7 @@ class ControlClusterClient(ABC):
         self.robot_states = None
         self.controllers_cmds = None
         self.trigger_flags = None
+        self.rhc_task_refs = None
 
         # flags
         self._was_cluster_ready = False
@@ -155,6 +160,10 @@ class ControlClusterClient(ABC):
                 if (not self._terminate) and \
                     (self.trigger_flags.get_clients_count() == self.cluster_size):
                     
+                    self.perf_timer.clock_sleep(1000) # nanoseconds (but this
+                    # # accuracy cannot be reached on a non-rt system)
+                    # # on a modern laptop, this sleeps for about 5e-5s
+
                     continue
                 
                 else:

@@ -12,6 +12,7 @@ from typing import List, TypeVar
 
 import torch
 
+from perf_sleep.pyperfsleep import PerfSleep
 
 class CntrlCmd(ABC):
 
@@ -35,6 +36,8 @@ class RHController(ABC):
             debug = False,
             array_dtype = torch.float32):
         
+        self.perf_timer = PerfSleep()
+
         self.controller_index = controller_index
 
         self.status = "status"
@@ -211,6 +214,13 @@ class RHController(ABC):
 
                         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                             f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+                
+                else:
+                    
+                    # we avoid busy waiting and sleep for a small amount of time
+
+                    self.perf_timer.clock_sleep(1000) # nanoseconds (actually resolution is much
+                    # poorer)
 
             except KeyboardInterrupt:
 
