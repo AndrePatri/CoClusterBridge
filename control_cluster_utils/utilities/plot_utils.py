@@ -658,8 +658,6 @@ class RhcTaskRefWindow():
         self.rt_plotters = []
 
         self.rhc_task_refs = []
-        # self.rhc_cmd = []
-        # self.rhc_state = []
 
         self._init_shared_data()
 
@@ -755,26 +753,7 @@ class RhcTaskRefWindow():
                 dtype=self.dtype, 
                 verbose=self.verbose))
 
-            # self.rhc_cmd.append(RobotCmds(n_dofs=self.jnt_number, 
-            #                         cluster_size=self.cluster_size, 
-            #                         index=i, 
-            #                         jnt_remapping=None, # we see everything as seen on the simulator side 
-            #                         add_info_size=self.add_data_length, 
-            #                         dtype=self.dtype, 
-            #                         verbose=self.verbose))
-
-            # self.rhc_state.append(RobotState(n_dofs=self.jnt_number, 
-            #                         cluster_size=self.cluster_size, 
-            #                         index=i, 
-            #                         jnt_remapping=None, 
-            #                         q_remapping=None, 
-            #                         dtype=self.dtype, 
-            #                         verbose=self.verbose))
-
-    def update(self, 
-            cluster_idx: int):
-
-        self.cluster_idx = cluster_idx
+    def update(self):
 
         self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
 
@@ -783,6 +762,18 @@ class RhcTaskRefWindow():
         self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
 
         self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+
+    def terminate(self):
+
+        self.cluster_size_clnt.terminate()
+        self.n_contacts_clnt.terminate()
+        self.jnt_number_clnt.terminate()
+        self.jnt_names_clnt.terminate()
+        self.add_data_length_clnt.terminate()
+
+        for i in range(0, self.cluster_size):
+
+            self.rhc_task_refs[i].terminate()
 
 class RhcCmdsWindow():
 
@@ -804,44 +795,41 @@ class RhcCmdsWindow():
 
         self.rt_plotters = []
 
-        self.rhc_task_refs = []
-        # self.rhc_cmd = []
-        # self.rhc_state = []
+        self.rhc_cmds = []
 
         self._init_shared_data()
 
-        self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
+        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
                     update_dt=update_dt, 
                     window_duration=window_duration, 
                     parent=None, 
-                    base_name="Contact flags", 
+                    base_name="RHC command q", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=self.jnt_names))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="RHC command v", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=self.jnt_names))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="RHC command effort", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=self.jnt_names))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.add_data_length, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="additional info", 
                     window_buffer_factor=window_buffer_factor, 
                     legend_list=None))
-        
-        self.rt_plotters.append(RtPlotWindow(n_data=1, 
-                    update_dt=update_dt, 
-                    window_duration=window_duration, 
-                    parent=None, 
-                    base_name="Task mode", 
-                    window_buffer_factor=window_buffer_factor, 
-                    legend_list=["task mode code"]))
-        
-        self.rt_plotters.append(RtPlotWindow(n_data=7, 
-                    update_dt=update_dt, 
-                    window_duration=window_duration, 
-                    parent=None, 
-                    base_name="Base pose", 
-                    window_buffer_factor=window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z", 
-                                "q_w", "q_i", "q_j", "q_k"]))
-        
-        self.rt_plotters.append(RtPlotWindow(n_data=3, 
-                    update_dt=update_dt, 
-                    window_duration=window_duration, 
-                    parent=None, 
-                    base_name="CoM pos", 
-                    window_buffer_factor=window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z"]))
         
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
@@ -894,42 +882,35 @@ class RhcCmdsWindow():
         # view of rhc references
         for i in range(0, self.cluster_size):
 
-            self.rhc_task_refs.append(RhcTaskRefs( 
-                cluster_size=self.cluster_size,
-                n_contacts=self.n_contacts,
-                index=i,
-                q_remapping=None,
-                dtype=self.dtype, 
-                verbose=self.verbose))
+            self.rhc_cmds.append(RobotCmds(n_dofs=self.jnt_number, 
+                                    cluster_size=self.cluster_size, 
+                                    index=i, 
+                                    jnt_remapping=None, # we see everything as seen on the simulator side 
+                                    add_info_size=self.add_data_length, 
+                                    dtype=self.dtype, 
+                                    verbose=self.verbose))
 
-            # self.rhc_cmd.append(RobotCmds(n_dofs=self.jnt_number, 
-            #                         cluster_size=self.cluster_size, 
-            #                         index=i, 
-            #                         jnt_remapping=None, # we see everything as seen on the simulator side 
-            #                         add_info_size=self.add_data_length, 
-            #                         dtype=self.dtype, 
-            #                         verbose=self.verbose))
+    def update(self):
 
-            # self.rhc_state.append(RobotState(n_dofs=self.jnt_number, 
-            #                         cluster_size=self.cluster_size, 
-            #                         index=i, 
-            #                         jnt_remapping=None, 
-            #                         q_remapping=None, 
-            #                         dtype=self.dtype, 
-            #                         verbose=self.verbose))
+        self.rt_plotters[0].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.q.numpy())
 
-    def update(self, 
-            cluster_idx: int):
+        self.rt_plotters[1].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.v.numpy())
 
-        self.cluster_idx = cluster_idx
+        self.rt_plotters[2].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.eff.numpy())
 
-        self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
+        self.rt_plotters[3].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].slvr_state.info.numpy())
 
-        self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
+    def terminate(self):
 
-        self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
+        self.cluster_size_clnt.terminate()
+        self.n_contacts_clnt.terminate()
+        self.jnt_number_clnt.terminate()
+        self.jnt_names_clnt.terminate()
+        self.add_data_length_clnt.terminate()
 
-        self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+        for i in range(0, self.cluster_size):
+
+            self.rhc_cmds[i].terminate()
 
 class RhcStateWindow():
 
@@ -944,56 +925,74 @@ class RhcStateWindow():
 
         self.cluster_idx = 0
 
-        self.grid = GridFrameWidget(2, 2, 
+        self.grid = GridFrameWidget(2, 3, 
                 parent=parent)
         
         self.base_frame = self.grid.base_frame
 
         self.rt_plotters = []
 
-        self.rhc_task_refs = []
-        # self.rhc_cmd = []
-        # self.rhc_state = []
+        self.rhc_states = []
 
         self._init_shared_data()
 
-        self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
+        self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.p.shape[1], 
                     update_dt=update_dt, 
                     window_duration=window_duration, 
                     parent=None, 
-                    base_name="Contact flags", 
-                    window_buffer_factor=window_buffer_factor, 
-                    legend_list=None))
-        
-        self.rt_plotters.append(RtPlotWindow(n_data=1, 
-                    update_dt=update_dt, 
-                    window_duration=window_duration, 
-                    parent=None, 
-                    base_name="Task mode", 
-                    window_buffer_factor=window_buffer_factor, 
-                    legend_list=["task mode code"]))
-        
-        self.rt_plotters.append(RtPlotWindow(n_data=7, 
-                    update_dt=update_dt, 
-                    window_duration=window_duration, 
-                    parent=None, 
-                    base_name="Base pose", 
-                    window_buffer_factor=window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z", 
-                                "q_w", "q_i", "q_j", "q_k"]))
-        
-        self.rt_plotters.append(RtPlotWindow(n_data=3, 
-                    update_dt=update_dt, 
-                    window_duration=window_duration, 
-                    parent=None, 
-                    base_name="CoM pos", 
+                    base_name="Root position", 
                     window_buffer_factor=window_buffer_factor, 
                     legend_list=["p_x", "p_y", "p_z"]))
         
+        self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.q.shape[1], 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Root orientation", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["q_w", "q_i", "q_j", "q_k"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.v.shape[1], 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Base linear vel.", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["v_x", "v_y", "v_z"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.omega.shape[1], 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Base angular vel.",
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["omega_x", "omega_y", "omega_z"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Joints q",
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=self.jnt_names))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Joints v",
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=self.jnt_names))
+        
+        # root state
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+        
+        # joint state
+        self.grid.addFrame(self.rt_plotters[4].base_frame, 0, 2)
+        self.grid.addFrame(self.rt_plotters[5].base_frame, 1, 2)
 
     def _init_shared_data(self):
 
@@ -1041,42 +1040,41 @@ class RhcStateWindow():
         # view of rhc references
         for i in range(0, self.cluster_size):
 
-            self.rhc_task_refs.append(RhcTaskRefs( 
-                cluster_size=self.cluster_size,
-                n_contacts=self.n_contacts,
-                index=i,
-                q_remapping=None,
-                dtype=self.dtype, 
-                verbose=self.verbose))
+            self.rhc_states.append(RobotState(n_dofs=self.jnt_number, 
+                                    cluster_size=self.cluster_size, 
+                                    index=i, 
+                                    jnt_remapping=None, 
+                                    q_remapping=None, 
+                                    dtype=self.dtype, 
+                                    verbose=self.verbose))
 
-            # self.rhc_cmd.append(RobotCmds(n_dofs=self.jnt_number, 
-            #                         cluster_size=self.cluster_size, 
-            #                         index=i, 
-            #                         jnt_remapping=None, # we see everything as seen on the simulator side 
-            #                         add_info_size=self.add_data_length, 
-            #                         dtype=self.dtype, 
-            #                         verbose=self.verbose))
+    def update(self):
 
-            # self.rhc_state.append(RobotState(n_dofs=self.jnt_number, 
-            #                         cluster_size=self.cluster_size, 
-            #                         index=i, 
-            #                         jnt_remapping=None, 
-            #                         q_remapping=None, 
-            #                         dtype=self.dtype, 
-            #                         verbose=self.verbose))
+        # root state
+        self.rt_plotters[0].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.p.numpy())
 
-    def update(self, 
-            cluster_idx: int):
+        self.rt_plotters[1].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.q.numpy())
 
-        self.cluster_idx = cluster_idx
+        self.rt_plotters[2].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.v.numpy())
 
-        self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
+        self.rt_plotters[3].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.omega.numpy())
 
-        self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
+        # joint state
+        self.rt_plotters[4].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.q.numpy())
 
-        self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
+        self.rt_plotters[5].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.v.numpy())
+    
+    def terminate(self):
 
-        self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+        self.cluster_size_clnt.terminate()
+        self.n_contacts_clnt.terminate()
+        self.jnt_number_clnt.terminate()
+        self.jnt_names_clnt.terminate()
+        self.add_data_length_clnt.terminate()
+
+        for i in range(0, self.cluster_size):
+
+            self.rhc_states[i].terminate()
 
 class DataThread(QThread):
 
@@ -1129,7 +1127,7 @@ class RealTimePlotApp(QMainWindow):
         self.data_thread.start()
 
         self.show()
-   
+
 if __name__ == "__main__":  
 
     app = QApplication(sys.argv)
