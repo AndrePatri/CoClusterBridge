@@ -642,9 +642,14 @@ class RhcTaskRefWindow():
     def __init__(self, 
             update_dt: int,
             window_duration: int,
+            cluster_size: int, 
+            n_contacts: int,
             window_buffer_factor: int = 2,
             parent: QWidget = None, 
             verbose = False):
+
+        self.cluster_size = cluster_size
+        self.n_contacts = n_contacts
 
         self.verbose = verbose
 
@@ -701,47 +706,6 @@ class RhcTaskRefWindow():
 
     def _init_shared_data(self):
 
-        self.wait_amount = 0.05
-        self.dtype = torch.float32
-        
-        # getting info
-        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=cluster_size_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=self.verbose)
-        self.cluster_size_clnt.attach()
-        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=n_contacts_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=True)
-        self.n_contacts_clnt.attach()
-        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
-                                        name=jnt_number_client_name(), 
-                                        dtype=torch.int64, 
-                                        wait_amount=self.wait_amount, 
-                                        verbose=self.verbose)
-        self.jnt_number_clnt.attach()
-        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
-                                    name=jnt_names_client_name(), 
-                                    is_server=False, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=self.verbose)
-        self.jnt_names_clnt.start()
-        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=additional_data_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=True)
-        self.add_data_length_clnt.attach()
-
-        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
-        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
-        self.jnt_names = self.jnt_names_clnt.read()
-        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
-        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
-
         # view of rhc references
         for i in range(0, self.cluster_size):
 
@@ -750,7 +714,7 @@ class RhcTaskRefWindow():
                 n_contacts=self.n_contacts,
                 index=i,
                 q_remapping=None,
-                dtype=self.dtype, 
+                dtype=torch.float32, 
                 verbose=self.verbose))
 
     def update(self):
@@ -780,9 +744,18 @@ class RhcCmdsWindow():
     def __init__(self, 
             update_dt: int,
             window_duration: int,
+            cluster_size: int, 
+            jnt_number: int, 
+            jnt_names: List[str], 
+            add_data_length: int,
             window_buffer_factor: int = 2,
             parent: QWidget = None, 
             verbose = False):
+
+        self.cluster_size = cluster_size
+        self.jnt_names = jnt_names 
+        self.jnt_number = jnt_number
+        self.add_data_length = add_data_length
 
         self.verbose = verbose
 
@@ -838,47 +811,6 @@ class RhcCmdsWindow():
 
     def _init_shared_data(self):
 
-        self.wait_amount = 0.05
-        self.dtype = torch.float32
-        
-        # getting info
-        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=cluster_size_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=self.verbose)
-        self.cluster_size_clnt.attach()
-        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=n_contacts_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=True)
-        self.n_contacts_clnt.attach()
-        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
-                                        name=jnt_number_client_name(), 
-                                        dtype=torch.int64, 
-                                        wait_amount=self.wait_amount, 
-                                        verbose=self.verbose)
-        self.jnt_number_clnt.attach()
-        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
-                                    name=jnt_names_client_name(), 
-                                    is_server=False, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=self.verbose)
-        self.jnt_names_clnt.start()
-        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=additional_data_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=True)
-        self.add_data_length_clnt.attach()
-
-        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
-        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
-        self.jnt_names = self.jnt_names_clnt.read()
-        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
-        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
-
         # view of rhc references
         for i in range(0, self.cluster_size):
 
@@ -887,7 +819,7 @@ class RhcCmdsWindow():
                                     index=i, 
                                     jnt_remapping=None, # we see everything as seen on the simulator side 
                                     add_info_size=self.add_data_length, 
-                                    dtype=self.dtype, 
+                                    dtype=torch.float32, 
                                     verbose=self.verbose))
 
     def update(self):
@@ -902,12 +834,6 @@ class RhcCmdsWindow():
 
     def terminate(self):
 
-        self.cluster_size_clnt.terminate()
-        self.n_contacts_clnt.terminate()
-        self.jnt_number_clnt.terminate()
-        self.jnt_names_clnt.terminate()
-        self.add_data_length_clnt.terminate()
-
         for i in range(0, self.cluster_size):
 
             self.rhc_cmds[i].terminate()
@@ -917,9 +843,16 @@ class RhcStateWindow():
     def __init__(self, 
             update_dt: int,
             window_duration: int,
+            cluster_size: int, 
+            jnt_number: int, 
+            jnt_names: List[str], 
             window_buffer_factor: int = 2,
             parent: QWidget = None, 
             verbose = False):
+
+        self.cluster_size = cluster_size
+        self.jnt_names = jnt_names 
+        self.jnt_number = jnt_number
 
         self.verbose = verbose
 
@@ -996,47 +929,6 @@ class RhcStateWindow():
 
     def _init_shared_data(self):
 
-        self.wait_amount = 0.05
-        self.dtype = torch.float32
-        
-        # getting info
-        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=cluster_size_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=self.verbose)
-        self.cluster_size_clnt.attach()
-        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=n_contacts_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=True)
-        self.n_contacts_clnt.attach()
-        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
-                                        name=jnt_number_client_name(), 
-                                        dtype=torch.int64, 
-                                        wait_amount=self.wait_amount, 
-                                        verbose=self.verbose)
-        self.jnt_number_clnt.attach()
-        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
-                                    name=jnt_names_client_name(), 
-                                    is_server=False, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=self.verbose)
-        self.jnt_names_clnt.start()
-        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=additional_data_name(), 
-                                    dtype=torch.int64, 
-                                    wait_amount=self.wait_amount, 
-                                    verbose=True)
-        self.add_data_length_clnt.attach()
-
-        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
-        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
-        self.jnt_names = self.jnt_names_clnt.read()
-        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
-        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
-
         # view of rhc references
         for i in range(0, self.cluster_size):
 
@@ -1045,7 +937,7 @@ class RhcStateWindow():
                                     index=i, 
                                     jnt_remapping=None, 
                                     q_remapping=None, 
-                                    dtype=self.dtype, 
+                                    dtype=torch.float32, 
                                     verbose=self.verbose))
 
     def update(self):
@@ -1065,12 +957,6 @@ class RhcStateWindow():
         self.rt_plotters[5].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.v.numpy())
     
     def terminate(self):
-
-        self.cluster_size_clnt.terminate()
-        self.n_contacts_clnt.terminate()
-        self.jnt_number_clnt.terminate()
-        self.jnt_names_clnt.terminate()
-        self.add_data_length_clnt.terminate()
 
         for i in range(0, self.cluster_size):
 
