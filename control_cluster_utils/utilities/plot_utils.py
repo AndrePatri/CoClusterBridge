@@ -17,6 +17,13 @@ from control_cluster_utils.utilities.sysutils import PathsGetter
 
 import os
 
+import torch
+from control_cluster_utils.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState
+from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
+from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
+from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
+from control_cluster_utils.utilities.defs import additional_data_name
+
 class RtPlotWidget(pg.PlotWidget):
 
     def __init__(self, 
@@ -118,7 +125,7 @@ class RtPlotWidget(pg.PlotWidget):
         self.getAxis('left').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
         self.getAxis('bottom').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
 
-        title_style = {'color': 'k', 'size': '14pt'}
+        title_style = {'color': 'k', 'size': '10pt'}
         self.plotItem.setTitle(title=self.base_name, **title_style)
         # Set grid color to black
         self.showGrid(x=True, y=True, alpha=1.0)  # Full opacity for grid lines
@@ -633,11 +640,15 @@ class GridFrameWidget():
 class RhcTaskRefWindow():
 
     def __init__(self, 
-            n_contacts: int,
             update_dt: int,
             window_duration: int,
             window_buffer_factor: int = 2,
-            parent: QWidget = None):
+            parent: QWidget = None, 
+            verbose = False):
+
+        self.verbose = verbose
+
+        self.cluster_idx = 0
 
         self.grid = GridFrameWidget(2, 2, 
                 parent=parent)
@@ -646,38 +657,426 @@ class RhcTaskRefWindow():
 
         self.rt_plotters = []
 
-        self.rt_plotters.append(RtPlotWindow(n_data=n_contacts, 
+        self.rhc_task_refs = []
+        # self.rhc_cmd = []
+        # self.rhc_state = []
+
+        self._init_shared_data()
+
+        self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
                     update_dt=update_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Contact flags", 
-                    window_buffer_factor=window_buffer_factor))
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=None))
         
         self.rt_plotters.append(RtPlotWindow(n_data=1, 
                     update_dt=update_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Task mode", 
-                    window_buffer_factor=window_buffer_factor))
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["task mode code"]))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=6, 
+        self.rt_plotters.append(RtPlotWindow(n_data=7, 
                     update_dt=update_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Base pose", 
-                    window_buffer_factor=window_buffer_factor))
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z", 
+                                "q_w", "q_i", "q_j", "q_k"]))
         
         self.rt_plotters.append(RtPlotWindow(n_data=3, 
                     update_dt=update_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="CoM pos", 
-                    window_buffer_factor=window_buffer_factor))
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z"]))
         
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+
+    def _init_shared_data(self):
+
+        self.wait_amount = 0.05
+        self.dtype = torch.float32
+        
+        # getting info
+        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=cluster_size_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        self.cluster_size_clnt.attach()
+        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=n_contacts_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        self.n_contacts_clnt.attach()
+        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
+                                        name=jnt_number_client_name(), 
+                                        dtype=torch.int64, 
+                                        wait_amount=self.wait_amount, 
+                                        verbose=self.verbose)
+        self.jnt_number_clnt.attach()
+        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
+                                    name=jnt_names_client_name(), 
+                                    is_server=False, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        self.jnt_names_clnt.start()
+        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=additional_data_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        self.add_data_length_clnt.attach()
+
+        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
+        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
+        self.jnt_names = self.jnt_names_clnt.read()
+        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
+        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
+
+        # view of rhc references
+        for i in range(0, self.cluster_size):
+
+            self.rhc_task_refs.append(RhcTaskRefs( 
+                cluster_size=self.cluster_size,
+                n_contacts=self.n_contacts,
+                index=i,
+                q_remapping=None,
+                dtype=self.dtype, 
+                verbose=self.verbose))
+
+            # self.rhc_cmd.append(RobotCmds(n_dofs=self.jnt_number, 
+            #                         cluster_size=self.cluster_size, 
+            #                         index=i, 
+            #                         jnt_remapping=None, # we see everything as seen on the simulator side 
+            #                         add_info_size=self.add_data_length, 
+            #                         dtype=self.dtype, 
+            #                         verbose=self.verbose))
+
+            # self.rhc_state.append(RobotState(n_dofs=self.jnt_number, 
+            #                         cluster_size=self.cluster_size, 
+            #                         index=i, 
+            #                         jnt_remapping=None, 
+            #                         q_remapping=None, 
+            #                         dtype=self.dtype, 
+            #                         verbose=self.verbose))
+
+    def update(self, 
+            cluster_idx: int):
+
+        self.cluster_idx = cluster_idx
+
+        self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
+
+        self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
+
+        self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
+
+        self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+
+class RhcCmdsWindow():
+
+    def __init__(self, 
+            update_dt: int,
+            window_duration: int,
+            window_buffer_factor: int = 2,
+            parent: QWidget = None, 
+            verbose = False):
+
+        self.verbose = verbose
+
+        self.cluster_idx = 0
+
+        self.grid = GridFrameWidget(2, 2, 
+                parent=parent)
+        
+        self.base_frame = self.grid.base_frame
+
+        self.rt_plotters = []
+
+        self.rhc_task_refs = []
+        # self.rhc_cmd = []
+        # self.rhc_state = []
+
+        self._init_shared_data()
+
+        self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Contact flags", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=None))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=1, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Task mode", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["task mode code"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=7, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Base pose", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z", 
+                                "q_w", "q_i", "q_j", "q_k"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=3, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="CoM pos", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z"]))
+        
+        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+
+    def _init_shared_data(self):
+
+        self.wait_amount = 0.05
+        self.dtype = torch.float32
+        
+        # getting info
+        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=cluster_size_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        self.cluster_size_clnt.attach()
+        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=n_contacts_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        self.n_contacts_clnt.attach()
+        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
+                                        name=jnt_number_client_name(), 
+                                        dtype=torch.int64, 
+                                        wait_amount=self.wait_amount, 
+                                        verbose=self.verbose)
+        self.jnt_number_clnt.attach()
+        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
+                                    name=jnt_names_client_name(), 
+                                    is_server=False, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        self.jnt_names_clnt.start()
+        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=additional_data_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        self.add_data_length_clnt.attach()
+
+        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
+        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
+        self.jnt_names = self.jnt_names_clnt.read()
+        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
+        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
+
+        # view of rhc references
+        for i in range(0, self.cluster_size):
+
+            self.rhc_task_refs.append(RhcTaskRefs( 
+                cluster_size=self.cluster_size,
+                n_contacts=self.n_contacts,
+                index=i,
+                q_remapping=None,
+                dtype=self.dtype, 
+                verbose=self.verbose))
+
+            # self.rhc_cmd.append(RobotCmds(n_dofs=self.jnt_number, 
+            #                         cluster_size=self.cluster_size, 
+            #                         index=i, 
+            #                         jnt_remapping=None, # we see everything as seen on the simulator side 
+            #                         add_info_size=self.add_data_length, 
+            #                         dtype=self.dtype, 
+            #                         verbose=self.verbose))
+
+            # self.rhc_state.append(RobotState(n_dofs=self.jnt_number, 
+            #                         cluster_size=self.cluster_size, 
+            #                         index=i, 
+            #                         jnt_remapping=None, 
+            #                         q_remapping=None, 
+            #                         dtype=self.dtype, 
+            #                         verbose=self.verbose))
+
+    def update(self, 
+            cluster_idx: int):
+
+        self.cluster_idx = cluster_idx
+
+        self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
+
+        self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
+
+        self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
+
+        self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+
+class RhcStateWindow():
+
+    def __init__(self, 
+            update_dt: int,
+            window_duration: int,
+            window_buffer_factor: int = 2,
+            parent: QWidget = None, 
+            verbose = False):
+
+        self.verbose = verbose
+
+        self.cluster_idx = 0
+
+        self.grid = GridFrameWidget(2, 2, 
+                parent=parent)
+        
+        self.base_frame = self.grid.base_frame
+
+        self.rt_plotters = []
+
+        self.rhc_task_refs = []
+        # self.rhc_cmd = []
+        # self.rhc_state = []
+
+        self._init_shared_data()
+
+        self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Contact flags", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=None))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=1, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Task mode", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["task mode code"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=7, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Base pose", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z", 
+                                "q_w", "q_i", "q_j", "q_k"]))
+        
+        self.rt_plotters.append(RtPlotWindow(n_data=3, 
+                    update_dt=update_dt, 
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="CoM pos", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z"]))
+        
+        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+
+    def _init_shared_data(self):
+
+        self.wait_amount = 0.05
+        self.dtype = torch.float32
+        
+        # getting info
+        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=cluster_size_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        self.cluster_size_clnt.attach()
+        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=n_contacts_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        self.n_contacts_clnt.attach()
+        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
+                                        name=jnt_number_client_name(), 
+                                        dtype=torch.int64, 
+                                        wait_amount=self.wait_amount, 
+                                        verbose=self.verbose)
+        self.jnt_number_clnt.attach()
+        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
+                                    name=jnt_names_client_name(), 
+                                    is_server=False, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
+        self.jnt_names_clnt.start()
+        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
+                                    name=additional_data_name(), 
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=True)
+        self.add_data_length_clnt.attach()
+
+        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
+        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
+        self.jnt_names = self.jnt_names_clnt.read()
+        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
+        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
+
+        # view of rhc references
+        for i in range(0, self.cluster_size):
+
+            self.rhc_task_refs.append(RhcTaskRefs( 
+                cluster_size=self.cluster_size,
+                n_contacts=self.n_contacts,
+                index=i,
+                q_remapping=None,
+                dtype=self.dtype, 
+                verbose=self.verbose))
+
+            # self.rhc_cmd.append(RobotCmds(n_dofs=self.jnt_number, 
+            #                         cluster_size=self.cluster_size, 
+            #                         index=i, 
+            #                         jnt_remapping=None, # we see everything as seen on the simulator side 
+            #                         add_info_size=self.add_data_length, 
+            #                         dtype=self.dtype, 
+            #                         verbose=self.verbose))
+
+            # self.rhc_state.append(RobotState(n_dofs=self.jnt_number, 
+            #                         cluster_size=self.cluster_size, 
+            #                         index=i, 
+            #                         jnt_remapping=None, 
+            #                         q_remapping=None, 
+            #                         dtype=self.dtype, 
+            #                         verbose=self.verbose))
+
+    def update(self, 
+            cluster_idx: int):
+
+        self.cluster_idx = cluster_idx
+
+        self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
+
+        self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
+
+        self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
+
+        self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
 
 class DataThread(QThread):
 
