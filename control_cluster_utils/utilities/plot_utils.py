@@ -4,7 +4,7 @@ import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from PyQt5.QtWidgets import QHBoxLayout, QFrame
-from PyQt5.QtWidgets import QScrollArea, QPushButton, QScrollBar, QSpacerItem, QSizePolicy, QSlider
+from PyQt5.QtWidgets import QScrollArea, QPushButton, QSpacerItem, QSizePolicy, QSlider
 from PyQt5.QtWidgets import QSplitter, QLabel, QGridLayout
 
 from PyQt5.QtGui import QIcon, QPixmap
@@ -61,6 +61,8 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.paused = False
 
+        self.nightmode = False
+
         self.ntimestamps_per_window = 10
         
         self.n_data = n_data
@@ -110,8 +112,8 @@ class RtPlotWidget(pg.PlotWidget):
 
             self.labels.append(label)
 
-            color = pg.mkColor(self.colors[i])  # Convert intColor to QColor
-            color.setAlpha(150)  # Set the alpha value for the color
+            color = self.colors[i] 
+            color.setAlpha(255)  # Set the alpha value for the color
 
             pen = pg.mkPen(color=color, 
                     width=2.3)
@@ -121,30 +123,40 @@ class RtPlotWidget(pg.PlotWidget):
         
     def _setup_plot(self):
         
-        # Create a slightly grey background
-        self.setBackground('w')  # RGB values for a light grey color
-
         self.enableAutoRange()
+
+        self.x_axis = self.plotItem.getAxis('bottom')
+        self.y_axis = self.plotItem.getAxis('left')
+
+        self.plotItem.setLabel('left', self.y_label)
+        self.plotItem.setLabel('bottom', self.x_label)
 
         # self.setDownsampling(auto= True, mode = None, ds = None)
 
-        # Set the alpha of the text to 255 (fully opaque)
-        self.getAxis('left').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
-        self.getAxis('bottom').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
-
-        title_style = {'color': 'k', 'size': '10pt'}
-        self.plotItem.setTitle(title=self.base_name, **title_style)
         # Set grid color to black
         self.showGrid(x=True, y=True, alpha=1.0)  # Full opacity for grid lines
-        self.getAxis('left').setGrid(255)  # Black grid lines for Y axis
-        self.getAxis('bottom').setGrid(255)  # Black grid lines for X axis
+        self.x_axis.setGrid(255)  
+        self.y_axis.setGrid(255) 
 
         # Define a list of colors for each row
         self.colors = [pg.intColor(i, self.n_data, 255) for i in range(self.n_data)]
 
-        # Add axis labels
-        self.plotItem.setLabel('left', self.y_label)
-        self.plotItem.setLabel('bottom', self.x_label)
+        self.dayshift() # sets uppearance for light mode
+    
+    def _contrasting_colors(self, 
+                        num_colors: int):
+
+        colors = []
+
+        for i in range(num_colors):
+
+            hue = (i / num_colors) * 360  # Spread hues across the color wheel
+
+            color = pg.mkColor(hue, 255, 200)  # Use full saturation and lightness for contrast
+
+            colors.append(color)
+
+        return colors
 
     def _init_timers(self):
         
@@ -238,7 +250,33 @@ class RtPlotWidget(pg.PlotWidget):
                     res: int = 10):
         
         self.ntimestamps_per_window = res
-        
+    
+    def nightshift(self):
+
+        self.setBackground('k')
+
+        title_style = {'color': 'k', 'size': '10pt'}
+        self.plotItem.setTitle(title=self.base_name, **title_style)
+
+        tick_color = pg.mkColor('w')  # Use 'b' for blue color, you can replace it with your preferred color
+        self.x_axis.setPen(tick_color)
+        self.x_axis.setTextPen(tick_color)
+        self.y_axis.setPen(tick_color)
+        self.y_axis.setTextPen(tick_color)
+
+    def dayshift(self):
+
+        self.setBackground('w')
+
+        title_style = {'color': 'w', 'size': '10pt'}
+        self.plotItem.setTitle(title=self.base_name, **title_style)
+
+        tick_color = pg.mkColor('k')  # Use 'b' for blue color, you can replace it with your preferred color
+        self.x_axis.setPen(tick_color)
+        self.x_axis.setTextPen(tick_color)
+        self.y_axis.setPen(tick_color)
+        self.y_axis.setTextPen(tick_color)
+
 class SettingsWidget():
 
     def __init__(self, 
@@ -250,6 +288,7 @@ class SettingsWidget():
 
         self.frame = QFrame(parent=parent)
         self.frame.setFrameShape(QFrame.StyledPanel)
+        self.frame.setContentsMargins(0, 0, 0, 0)
         self.settings_frame_layout = QVBoxLayout(self.frame)  # Use QVBoxLayout here
         self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -267,6 +306,7 @@ class SettingsWidget():
         self.iconed_button_layouts = []
         self.iconed_buttons = []
         self.icones_buttons = []
+        self.triggered_icones_buttons = []
         self.pixmaps = []
         self.button_descrs = []
         self.iconpaths = []
@@ -294,7 +334,7 @@ class SettingsWidget():
         self.val_title = QLabel(title)
         current_val = QLabel(init_val_shown)
         current_val.setAlignment(Qt.AlignRight)
-        current_val.setStyleSheet("border: 1px solid gray; background-color: white; border-radius: 4px;")
+        current_val.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
 
         val_layout.addWidget(self.val_title, 
                                     alignment=Qt.AlignLeft)
@@ -307,7 +347,7 @@ class SettingsWidget():
 
         min_label = QLabel(min_shown)
         min_label.setAlignment(Qt.AlignCenter)
-        min_label.setStyleSheet("border: 1px solid gray; background-color: white; border-radius: 4px;")
+        min_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
         val_slider_frame_layout.addWidget(min_label)
 
         val_slider = QSlider(Qt.Horizontal)
@@ -319,7 +359,7 @@ class SettingsWidget():
 
         max_label = QLabel(max_shown)
         max_label.setAlignment(Qt.AlignCenter)
-        max_label.setStyleSheet("border: 1px solid gray; background-color: white; border-radius: 4px;")
+        max_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
         val_slider_frame_layout.addWidget(max_label)
 
         self.settings_frame_layout.addWidget(val_frame)
@@ -338,13 +378,13 @@ class SettingsWidget():
                         parent: QWidget, 
                         icon_basepath: str, 
                         icon: str,
+                        callback: Callable[[int], None], 
+                        icon_triggered: str = None,
                         descr: str = ""):
-        
-        iconpath = os.path.join(icon_basepath, 
-                                   icon + ".svg")
         
         button_frame = QFrame(parent)
         button_frame.setFrameShape(QFrame.StyledPanel)
+        button_frame.setGeometry(100, 100, 200, 200)
         button_frame_color = button_frame.palette().color(self.frame.backgroundRole()).name()
         button_layout = QHBoxLayout(button_frame)  # Use QVBoxLayout here
         button_layout.setContentsMargins(2, 2, 2, 2)
@@ -354,16 +394,28 @@ class SettingsWidget():
 
         button = QPushButton(button_frame)
         button.setGeometry(100, 100, 100, 50)
-        button.setStyleSheet(f"background-color: {button_frame_color};")
-        pixmap = QPixmap(iconpath)
 
+        iconpath = os.path.join(icon_basepath, 
+                                   icon + ".svg")
+        pixmap = QPixmap(iconpath)
         button_icon = QIcon(pixmap)
+
+        if icon_triggered is not None:
+            
+            iconpath_triggered = os.path.join(icon_basepath, 
+                                   icon_triggered + ".svg")
+            pixmap_triggered = QPixmap(iconpath_triggered)
+            triggereed_button_icon = QIcon(pixmap_triggered)
+
+        else:
+
+            triggereed_button_icon = None
 
         button.setIcon(button_icon)
         button.setFixedSize(30, 30)
         button.setIconSize(button.size())
         
-        button.clicked.connect(self.change_pause_state)
+        button.clicked.connect(callback)
         
         self.iconpaths.append(iconpath)
 
@@ -371,6 +423,8 @@ class SettingsWidget():
         self.iconed_button_layouts.append(button_layout)
         self.iconed_buttons.append(button)
         self.icones_buttons.append(button_icon)
+        self.triggered_icones_buttons.append(triggereed_button_icon)
+
         self.pixmaps.append(pixmap)
 
         self.button_descrs.append(button_descr)
@@ -417,7 +471,9 @@ class SettingsWidget():
         self._create_iconed_button(parent=self.frame, 
                             icon_basepath=icon_basepath, 
                             icon="pause", 
-                            descr="freeze/unfreeze")
+                            icon_triggered="unpause",
+                            descr="freeze/unfreeze", 
+                            callback=self.change_pause_state)
         
         # create slider for window size
 
@@ -459,13 +515,13 @@ class SettingsWidget():
         
         self.paused = not self.paused
         
-        # if self.paused: 
+        if self.paused: 
             
-            
-        
-        # else:
+            self.iconed_buttons[0].setIcon(self.triggered_icones_buttons[0])
 
-        #     self.iconed_buttons[0].setIcon(self.icones_buttons_clicked[0])
+        else:
+
+            self.iconed_buttons[0].setIcon(self.icones_buttons[0])
 
         self.rt_plot_widget.paused = self.paused
 
@@ -748,7 +804,7 @@ class RhcTaskRefWindow():
         self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
         self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
 
-    def pause(self):
+    def swith_pause(self):
 
         for i in range(len(self.rt_plotters)):
 
@@ -761,6 +817,18 @@ class RhcTaskRefWindow():
         for i in range(len(self.rt_plotters)):
 
             self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+
+    def nightshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.nightshift()
+    
+    def dayshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
 
@@ -866,7 +934,7 @@ class RhcCmdsWindow():
         self.rt_plotters[2].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.eff.numpy())
         self.rt_plotters[3].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].slvr_state.info.numpy())
 
-    def pause(self):
+    def swith_pause(self):
 
         for i in range(len(self.rt_plotters)):
 
@@ -879,6 +947,18 @@ class RhcCmdsWindow():
         for i in range(len(self.rt_plotters)):
 
             self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+
+    def nightshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.nightshift()
+    
+    def dayshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
 
@@ -1012,7 +1092,7 @@ class RhcStateWindow():
         self.rt_plotters[4].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.q.numpy())
         self.rt_plotters[5].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.v.numpy())
     
-    def pause(self):
+    def swith_pause(self):
 
         for i in range(len(self.rt_plotters)):
 
@@ -1025,6 +1105,18 @@ class RhcStateWindow():
         for i in range(len(self.rt_plotters)):
 
             self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+
+    def nightshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.nightshift()
+    
+    def dayshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
 

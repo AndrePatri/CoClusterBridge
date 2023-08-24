@@ -1,8 +1,7 @@
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QSlider
 from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
-from PyQt5.QtWidgets import QSpacerItem, QSizePolicy
-from PyQt5.QtWidgets import QScrollArea, QPushButton, QScrollBar, QSpacerItem, QSizePolicy, QSlider
+from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
 
 from control_cluster_utils.utilities.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
 from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
@@ -20,6 +19,8 @@ import sys
 
 import time
 
+from perf_sleep.pyperfsleep import PerfSleep
+
 from typing import Callable
 
 class SharedDataThread(QThread):
@@ -32,6 +33,8 @@ class SharedDataThread(QThread):
                 verbose = True):
         
         super().__init__()
+
+        self.perf_timer = PerfSleep()
 
         self._cluster_index = 0 # data for this cluster will be emitted
 
@@ -71,6 +74,8 @@ class SharedDataThread(QThread):
         actual_sleep = self.update_dt - update_duration
 
         if (actual_sleep > 0):
+            
+            # self.perf_timer.clock_sleep(int(actual_sleep * 1e9)) # from a child thread doesn't work
 
             time.sleep(actual_sleep)
         
@@ -144,6 +149,14 @@ class RtClusterDebugger(QMainWindow):
         
         self.sliders_current_vals = []
         
+        self.button_icons = []
+        self.triggered_button_icons = []
+        self.buttons = []
+
+        self.dark_mode_enabled = False
+
+        self._paused = False
+
         super().__init__()
 
         self._init_shared_data()
@@ -188,17 +201,19 @@ class RtClusterDebugger(QMainWindow):
 
     def _init_ui(self):
 
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 800)
         self.setWindowTitle("Cluster real-time debugger")
+        self.setContentsMargins(0, 0, 0, 0)
 
         self.central_widget = QWidget(self)
+        self.central_widget.setContentsMargins(0, 0, 0, 0)
         self.setCentralWidget(self.central_widget)
 
         self.layout = QHBoxLayout(self.central_widget)
         
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.splitter.setHandleWidth(0.1)
+        self.splitter.setHandleWidth(1.0)
         self.layout.addWidget(self.splitter)
         
         self.tabs = ClosableTabWidget()
@@ -244,9 +259,18 @@ class RtClusterDebugger(QMainWindow):
         
         paths = PathsGetter()
         icon_basepath = paths.GUI_ICONS_PATH
+
+        self._create_iconed_button(parent=self.settings_frame, 
+                            icon_basepath=icon_basepath, 
+                            icon="nightshift", 
+                            icon_triggered="dayshift",
+                            callback=self._toggle_dark_mode, 
+                            descr="dark/day mode")
+        
         self._create_iconed_button(parent=self.settings_frame, 
                             icon_basepath=icon_basepath, 
                             icon="pause", 
+                            icon_triggered="unpause",
                             callback=self._pause_all, 
                             descr="freeze/unfreeze all")
         
@@ -294,7 +318,7 @@ class RtClusterDebugger(QMainWindow):
             val_title = QLabel(title)
             current_val = QLabel(init_val_shown)
             current_val.setAlignment(Qt.AlignRight)
-            current_val.setStyleSheet("border: 1px solid gray; background-color: white; border-radius: 4px;")
+            current_val.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
 
             val_layout.addWidget(val_title, 
                                     alignment=Qt.AlignLeft)
@@ -307,7 +331,7 @@ class RtClusterDebugger(QMainWindow):
 
             min_label = QLabel(min_shown)
             min_label.setAlignment(Qt.AlignCenter)
-            min_label.setStyleSheet("border: 1px solid gray; background-color: white; border-radius: 4px;")
+            min_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
             val_slider_frame_layout.addWidget(min_label)
 
             val_slider = QSlider(Qt.Horizontal)
@@ -319,7 +343,7 @@ class RtClusterDebugger(QMainWindow):
 
             max_label = QLabel(max_shown)
             max_label.setAlignment(Qt.AlignCenter)
-            max_label.setStyleSheet("border: 1px solid gray; background-color: white; border-radius: 4px;")
+            max_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
             val_slider_frame_layout.addWidget(max_label)
 
             self.settings_frame_layout.addWidget(val_frame)
@@ -336,13 +360,11 @@ class RtClusterDebugger(QMainWindow):
                     icon_basepath: str, 
                     icon: str,
                     callback: Callable[[int], None], 
+                    icon_triggered: str = None,
                     descr: str = ""):
-        iconpath = os.path.join(icon_basepath, 
-                                   icon + ".svg")
-        
+
         button_frame = QFrame(parent)
         button_frame.setFrameShape(QFrame.StyledPanel)
-        button_frame_color = button_frame.palette().color(parent.backgroundRole()).name()
         button_layout = QHBoxLayout(button_frame)  # Use QVBoxLayout here
         button_layout.setContentsMargins(2, 2, 2, 2)
 
@@ -351,10 +373,22 @@ class RtClusterDebugger(QMainWindow):
 
         button = QPushButton(button_frame)
         button.setGeometry(100, 100, 100, 50)
-        button.setStyleSheet(f"background-color: {button_frame_color};")
-        pixmap = QPixmap(iconpath)
 
+        iconpath = os.path.join(icon_basepath, 
+                                   icon + ".svg")
+        pixmap = QPixmap(iconpath)
         button_icon = QIcon(pixmap)
+
+        if icon_triggered is not None:
+            
+            iconpath_triggered = os.path.join(icon_basepath, 
+                                   icon_triggered + ".svg")
+            pixmap_triggered = QPixmap(iconpath_triggered)
+            triggereed_button_icon = QIcon(pixmap_triggered)
+
+        else:
+
+            triggereed_button_icon = None
 
         button.setIcon(button_icon)
         button.setFixedSize(30, 30)
@@ -365,6 +399,10 @@ class RtClusterDebugger(QMainWindow):
         button_layout.addWidget(button_descr)
         button_layout.addWidget(button)
         self.settings_frame_layout.addWidget(button_frame)
+
+        self.button_icons.append(button_icon)
+        self.triggered_button_icons.append(triggereed_button_icon)
+        self.buttons.append(button)
     
     def _init_windows(self):
 
@@ -453,16 +491,26 @@ class RtClusterDebugger(QMainWindow):
 
         if not self._tabs_terminated[0]:
 
-            self.rhc_task_plotter.pause()
+            self.rhc_task_plotter.swith_pause()
 
         if not self._tabs_terminated[1]:
 
-            self.rhc_cmds_plotter.pause()
+            self.rhc_cmds_plotter.swith_pause()
 
         if not self._tabs_terminated[2]:
 
-            self.rhc_states_plotter.pause()
-    
+            self.rhc_states_plotter.swith_pause()
+
+        self._paused = not self._paused
+
+        if self._paused:
+            
+            self.buttons[1].setIcon(self.triggered_button_icons[1])
+
+        if not self._paused:
+
+            self.buttons[1].setIcon(self.button_icons[1])
+
     def change_plot_update_dt(self, 
                     millisec: int):
         
@@ -517,6 +565,105 @@ class RtClusterDebugger(QMainWindow):
 
         self.app.exec_()
 
+    def _toggle_dark_mode(self):
+
+        self.dark_mode_enabled = not self.dark_mode_enabled
+
+        stylesheet = self.get_stylesheet()
+
+        self.setStyleSheet(stylesheet)
+
+        if self.dark_mode_enabled:
+            
+            self.buttons[0].setIcon(self.triggered_button_icons[0])
+
+            self.rhc_cmds_plotter.nightshift()
+            self.rhc_states_plotter.nightshift()
+            self.rhc_task_plotter.nightshift()
+
+        if not self.dark_mode_enabled:
+
+            self.buttons[0].setIcon(self.button_icons[0])
+
+            self.rhc_cmds_plotter.dayshift()
+            self.rhc_states_plotter.dayshift()
+            self.rhc_task_plotter.dayshift()
+
+    def get_stylesheet(self):
+
+        text_color = "#ffffff" if self.dark_mode_enabled else "#333333"
+        background_color = "#333333" if self.dark_mode_enabled else "#FFFFFF"
+        
+        return f"""
+            QFrame {{
+                background-color: {background_color};
+                padding: 0px;
+            }}
+            QLabel {{
+                color: {text_color};
+                background-color: {background_color};
+                padding: 0px;
+            }}
+            QPushButton {{
+                background-color: {background_color}
+                color: {text_color};
+                padding: 0px;
+            }}
+            QPushButton::icon {{
+                background-color: {background_color};
+            }}
+            QSlider {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QIcon {{
+                background-color: {background_color};
+                color: {text_color};
+                padding: 0px;
+            }}
+            QTabWidget::pane {{
+                background-color: {background_color};
+                color: {text_color};
+                padding: 0px;
+            }}
+            QTabWidget::tab-bar {{
+                background-color: {background_color};
+                color: {text_color};
+                padding: 0px;
+            }}
+            QTabBar::tab {{
+                background-color: {background_color};
+                color: {text_color};
+                padding: 0px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {background_color};
+                padding: 0px;
+            }}
+            QScrollBar:vertical {{
+                background: {background_color};
+                color: {text_color};
+            }}
+            QScrollBar:horizontal {{
+                background: {background_color};
+                color: {text_color};
+            }}
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+                background: {background_color};
+                color: {text_color};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                background: {background_color};
+                color: {text_color};
+            }}
+            QScrollArea {{
+                background: {background_color};
+                color: {text_color};
+            }}
+
+        """
+        
     def __del__(self):
         
         if not self._terminated:
