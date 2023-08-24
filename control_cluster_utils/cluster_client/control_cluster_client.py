@@ -7,7 +7,7 @@ from control_cluster_utils.utilities.control_cluster_defs import HanshakeDataCnt
 from control_cluster_utils.utilities.control_cluster_defs import RhcClusterTaskRefs
 
 from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
-from control_cluster_utils.utilities.defs import trigger_flagname
+from control_cluster_utils.utilities.defs import trigger_flagname, launch_controllers_flagname
 
 import time
 
@@ -71,6 +71,7 @@ class ControlClusterClient(ABC):
         self.robot_states = None
         self.controllers_cmds = None
         self.trigger_flags = None
+        self.launch_controllers = None
         self.rhc_task_refs = None
 
         # flags
@@ -109,6 +110,9 @@ class ControlClusterClient(ABC):
 
         self.trigger_flags.start()
 
+        self.launch_controllers.start()
+        self.launch_controllers.reset_bool(False)
+
         self._spawn_handshake() # we launch all the child processes
 
     def _spawn_handshake(self):
@@ -142,37 +146,37 @@ class ControlClusterClient(ABC):
         self.trigger_flags = SharedMemSrvr(self.cluster_size, 1, 
                                 trigger_flagname(), 
                                 dtype=dtype) 
-    
+        
+        self.launch_controllers = SharedMemSrvr(1, 1, 
+                                launch_controllers_flagname(), 
+                                dtype=dtype) 
+
     def _trigger_solution(self):
 
-        if self.is_cluster_ready: 
-            
-            self.trigger_flags.reset_bool(True) # sets all flags
+        self.trigger_flags.reset_bool(True) # sets all flags
 
     def _solved(self):
 
         solved = False
-
-        if self.is_cluster_ready: 
             
-            while not self.trigger_flags.none(): # far too much CPU intensive?
+        while not self.trigger_flags.none(): # far too much CPU intensive?
 
-                if (not self._terminate) and \
-                    (self.trigger_flags.get_clients_count() == self.cluster_size):
-                    
-                    self.perf_timer.clock_sleep(1000) # nanoseconds (but this
-                    # # accuracy cannot be reached on a non-rt system)
-                    # # on a modern laptop, this sleeps for about 5e-5s
-
-                    continue
+            if (not self._terminate) and \
+                (self.trigger_flags.get_clients_count() == self.cluster_size):
                 
-                else:
-                    
-                    solved = False
+                self.perf_timer.clock_sleep(1000) # nanoseconds (but this
+                # # accuracy cannot be reached on a non-rt system)
+                # # on a modern laptop, this sleeps for about 5e-5s
 
-                    break
+                continue
             
-            solved = True
+            else:
+                
+                solved = False
+
+                break
+        
+        solved = True
 
         return solved
         
@@ -279,10 +283,12 @@ class ControlClusterClient(ABC):
             
             self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
 
-            self._trigger_solution() # triggers solution of all controllers in the cluster 
+            if self.launch_controllers.all():
+                
+                self._trigger_solution() # triggers solution of all controllers in the cluster 
 
-            # we wait for all controllers to finish      
-            solved = self._solved() # this is blocking
+                # we wait for all controllers to finish      
+                solved = self._solved() # this is blocking
                 
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
@@ -307,6 +313,10 @@ class ControlClusterClient(ABC):
             if self.trigger_flags is not None:
                 
                 self.trigger_flags.terminate()
+            
+            if self.launch_controllers is not None:
+
+                self.launch_controllers.terminate()
 
             if self.controllers_cmds is not None:
                 

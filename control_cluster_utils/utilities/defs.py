@@ -56,6 +56,12 @@ def trigger_flagname():
 
     return name
 
+def launch_controllers_flagname():
+
+    name = "LaunchControllers"
+
+    return name
+
 def solved_flagname():
 
     name = "Solved"

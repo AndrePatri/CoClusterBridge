@@ -255,7 +255,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.setBackground('k')
 
-        title_style = {'color': 'k', 'size': '10pt'}
+        title_style = {'color': 'w', 'size': '10pt'}
         self.plotItem.setTitle(title=self.base_name, **title_style)
 
         tick_color = pg.mkColor('w')  # Use 'b' for blue color, you can replace it with your preferred color
@@ -268,7 +268,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.setBackground('w')
 
-        title_style = {'color': 'w', 'size': '10pt'}
+        title_style = {'color': 'k', 'size': '10pt'}
         self.plotItem.setTitle(title=self.base_name, **title_style)
 
         tick_color = pg.mkColor('k')  # Use 'b' for blue color, you can replace it with your preferred color
@@ -727,6 +727,8 @@ class RhcTaskRefWindow():
 
         self.verbose = verbose
 
+        self._terminated = False
+
         self.cluster_idx = 0
 
         self.grid = GridFrameWidget(2, 2, 
@@ -799,42 +801,54 @@ class RhcTaskRefWindow():
             
     def update(self):
 
-        self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
-        self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
-        self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
-        self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+        if not self._terminated:
+            
+            self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
 
     def swith_pause(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.paused = \
-                not self.rt_plotters[i].rt_plot_widget.paused
+                self.rt_plotters[i].rt_plot_widget.paused = \
+                    not self.rt_plotters[i].rt_plot_widget.paused
 
     def change_plot_update_dt(self, 
                     dt: float):
         
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+                self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
 
     def nightshift(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.nightshift()
-    
+                self.rt_plotters[i].rt_plot_widget.nightshift()
+        
     def dayshift(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.dayshift()
+                self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
 
         for i in range(0, self.cluster_size):
 
             self.rhc_task_refs[i].terminate()
+        
+        self._terminated = True
 
 class RhcCmdsWindow():
 
@@ -856,6 +870,8 @@ class RhcCmdsWindow():
         self.add_data_length = add_data_length
 
         self.verbose = verbose
+
+        self._terminated = False
 
         self.cluster_idx = 0
 
@@ -928,43 +944,55 @@ class RhcCmdsWindow():
                                     verbose=self.verbose))
 
     def update(self):
-
-        self.rt_plotters[0].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.q.numpy())
-        self.rt_plotters[1].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.v.numpy())
-        self.rt_plotters[2].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.eff.numpy())
-        self.rt_plotters[3].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].slvr_state.info.numpy())
+        
+        if not self._terminated:
+            
+            self.rt_plotters[0].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.q.numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.v.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.eff.numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].slvr_state.info.numpy())
 
     def swith_pause(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.paused = \
-                not self.rt_plotters[i].rt_plot_widget.paused
+                self.rt_plotters[i].rt_plot_widget.paused = \
+                    not self.rt_plotters[i].rt_plot_widget.paused
     
     def change_plot_update_dt(self, 
                     dt: float):
         
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+                self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
 
     def nightshift(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.nightshift()
+                self.rt_plotters[i].rt_plot_widget.nightshift()
     
     def dayshift(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
 
-            self.rt_plotters[i].rt_plot_widget.dayshift()
+                self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
 
         for i in range(0, self.cluster_size):
 
             self.rhc_cmds[i].terminate()
+        
+        self._terminated = True
 
 class RhcStateWindow():
 
@@ -984,6 +1012,8 @@ class RhcStateWindow():
         self.jnt_number = jnt_number
 
         self.verbose = verbose
+
+        self._terminated = False
 
         self.cluster_idx = 0
 
@@ -1082,35 +1112,43 @@ class RhcStateWindow():
 
     def update(self):
 
-        # root state
-        self.rt_plotters[0].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.p.numpy())
-        self.rt_plotters[1].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.q.numpy())
-        self.rt_plotters[2].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.v.numpy())
-        self.rt_plotters[3].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.omega.numpy())
+        if not self._terminated:
+        
+            # root state
+            self.rt_plotters[0].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.p.numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.q.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.v.numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.omega.numpy())
 
-        # joint state
-        self.rt_plotters[4].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.q.numpy())
-        self.rt_plotters[5].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.v.numpy())
+            # joint state
+            self.rt_plotters[4].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.q.numpy())
+            self.rt_plotters[5].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.v.numpy())
     
     def swith_pause(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
 
-            self.rt_plotters[i].rt_plot_widget.paused = \
-                not self.rt_plotters[i].rt_plot_widget.paused
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.paused = \
+                    not self.rt_plotters[i].rt_plot_widget.paused
     
     def change_plot_update_dt(self, 
                     dt: float):
         
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
 
-            self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
 
     def nightshift(self):
 
-        for i in range(len(self.rt_plotters)):
+        if not self._terminated:
 
-            self.rt_plotters[i].rt_plot_widget.nightshift()
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.nightshift()
     
     def dayshift(self):
 
@@ -1119,10 +1157,12 @@ class RhcStateWindow():
             self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
-
+        
         for i in range(0, self.cluster_size):
 
             self.rhc_states[i].terminate()
+        
+        self._terminated = True
 
 class DataThread(QThread):
 

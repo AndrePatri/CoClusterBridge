@@ -881,22 +881,24 @@ class SharedMemClient:
             
             if self.client_index >= 0 and \
                 self.client_index < len(self.bool_bytearray_view) and \
-                len(self.bool_bytearray_view) > 1:
+                len(self.bool_bytearray_view) > 0:
 
                 self.bool_bytearray_view[self.client_index] = val
 
             else:
 
                 exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
-                            ": " + f"bool val will not be assigned for dim incompatibility."
+                            f"[{self.exception}]" + f"[{self.set_bool.__name__}]" + \
+                            ": " + f"bool val will not be assigned for dim incompatibility." + \
+                            f"Client index: {self.client_index}, len bytearray view: {len(self.bool_bytearray_view)}."
+                
 
                 print(exception)
         
         else:
 
             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.exception}]" + f"[{self.set_bool.__name__}]" + \
                             ": " + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 

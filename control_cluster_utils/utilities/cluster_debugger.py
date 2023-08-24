@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
 
 from control_cluster_utils.utilities.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
 from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
+from control_cluster_utils.utilities.defs import launch_controllers_flagname
 from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
 from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
 from control_cluster_utils.utilities.defs import additional_data_name
@@ -140,6 +141,8 @@ class RtClusterDebugger(QMainWindow):
 
         self._terminated = False
 
+        self._controllers_triggered = False
+
         self.window_length = window_length 
         self.window_buffer_factor = window_buffer_factor
 
@@ -156,6 +159,18 @@ class RtClusterDebugger(QMainWindow):
         self.dark_mode_enabled = False
 
         self._paused = False
+
+        # shared mem
+        self.cluster_size_clnt = None
+        self.n_contacts_clnt = None
+        self.jnt_number_clnt = None
+        self.jnt_names_clnt = None
+        self.add_data_length_clnt = None
+        self.launch_controllers = None
+
+        self.rhc_task_plotter = None
+        self.rhc_cmds_plotter = None
+        self.rhc_states_plotter = None
 
         super().__init__()
 
@@ -262,6 +277,15 @@ class RtClusterDebugger(QMainWindow):
 
         self._create_iconed_button(parent=self.settings_frame, 
                             icon_basepath=icon_basepath, 
+                            icon="stop_controllers", 
+                            icon_triggered="launch_controllers",
+                            callback=self._toggle_controllers, 
+                            descr="launch/stop controllers", 
+                            size_x = 80, 
+                            size_y = 50)
+        
+        self._create_iconed_button(parent=self.settings_frame, 
+                            icon_basepath=icon_basepath, 
                             icon="nightshift", 
                             icon_triggered="dayshift",
                             callback=self._toggle_dark_mode, 
@@ -272,7 +296,7 @@ class RtClusterDebugger(QMainWindow):
                             icon="pause", 
                             icon_triggered="unpause",
                             callback=self._pause_all, 
-                            descr="freeze/unfreeze all")
+                            descr="freeze/unfreeze plots")
         
         self._generate_slider(parent=self.settings_frame, 
                         min_shown=f"{self.data_update_dt}", # sec.
@@ -361,7 +385,9 @@ class RtClusterDebugger(QMainWindow):
                     icon: str,
                     callback: Callable[[int], None], 
                     icon_triggered: str = None,
-                    descr: str = ""):
+                    descr: str = "", 
+                    size_x = 30, 
+                    size_y = 30):
 
         button_frame = QFrame(parent)
         button_frame.setFrameShape(QFrame.StyledPanel)
@@ -391,7 +417,7 @@ class RtClusterDebugger(QMainWindow):
             triggereed_button_icon = None
 
         button.setIcon(button_icon)
-        button.setFixedSize(30, 30)
+        button.setFixedSize(size_x, size_y)
         button.setIconSize(button.size())
         
         button.clicked.connect(callback)
@@ -481,6 +507,14 @@ class RtClusterDebugger(QMainWindow):
                                     verbose=True)
         self.add_data_length_clnt.attach()
 
+        self.launch_controllers = SharedMemClient(1, 1, 
+                                launch_controllers_flagname(), 
+                                dtype=torch.bool, 
+                                client_index=0)
+
+        self.launch_controllers.attach()
+        self.launch_controllers.set_bool(False) # by default don't trigger the controllers
+
         self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
         self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
         self.jnt_names = self.jnt_names_clnt.read()
@@ -505,11 +539,11 @@ class RtClusterDebugger(QMainWindow):
 
         if self._paused:
             
-            self.buttons[1].setIcon(self.triggered_button_icons[1])
+            self.buttons[2].setIcon(self.triggered_button_icons[2])
 
         if not self._paused:
 
-            self.buttons[1].setIcon(self.button_icons[1])
+            self.buttons[2].setIcon(self.button_icons[2])
 
     def change_plot_update_dt(self, 
                     millisec: int):
@@ -532,15 +566,15 @@ class RtClusterDebugger(QMainWindow):
         
     def update_from_shared_data(self):
         
-        if not self._tabs_terminated[0]:
+        if not self._tabs_terminated[0] and self.rhc_task_plotter is not None:
 
             self.rhc_task_plotter.update()
 
-        if not self._tabs_terminated[1]:
+        if not self._tabs_terminated[1] and self.rhc_cmds_plotter is not None:
 
             self.rhc_cmds_plotter.update()
 
-        if not self._tabs_terminated[2]:
+        if not self._tabs_terminated[2] and self.rhc_states_plotter is not None:
 
             self.rhc_states_plotter.update()
 
@@ -565,6 +599,20 @@ class RtClusterDebugger(QMainWindow):
 
         self.app.exec_()
 
+    def _toggle_controllers(self):
+
+        self._controllers_triggered = not self._controllers_triggered
+
+        self.launch_controllers.set_bool(self._controllers_triggered)
+
+        if self._controllers_triggered:
+            
+            self.buttons[0].setIcon(self.triggered_button_icons[0])
+
+        if not self._controllers_triggered:
+
+            self.buttons[0].setIcon(self.button_icons[0])
+
     def _toggle_dark_mode(self):
 
         self.dark_mode_enabled = not self.dark_mode_enabled
@@ -575,7 +623,7 @@ class RtClusterDebugger(QMainWindow):
 
         if self.dark_mode_enabled:
             
-            self.buttons[0].setIcon(self.triggered_button_icons[0])
+            self.buttons[1].setIcon(self.triggered_button_icons[1])
 
             self.rhc_cmds_plotter.nightshift()
             self.rhc_states_plotter.nightshift()
@@ -583,7 +631,7 @@ class RtClusterDebugger(QMainWindow):
 
         if not self.dark_mode_enabled:
 
-            self.buttons[0].setIcon(self.button_icons[0])
+            self.buttons[1].setIcon(self.button_icons[1])
 
             self.rhc_cmds_plotter.dayshift()
             self.rhc_states_plotter.dayshift()
@@ -679,6 +727,7 @@ class RtClusterDebugger(QMainWindow):
         self.jnt_number_clnt.terminate()
         self.jnt_names_clnt.terminate()
         self.add_data_length_clnt.terminate()
+        self.launch_controllers.terminate()
 
         self.rhc_task_plotter.terminate()
         self.rhc_cmds_plotter.terminate()
