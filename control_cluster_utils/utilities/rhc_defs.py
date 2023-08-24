@@ -22,7 +22,7 @@ class RobotState:
             self.v = None # floating base linear vel
             self.omega = None # floating base angular vel
 
-            self._terminate = False
+            self._terminated = False
 
             self.q_remapping = None
             if q_remapping is not None:
@@ -40,9 +40,9 @@ class RobotState:
 
         def terminate(self):
             
-            if not self._terminate:
+            if not self._terminated:
                 
-                self._terminate = True
+                self._terminated = True
 
                 # release any memory view
 
@@ -111,7 +111,7 @@ class RobotState:
 
             self.n_dofs = n_dofs
 
-            self._terminate = False 
+            self._terminated = False 
 
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
@@ -126,9 +126,9 @@ class RobotState:
 
         def terminate(self):
 
-            if not self._terminate:
+            if not self._terminated:
                 
-                self._terminate = True
+                self._terminated = True
 
                 # we release any memory view
 
@@ -182,7 +182,7 @@ class RobotState:
 
         self.device = torch.device('cpu') # born to live on CPU
 
-        self._terminate = False
+        self._terminated = False
 
         self.n_dofs = n_dofs
         self.cluster_size = cluster_size
@@ -213,20 +213,22 @@ class RobotState:
         # paying attention to read the right blocks
 
     def __del__(self):
-
-        self.terminate()
+        
+        if not self._terminated:
+        
+            self.terminate()
 
     def terminate(self):
 
-        if not self._terminate:
-
-            self._terminate = True
+        if not self._terminated:
 
             self.root_state.terminate()
 
             self.jnt_state.terminate()
 
             self.shared_memman.terminate()
+
+            self._terminated = True
 
 class RobotCmds:
 
@@ -243,7 +245,7 @@ class RobotCmds:
             self.v = None # joint velocities
             self.eff = None # joint efforts
 
-            self._terminate = False
+            self._terminated = False
 
             self.jnt_remapping = None
 
@@ -316,7 +318,7 @@ class RobotCmds:
 
         def terminate(self):
             
-            if not self._terminate:
+            if not self._terminated:
 
                 # we release all memory views
 
@@ -337,7 +339,7 @@ class RobotCmds:
             
             self.n_dofs = n_dofs
 
-            self._terminate = False
+            self._terminated = False
 
             self.assign_views(mem_manager, "info")
 
@@ -363,7 +365,7 @@ class RobotCmds:
 
         def terminate(self):
             
-            if not self._terminate:
+            if not self._terminated:
 
                 # we release any memory view
                 self.info = None
@@ -387,7 +389,7 @@ class RobotCmds:
 
         self.jnt_remapping = jnt_remapping 
         
-        self._terminate = False
+        self._terminated = False
 
         aggregate_view_columnsize = -1
 
@@ -420,11 +422,13 @@ class RobotCmds:
     
     def __del__(self):
 
-        self.terminate()
+        if not self._terminated:
+        
+            self.terminate()
 
     def terminate(self):
         
-        if not self._terminate:
+        if not self._terminated:
 
             self.jnt_cmd.terminate()
 
@@ -432,6 +436,8 @@ class RobotCmds:
 
             self.shared_memman.terminate()
 
+            self._terminated = True
+            
 class RhcTaskRefs:
 
     class PhaseId:
@@ -448,7 +454,7 @@ class RhcTaskRefs:
 
             self.n_contacts = n_contacts
 
-            self._terminate = False
+            self._terminated = False
             
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "phase_id")
@@ -460,9 +466,9 @@ class RhcTaskRefs:
 
         def terminate(self):
             
-            if not self._terminate:
+            if not self._terminated:
                 
-                self._terminate = True
+                self._terminated = True
 
                 # release any memory view
 
@@ -514,7 +520,7 @@ class RhcTaskRefs:
 
             self.n_contacts = n_contacts
 
-            self._terminate = False
+            self._terminated = False
 
             self.q_remapping = None
 
@@ -532,9 +538,9 @@ class RhcTaskRefs:
 
         def terminate(self):
             
-            if not self._terminate:
+            if not self._terminated:
                 
-                self._terminate = True
+                self._terminated = True
 
                 # release any memory view
 
@@ -616,7 +622,7 @@ class RhcTaskRefs:
 
             self.com_pos = None # full com position
 
-            self._terminate = False
+            self._terminated = False
             
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "com_pos")
@@ -627,9 +633,9 @@ class RhcTaskRefs:
 
         def terminate(self):
             
-            if not self._terminate:
+            if not self._terminated:
                 
-                self._terminate = True
+                self._terminated = True
 
                 # release any memory view
 
@@ -668,7 +674,7 @@ class RhcTaskRefs:
 
         self.device = torch.device('cpu') # born to live on CPU
 
-        self._terminate = False
+        self._terminated = False
 
         self.cluster_size = cluster_size
         self.n_contacts = n_contacts
@@ -700,20 +706,24 @@ class RhcTaskRefs:
                                 dtype=self.dtype)
 
     def __del__(self):
+        
+        if not self._terminated:
 
-        self.terminate()
+            self.terminate()
 
     def terminate(self):
 
-        if not self._terminate:
-
-            self._terminate = True
+        if not self._terminated:
 
             self.phase_id.terminate()
 
             self.base_pose.terminate()
 
             self.com_pos.terminate()
+
+            self.shared_memman.terminate()
+
+            self._terminated = True
 
     @abstractmethod
     def update(self):

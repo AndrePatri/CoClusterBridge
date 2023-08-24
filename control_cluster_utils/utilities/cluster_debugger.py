@@ -2,12 +2,17 @@ from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QSlider
 from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
 from PyQt5.QtWidgets import QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QScrollArea, QPushButton, QScrollBar, QSpacerItem, QSizePolicy, QSlider
 
 from control_cluster_utils.utilities.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
 from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
 from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
 from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
 from control_cluster_utils.utilities.defs import additional_data_name
+from control_cluster_utils.utilities.sysutils import PathsGetter
+from PyQt5.QtGui import QIcon, QPixmap
+
+import os
 
 import torch
 
@@ -20,6 +25,7 @@ from typing import Callable
 class SharedDataThread(QThread):
 
     trigger_update = pyqtSignal()
+    samples_data_dt = pyqtSignal(float)
 
     def __init__(self, 
                 update_dt: float, 
@@ -39,12 +45,20 @@ class SharedDataThread(QThread):
         self.rhc_task_refs = []
         self.rhc_cmd = []
         self.rhc_state = []
-                
+        
+        self.samples_data_dt.connect(self._update_sampling_dt,
+                                        Qt.QueuedConnection)
+        
         self.initialized = True
-
+    
     def terminate(self):
 
         self._terminate = True
+
+    def _update_sampling_dt(self, 
+                        dt: float):
+        
+        self.update_dt = dt
 
     def _trigger_update(self):
         
@@ -108,14 +122,19 @@ class ClosableTabWidget(QTabWidget):
 class RtClusterDebugger(QMainWindow):
 
     def __init__(self, 
-                update_dt: float = 0.1, 
+                data_update_dt: float = 0.01,
+                plot_update_dt: float = 0.5, 
                 window_length: float = 10.0, # [s]
                 window_buffer_factor: int = 2,
                 verbose: bool = False):
 
+        self.data_update_dt = data_update_dt
+        self.plot_update_dt = plot_update_dt
+
         self._tabs_terminated = [False] * 3
 
-        self.update_dt = update_dt
+        self._terminated = False
+
         self.window_length = window_length 
         self.window_buffer_factor = window_buffer_factor
 
@@ -137,6 +156,19 @@ class RtClusterDebugger(QMainWindow):
 
         self.show()
     
+    def closeEvent(self, event):
+        # This function is called when the window is being closed
+        # You can perform your desired actions here
+
+        message = f"[{self.__class__.__name__}]" + f"[status]: " \
+                + f"closing debugger and performing some cleanup..."
+            
+        print(message)
+
+        self.terminate()
+
+        event.accept()  
+
     def terminate_tab(self, 
                     tab_idx: int):
         
@@ -165,10 +197,12 @@ class RtClusterDebugger(QMainWindow):
         self.layout = QHBoxLayout(self.central_widget)
         
         self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.splitter.setHandleWidth(0.1)
         self.layout.addWidget(self.splitter)
         
         self.tabs = ClosableTabWidget()
+        self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # self.splitter_layout.addWidget(self.tabs)
         self.tabs.add_closing_method(self.terminate_tab)
 
@@ -190,11 +224,15 @@ class RtClusterDebugger(QMainWindow):
                         "RhcState")
         
         self.settings_frame = QFrame()
+        self.settings_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         self.settings_frame.setFrameShape(QFrame.StyledPanel)
         self.settings_frame_layout = QVBoxLayout(self.settings_frame)  # Use QVBoxLayout here
         self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
         # self.splitter_layout.addWidget(self.settings_frame)
-        self.settings_lavel = QLabel("Settings")
+
+        self.settings_label = QLabel("Settings")
+        self.settings_frame_layout.addWidget(self.settings_label, 
+                                    alignment=Qt.AlignCenter)
 
         self._generate_slider(parent=self.settings_frame, 
                         min_shown=f"{0}", min= 0, 
@@ -203,6 +241,34 @@ class RtClusterDebugger(QMainWindow):
                         init_val_shown=f"{0}", init=0, 
                         title="cluster index", 
                         callback=self.update_cluster_idx)
+        
+        paths = PathsGetter()
+        icon_basepath = paths.GUI_ICONS_PATH
+        self._create_iconed_button(parent=self.settings_frame, 
+                            icon_basepath=icon_basepath, 
+                            icon="pause", 
+                            callback=self._pause_all, 
+                            descr="freeze/unfreeze all")
+        
+        self._generate_slider(parent=self.settings_frame, 
+                        min_shown=f"{self.data_update_dt}", # sec.
+                        min= int(self.data_update_dt * 1e3), # millisec. 
+                        max_shown=f"{1.0}", 
+                        max=int(1.0 * 1e3), 
+                        init_val_shown=f"{self.plot_update_dt}", 
+                        init=int(self.plot_update_dt * 1e3), 
+                        title="plot update dt [s]", 
+                        callback=self.change_plot_update_dt)
+
+        self._generate_slider(parent=self.settings_frame, 
+                        min_shown=f"{0.001}", # sec.
+                        min= int(0.001 * 1e3), # millisec. 
+                        max_shown=f"{1.0}", 
+                        max=int(1.0 * 1e3), 
+                        init_val_shown=f"{self.data_update_dt}", 
+                        init=int(self.data_update_dt * 1e3), 
+                        title="samples update dt [s]", 
+                        callback=self.change_samples_update_dt)
         
         self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
@@ -265,9 +331,45 @@ class RtClusterDebugger(QMainWindow):
 
             self.sliders_current_vals.append(current_val)
 
+    def _create_iconed_button(self, 
+                    parent: QWidget, 
+                    icon_basepath: str, 
+                    icon: str,
+                    callback: Callable[[int], None], 
+                    descr: str = ""):
+        iconpath = os.path.join(icon_basepath, 
+                                   icon + ".svg")
+        
+        button_frame = QFrame(parent)
+        button_frame.setFrameShape(QFrame.StyledPanel)
+        button_frame_color = button_frame.palette().color(parent.backgroundRole()).name()
+        button_layout = QHBoxLayout(button_frame)  # Use QVBoxLayout here
+        button_layout.setContentsMargins(2, 2, 2, 2)
+
+        button_descr = QLabel(descr)
+        button_descr.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        button = QPushButton(button_frame)
+        button.setGeometry(100, 100, 100, 50)
+        button.setStyleSheet(f"background-color: {button_frame_color};")
+        pixmap = QPixmap(iconpath)
+
+        button_icon = QIcon(pixmap)
+
+        button.setIcon(button_icon)
+        button.setFixedSize(30, 30)
+        button.setIconSize(button.size())
+        
+        button.clicked.connect(callback)
+    
+        button_layout.addWidget(button_descr)
+        button_layout.addWidget(button)
+        self.settings_frame_layout.addWidget(button_frame)
+    
     def _init_windows(self):
 
-        self.rhc_task_plotter = RhcTaskRefWindow(update_dt=self.update_dt, 
+        self.rhc_task_plotter = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
+                                    update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
                                     cluster_size=self.cluster_size,
                                     n_contacts=self.n_contacts,
@@ -275,7 +377,8 @@ class RtClusterDebugger(QMainWindow):
                                     parent=None, 
                                     verbose = self.verbose)
         
-        self.rhc_cmds_plotter = RhcCmdsWindow(update_dt=self.update_dt, 
+        self.rhc_cmds_plotter = RhcCmdsWindow(update_data_dt=self.data_update_dt, 
+                                    update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
                                     cluster_size=self.cluster_size,
                                     add_data_length=self.add_data_length,
@@ -285,7 +388,8 @@ class RtClusterDebugger(QMainWindow):
                                     parent=None, 
                                     verbose = self.verbose)
         
-        self.rhc_states_plotter = RhcStateWindow(update_dt=self.update_dt, 
+        self.rhc_states_plotter = RhcStateWindow(update_data_dt=self.data_update_dt, 
+                                    update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
                                     cluster_size=self.cluster_size,
                                     jnt_names=self.jnt_names, 
@@ -296,10 +400,11 @@ class RtClusterDebugger(QMainWindow):
 
     def _init_data_thread(self):
 
-        self.data_thread = SharedDataThread(self.update_dt)
+        self.data_thread = SharedDataThread(self.data_update_dt)
         
         self.data_thread.trigger_update.connect(self.update_from_shared_data,
                                         Qt.QueuedConnection)
+        
         self.data_thread.start()
 
     def _init_shared_data(self):
@@ -344,6 +449,39 @@ class RtClusterDebugger(QMainWindow):
         self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
         self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
     
+    def _pause_all(self):
+
+        if not self._tabs_terminated[0]:
+
+            self.rhc_task_plotter.pause()
+
+        if not self._tabs_terminated[1]:
+
+            self.rhc_cmds_plotter.pause()
+
+        if not self._tabs_terminated[2]:
+
+            self.rhc_states_plotter.pause()
+    
+    def change_plot_update_dt(self, 
+                    millisec: int):
+        
+        dt_sec = float(millisec * 1e-3)
+        self.rhc_task_plotter.change_plot_update_dt(dt_sec)
+        self.rhc_cmds_plotter.change_plot_update_dt(dt_sec)
+        self.rhc_states_plotter.change_plot_update_dt(dt_sec)
+
+        self.sliders_current_vals[1].setText(f'{dt_sec:.3f}')
+
+    def change_samples_update_dt(self, 
+                    millisec: int):
+
+        dt_sec = float(millisec * 1e-3)
+
+        self.data_thread.samples_data_dt.emit(dt_sec)
+
+        self.sliders_current_vals[2].setText(f'{dt_sec:.4f}')
+        
     def update_from_shared_data(self):
         
         if not self._tabs_terminated[0]:
@@ -380,8 +518,10 @@ class RtClusterDebugger(QMainWindow):
         self.app.exec_()
 
     def __del__(self):
+        
+        if not self._terminated:
 
-        self.terminate()
+            self.terminate()
 
     def terminate(self):
 
@@ -392,6 +532,12 @@ class RtClusterDebugger(QMainWindow):
         self.jnt_number_clnt.terminate()
         self.jnt_names_clnt.terminate()
         self.add_data_length_clnt.terminate()
+
+        self.rhc_task_plotter.terminate()
+        self.rhc_cmds_plotter.terminate()
+        self.rhc_states_plotter.terminate()
+
+        self._terminated = True
 
 if __name__ == "__main__":  
 

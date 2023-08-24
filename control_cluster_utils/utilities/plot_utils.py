@@ -1,7 +1,7 @@
 import sys
 import time
 import numpy as np
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from PyQt5.QtWidgets import QHBoxLayout, QFrame
 from PyQt5.QtWidgets import QScrollArea, QPushButton, QScrollBar, QSpacerItem, QSizePolicy, QSlider
@@ -29,11 +29,12 @@ class RtPlotWidget(pg.PlotWidget):
     def __init__(self, 
                 window_duration: int,
                 n_data: int,  
-                update_dt: float, 
+                update_data_dt: float, 
+                update_plot_dt: float, 
                 base_name: str, 
                 legend_list: List[str] = None,
                 parent: QWidget = None, 
-                xlabel = "t [s]", 
+                xlabel = "sample n.", 
                 ylabel = "", 
                 window_buffer_factor: int = 2):
 
@@ -42,6 +43,8 @@ class RtPlotWidget(pg.PlotWidget):
         super().__init__(title=base_name,
                     parent=parent)
         
+        self.plot_item = self.getPlotItem()
+
         if legend_list is not None and len(legend_list) != n_data:
             
             warning = "[{self.__class__.__name__}]" + f"[{self.warning}]" \
@@ -64,7 +67,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.window_offset = 0
 
-        self.window_size = int(window_duration // update_dt) + 1 # floor division
+        self.window_size = int(window_duration // update_data_dt) + 1 # floor division
         self.window_duration = window_duration
 
         self.window_buffer_factor = window_buffer_factor
@@ -73,11 +76,12 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.base_name = base_name
 
-        self.update_dt = update_dt
+        self.update_data_dt = update_data_dt
+        self.update_plot_dt = update_plot_dt
 
         self.data = np.zeros((self.n_data, self.window_buffer_size))
 
-        self.elapsed_times = [0 for i in range(self.window_buffer_size)]
+        self.sample_stamps = np.arange(0, self.window_buffer_size)
 
         self.labels = [] 
         self.lines = []
@@ -88,7 +92,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.update_window_size(self.window_size)
 
-        self.update_timestamps_res(self.ntimestamps_per_window)
+        # self.update_timestamps_res(self.ntimestamps_per_window)
         
         self._init_timers()
     
@@ -112,15 +116,18 @@ class RtPlotWidget(pg.PlotWidget):
             pen = pg.mkPen(color=color, 
                     width=2.3)
 
-            self.lines.append(self.plot(self.data[i, :], 
+            self.lines.append(self.plot_item.plot(self.data[i, :], 
                         pen=pen))
-            
+        
     def _setup_plot(self):
         
         # Create a slightly grey background
         self.setBackground('w')  # RGB values for a light grey color
 
         self.enableAutoRange()
+
+        # self.setDownsampling(auto= True, mode = None, ds = None)
+
         # Set the alpha of the text to 255 (fully opaque)
         self.getAxis('left').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
         self.getAxis('bottom').setTextPen(color=(0, 0, 0, 255))  # Black text color with alpha=255
@@ -141,9 +148,17 @@ class RtPlotWidget(pg.PlotWidget):
 
     def _init_timers(self):
         
-        self.last_update_time = time.perf_counter()
-        self.reference_time = time.perf_counter()
+        self.timer = QTimer()
+        self.timer.setInterval(int(self.update_plot_dt * 1e3)) # millisec.
+        self.timer.timeout.connect(self._update_plot_data)
+        self.timer.start()
     
+    def set_timer_interval(self, 
+                    sec: float):
+
+        self.timer.setInterval(int(sec * 1e3)) # millisec.
+        self.timer.start()
+
     def hide_line(self, 
                 index: int):
 
@@ -154,31 +169,27 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.lines[index].show() 
     
+    def _update_plot_data(self):
+        
+        if not self.paused:
+
+            for i in range(0, self.data.shape[0]):
+
+                self.lines[i].setData(self.data[i, :])
+
     def update(self, 
             new_data: np.ndarray):
 
         # updates window with new data
 
-        current_time = time.perf_counter()
+        self.data[:, :] = np.roll(self.data, -1, axis=1) # roll data backwards
 
-        if current_time - self.last_update_time >= self.update_dt:
+        self.data[:, -1] = new_data.flatten() # assign new sample
+        
+        # self.sample_stamps = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
+        # self.sample_stamps = self.sample_stamps[::-1]
 
-            if not self.paused:
-
-                rolled_data = np.roll(self.data, -1, axis=1)
-                self.data = rolled_data
-                self.data[:, -1] = new_data.flatten()
-                
-                for i in range(0, self.data.shape[0]):
-
-                    self.lines[i].setData(self.data[i, :])
-
-                self.elapsed_times = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
-                self.elapsed_times = self.elapsed_times[::-1]
-
-            self._update_timestams_ticks(self.elapsed_times) 
-
-            self.last_update_time = current_time
+        # self._update_timestams_ticks(self.sample_stamps) 
 
     def _update_timestams_ticks(self, 
                         elapsed_times: List[float]):
@@ -413,11 +424,11 @@ class SettingsWidget():
         self._generate_complex_slider(title="window size [s]: ", 
                                 parent=self.frame, 
                                 callback=self.update_window_size, 
-                                min_shown=f'{self.rt_plot_widget.update_dt}', 
+                                min_shown=f'{self.rt_plot_widget.update_data_dt}', 
                                 min = 1,
                                 max_shown=f'{self.rt_plot_widget.window_buffer_duration}', 
                                 max = self.rt_plot_widget.window_buffer_size,
-                                init_val_shown =f'{self.rt_plot_widget.update_dt * self.rt_plot_widget.window_size}', 
+                                init_val_shown =f'{self.rt_plot_widget.update_data_dt * self.rt_plot_widget.window_size}', 
                                 init=self.rt_plot_widget.window_size)
 
         self._generate_complex_slider(title="window offset [n.samples]: ", 
@@ -430,15 +441,15 @@ class SettingsWidget():
                                 init_val_shown =f'{self.rt_plot_widget.window_offset}', 
                                 init=self.rt_plot_widget.window_offset)
         
-        self._generate_complex_slider(title="n. timestamps: ", 
-                                parent=self.frame, 
-                                callback=self.update_timestamps_res, 
-                                min_shown=f'{1}', 
-                                min = 1,
-                                max_shown=f'{self.rt_plot_widget.window_size}', 
-                                max = self.rt_plot_widget.window_size,
-                                init_val_shown =f'{self.rt_plot_widget.window_offset}', 
-                                init=self.rt_plot_widget.window_offset)
+        # self._generate_complex_slider(title="n. timestamps: ", 
+        #                         parent=self.frame, 
+        #                         callback=self.update_timestamps_res, 
+        #                         min_shown=f'{1}', 
+        #                         min = 1,
+        #                         max_shown=f'{self.rt_plot_widget.window_size}', 
+        #                         max = self.rt_plot_widget.window_size,
+        #                         init_val_shown =f'{self.rt_plot_widget.window_offset}', 
+        #                         init=self.rt_plot_widget.window_offset)
 
         self._create_plot_selector()
  
@@ -473,7 +484,7 @@ class SettingsWidget():
         self.val_sliders[2].setMaximum(int(self.rt_plot_widget.window_size))
 
         # updates displayed window size
-        self.current_vals[0].setText(f'{self.rt_plot_widget.update_dt * self.rt_plot_widget.window_size:.2f}')
+        self.current_vals[0].setText(f'{self.rt_plot_widget.update_data_dt * self.rt_plot_widget.window_size:.2f}')
 
     def update_window_offset(self, 
                     offset: int):
@@ -523,15 +534,19 @@ class RtPlotWindow():
 
     def __init__(self, 
             n_data: int, 
-            update_dt: float, 
+            update_data_dt: float, 
+            update_plot_dt: float, 
             window_duration: float, 
             parent: QWidget,
             legend_list: List[str] = None,
             base_name: str = "", 
-            window_buffer_factor: int = 2):
+            window_buffer_factor: int = 2, 
+            ylabel = ""):
 
         self.n_data = n_data
-        self.update_dt = update_dt
+        self.update_data_dt = update_data_dt
+        self.update_plot_dt = update_plot_dt    
+
         self.window_duration = window_duration
 
         self.base_name = base_name
@@ -546,12 +561,14 @@ class RtPlotWindow():
         # create the plot widget
         self.rt_plot_widget = RtPlotWidget(
             window_duration=self.window_duration,
-            update_dt=self.update_dt,
+            update_data_dt=self.update_data_dt,
+            update_plot_dt=self.update_plot_dt,
             n_data=self.n_data,
             base_name=self.base_name,
             parent=None, 
             window_buffer_factor=window_buffer_factor, 
-            legend_list=legend_list
+            legend_list=legend_list, 
+            ylabel=ylabel
         )
         # we create the settings widget 
         self.settings_widget = SettingsWidget(rt_plotter=self.rt_plot_widget, 
@@ -640,7 +657,8 @@ class GridFrameWidget():
 class RhcTaskRefWindow():
 
     def __init__(self, 
-            update_dt: int,
+            update_data_dt: int,
+            update_plot_dt: int,
             window_duration: int,
             cluster_size: int, 
             n_contacts: int,
@@ -667,15 +685,18 @@ class RhcTaskRefWindow():
         self._init_shared_data()
 
         self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Contact flags", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=None))
+                    legend_list=None, 
+                    ylabel=""))
         
         self.rt_plotters.append(RtPlotWindow(n_data=1, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Task mode", 
@@ -683,7 +704,8 @@ class RhcTaskRefWindow():
                     legend_list=["task mode code"]))
         
         self.rt_plotters.append(RtPlotWindow(n_data=7, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Base pose", 
@@ -692,12 +714,14 @@ class RhcTaskRefWindow():
                                 "q_w", "q_i", "q_j", "q_k"]))
         
         self.rt_plotters.append(RtPlotWindow(n_data=3, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="CoM pos", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z"]))
+                    legend_list=["p_x", "p_y", "p_z"], 
+                    ylabel="[m]"))
         
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
@@ -716,24 +740,29 @@ class RhcTaskRefWindow():
                 q_remapping=None,
                 dtype=torch.float32, 
                 verbose=self.verbose))
-
+            
     def update(self):
 
         self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
-
         self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
-
         self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
-
         self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
 
-    def terminate(self):
+    def pause(self):
 
-        self.cluster_size_clnt.terminate()
-        self.n_contacts_clnt.terminate()
-        self.jnt_number_clnt.terminate()
-        self.jnt_names_clnt.terminate()
-        self.add_data_length_clnt.terminate()
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.paused = \
+                not self.rt_plotters[i].rt_plot_widget.paused
+
+    def change_plot_update_dt(self, 
+                    dt: float):
+        
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+
+    def terminate(self):
 
         for i in range(0, self.cluster_size):
 
@@ -742,7 +771,8 @@ class RhcTaskRefWindow():
 class RhcCmdsWindow():
 
     def __init__(self, 
-            update_dt: int,
+            update_data_dt: int,
+            update_plot_dt: int,
             window_duration: int,
             cluster_size: int, 
             jnt_number: int, 
@@ -773,31 +803,38 @@ class RhcCmdsWindow():
         self._init_shared_data()
 
         self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="RHC command q", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=self.jnt_names))
+                    legend_list=self.jnt_names, 
+                    ylabel="[rad]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="RHC command v", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=self.jnt_names))
+                    legend_list=self.jnt_names, 
+                    ylabel="[rad/s]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="RHC command effort", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=self.jnt_names))
+                    legend_list=self.jnt_names, 
+                    ylabel="[Nm]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.add_data_length, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="additional info", 
@@ -825,12 +862,23 @@ class RhcCmdsWindow():
     def update(self):
 
         self.rt_plotters[0].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.q.numpy())
-
         self.rt_plotters[1].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.v.numpy())
-
         self.rt_plotters[2].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].jnt_cmd.eff.numpy())
-
         self.rt_plotters[3].rt_plot_widget.update(self.rhc_cmds[self.cluster_idx].slvr_state.info.numpy())
+
+    def pause(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.paused = \
+                not self.rt_plotters[i].rt_plot_widget.paused
+    
+    def change_plot_update_dt(self, 
+                    dt: float):
+        
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
 
     def terminate(self):
 
@@ -841,7 +889,8 @@ class RhcCmdsWindow():
 class RhcStateWindow():
 
     def __init__(self, 
-            update_dt: int,
+            update_data_dt: int,
+            update_plot_dt: int,
             window_duration: int,
             cluster_size: int, 
             jnt_number: int, 
@@ -870,15 +919,18 @@ class RhcStateWindow():
         self._init_shared_data()
 
         self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.p.shape[1], 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Root position", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z"]))
+                    legend_list=["p_x", "p_y", "p_z"], 
+                    ylabel="[m]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.q.shape[1], 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Root orientation", 
@@ -886,36 +938,44 @@ class RhcStateWindow():
                     legend_list=["q_w", "q_i", "q_j", "q_k"]))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.v.shape[1], 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Base linear vel.", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=["v_x", "v_y", "v_z"]))
+                    legend_list=["v_x", "v_y", "v_z"], 
+                    ylabel="[m/s]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.omega.shape[1], 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt, 
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Base angular vel.",
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=["omega_x", "omega_y", "omega_z"]))
+                    legend_list=["omega_x", "omega_y", "omega_z"], 
+                    ylabel="[rad/s]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Joints q",
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=self.jnt_names))
+                    legend_list=self.jnt_names, 
+                    ylabel="[rad]"))
         
         self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
-                    update_dt=update_dt, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
                     base_name="Joints v",
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=self.jnt_names))
+                    legend_list=self.jnt_names, 
+                    ylabel="[rad/s]"))
         
         # root state
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
@@ -944,18 +1004,28 @@ class RhcStateWindow():
 
         # root state
         self.rt_plotters[0].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.p.numpy())
-
         self.rt_plotters[1].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.q.numpy())
-
         self.rt_plotters[2].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.v.numpy())
-
         self.rt_plotters[3].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.omega.numpy())
 
         # joint state
         self.rt_plotters[4].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.q.numpy())
-
         self.rt_plotters[5].rt_plot_widget.update(self.rhc_states[self.cluster_idx].jnt_state.v.numpy())
     
+    def pause(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.paused = \
+                not self.rt_plotters[i].rt_plot_widget.paused
+    
+    def change_plot_update_dt(self, 
+                    dt: float):
+        
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+
     def terminate(self):
 
         for i in range(0, self.cluster_size):
