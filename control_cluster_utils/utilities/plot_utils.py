@@ -1,9 +1,7 @@
-import sys
-import time
 import numpy as np
 
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QVBoxLayout, QWidget, QTabWidget
 from PyQt5.QtWidgets import QHBoxLayout, QFrame
 from PyQt5.QtWidgets import QScrollArea, QPushButton, QSpacerItem, QSizePolicy, QSlider
 from PyQt5.QtWidgets import QSplitter, QLabel
@@ -11,7 +9,7 @@ from PyQt5.QtGui import QIcon, QPixmap
 
 import pyqtgraph as pg
 
-from typing import List, Callable
+from typing import List, Callable, Union
 
 from control_cluster_utils.utilities.sysutils import PathsGetter
 from control_cluster_utils.utilities.defs import Journal
@@ -96,6 +94,91 @@ class RtPlotWidget(pg.PlotWidget):
         
         self._init_timers()
     
+    def update(self, 
+            new_data: np.ndarray):
+
+        # updates window with new data
+
+        self.data[:, :] = np.roll(self.data, -1, axis=1) # roll data backwards
+
+        self.data[:, -1] = new_data.flatten() # assign new sample
+        
+        # self.sample_stamps = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
+        # self.sample_stamps = self.sample_stamps[::-1]
+
+        # self._update_timestams_ticks(self.sample_stamps) 
+
+    def set_timer_interval(self, 
+                    sec: float):
+
+        self.timer.setInterval(int(sec * 1e3)) # millisec.
+        self.timer.start()
+
+    def hide_line(self, 
+                index: int):
+
+        self.lines[index].hide() 
+
+    def show_line(self, 
+                index: int):
+
+        self.lines[index].show() 
+
+    def update_window_size(self, 
+                new_size: int):
+        
+        self.window_size = min(new_size, self.window_buffer_size)
+
+        x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset * self.window_size, 
+            self.window_buffer_size - 1 - self.window_offset * self.window_size) 
+        
+        self.setXRange(*x_range)
+
+    def update_window_offset(self, 
+                    offset: int = 0):
+        
+        if offset > self.window_buffer_size - self.window_size:
+
+            offset = self.window_buffer_size - self.window_size
+
+        self.window_offset = offset
+
+        x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset, 
+            self.window_buffer_size - 1 - self.window_offset) 
+        
+        self.setXRange(*x_range)
+
+    def update_timestamps_res(self, 
+                    res: int = 10):
+        
+        self.ntimestamps_per_window = res
+    
+    def nightshift(self):
+
+        self.setBackground('k')
+
+        title_style = {'color': 'w', 'size': '10pt'}
+        self.plotItem.setTitle(title=self.base_name, **title_style)
+
+        tick_color = pg.mkColor('w')  # Use 'b' for blue color, you can replace it with your preferred color
+        self.x_axis.setPen(tick_color)
+        self.x_axis.setTextPen(tick_color)
+        self.y_axis.setPen(tick_color)
+        self.y_axis.setTextPen(tick_color)
+
+    def dayshift(self):
+
+        self.setBackground('w')
+
+        title_style = {'color': 'k', 'size': '10pt'}
+        self.plotItem.setTitle(title=self.base_name, **title_style)
+
+        tick_color = pg.mkColor('k')  # Use 'b' for blue color, you can replace it with your preferred color
+        self.x_axis.setPen(tick_color)
+        self.x_axis.setTextPen(tick_color)
+        self.y_axis.setPen(tick_color)
+        self.y_axis.setTextPen(tick_color)
+
     def _init_lines(self):
 
         for i in range(0, self.n_data):
@@ -163,22 +246,6 @@ class RtPlotWidget(pg.PlotWidget):
         self.timer.timeout.connect(self._update_plot_data)
         self.timer.start()
     
-    def set_timer_interval(self, 
-                    sec: float):
-
-        self.timer.setInterval(int(sec * 1e3)) # millisec.
-        self.timer.start()
-
-    def hide_line(self, 
-                index: int):
-
-        self.lines[index].hide() 
-
-    def show_line(self, 
-                index: int):
-
-        self.lines[index].show() 
-    
     def _update_plot_data(self):
         
         if not self.paused:
@@ -186,20 +253,6 @@ class RtPlotWidget(pg.PlotWidget):
             for i in range(0, self.data.shape[0]):
 
                 self.lines[i].setData(self.data[i, :])
-
-    def update(self, 
-            new_data: np.ndarray):
-
-        # updates window with new data
-
-        self.data[:, :] = np.roll(self.data, -1, axis=1) # roll data backwards
-
-        self.data[:, -1] = new_data.flatten() # assign new sample
-        
-        # self.sample_stamps = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
-        # self.sample_stamps = self.sample_stamps[::-1]
-
-        # self._update_timestams_ticks(self.sample_stamps) 
 
     def _update_timestams_ticks(self, 
                         elapsed_times: List[float]):
@@ -220,113 +273,63 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.getAxis('bottom').setTicks([x_ticks])
     
-    def update_window_size(self, 
-                    new_size: int):
+class WidgetUtils:
+
+    class SliderData:
+
+        def __init__(self):
+            
+            self.base_frame = None
+            self.base_layout = None
+            self.val_frame = None
+            self.val_layout = None
+            self.val_slider_frame = None
+            self.val_slider_frame_layout = None
+            self.min_label = None
+            self.max_label = None
+            self.val_slider = None
+            self.current_val = None
         
-        self.window_size = min(new_size, self.window_buffer_size)
+    class IconedButtonData:
 
-        x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset * self.window_size, 
-            self.window_buffer_size - 1 - self.window_offset * self.window_size) 
-        
-        self.setXRange(*x_range)
-
-    def update_window_offset(self, 
-                    offset: int = 0):
-        
-        if offset > self.window_buffer_size - self.window_size:
-
-            offset = self.window_buffer_size - self.window_size
-
-        self.window_offset = offset
-
-        x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset, 
-            self.window_buffer_size - 1 - self.window_offset) 
-        
-        self.setXRange(*x_range)
-
-    def update_timestamps_res(self, 
-                    res: int = 10):
-        
-        self.ntimestamps_per_window = res
+        def __init__(self):
+            
+            self.clicked_iconpath = None
+            self.iconed_button_frame = None
+            self.iconed_button_layout = None
+            self.iconed_button = None
+            self.icone_button = None
+            self.triggered_icone_button = None
+            self.pixmap = None
+            self.button_descr = None
+            self.iconpath = None
     
-    def nightshift(self):
+    class ScrollableListData:
 
-        self.setBackground('k')
+        def __init__(self):
 
-        title_style = {'color': 'w', 'size': '10pt'}
-        self.plotItem.setTitle(title=self.base_name, **title_style)
+            self.buttons = []
 
-        tick_color = pg.mkColor('w')  # Use 'b' for blue color, you can replace it with your preferred color
-        self.x_axis.setPen(tick_color)
-        self.x_axis.setTextPen(tick_color)
-        self.y_axis.setPen(tick_color)
-        self.y_axis.setTextPen(tick_color)
+    def generate_complex_slider(self, 
+                parent: QWidget, 
+                parent_layout: Union[QHBoxLayout, QVBoxLayout],
+                callback: Callable[[int], None], 
+                min_shown: str, 
+                min: int,
+                max_shown: str, 
+                max: int,
+                init_val_shown: str,
+                init: int,
+                title: str):
 
-    def dayshift(self):
+        slider_data = self.SliderData()
 
-        self.setBackground('w')
+        base_frame = QFrame(parent)
+        base_frame.setFrameShape(QFrame.StyledPanel)
+        base_layout = QVBoxLayout(base_frame)  # Use QVBoxLayout here
+        base_layout.setContentsMargins(0, 0, 0, 0)
 
-        title_style = {'color': 'k', 'size': '10pt'}
-        self.plotItem.setTitle(title=self.base_name, **title_style)
-
-        tick_color = pg.mkColor('k')  # Use 'b' for blue color, you can replace it with your preferred color
-        self.x_axis.setPen(tick_color)
-        self.x_axis.setTextPen(tick_color)
-        self.y_axis.setPen(tick_color)
-        self.y_axis.setTextPen(tick_color)
-
-class SettingsWidget():
-
-    def __init__(self, 
-            rt_plotter: RtPlotWidget,
-            parent: QWidget = None
-            ):
-
-        self.journal = Journal()
-
-        self.rt_plot_widget = rt_plotter
-
-        self.frame = QFrame(parent=parent)
-        self.frame.setFrameShape(QFrame.StyledPanel)
-        self.frame.setContentsMargins(0, 0, 0, 0)
-        self.settings_frame_layout = QVBoxLayout(self.frame)  # Use QVBoxLayout here
-        self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.val_frames = []
-        self.val_layouts = []
-        self.current_vals = []
-        self.val_slider_frames = []
-        self.val_slider_frame_layouts = []
-        self.min_labels = []
-        self.max_labels = []
-        self.val_sliders = []
-
-        self.clicked_iconpaths = []
-        self.iconed_button_frames = []
-        self.iconed_button_layouts = []
-        self.iconed_buttons = []
-        self.icones_buttons = []
-        self.triggered_icones_buttons = []
-        self.pixmaps = []
-        self.button_descrs = []
-        self.iconpaths = []
-
-        self.paused = False
-
-        self.init_ui()
-
-    def _generate_complex_slider(self, 
-                        parent: QWidget, 
-                        callback: Callable[[int], None], 
-                        min_shown: str, 
-                        min: int,
-                        max_shown: str, 
-                        max: int,
-                        init_val_shown: str,
-                        init: int,
-                        title: str):
-
-        val_frame = QFrame(parent)
+        val_frame = QFrame(base_frame)
         val_frame.setFrameShape(QFrame.StyledPanel)
         val_layout = QHBoxLayout(val_frame)  # Use QVBoxLayout here
         val_layout.setContentsMargins(2, 2, 2, 2)
@@ -340,7 +343,7 @@ class SettingsWidget():
                                     alignment=Qt.AlignLeft)
         val_layout.addWidget(current_val)
 
-        val_slider_frame = QFrame(parent)
+        val_slider_frame = QFrame(base_frame)
         val_slider_frame.setFrameShape(QFrame.StyledPanel)
         val_slider_frame_layout = QHBoxLayout(val_slider_frame)  # Use QHBoxLayout here
         val_slider_frame_layout.setContentsMargins(2, 2, 2, 2)
@@ -362,30 +365,40 @@ class SettingsWidget():
         max_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
         val_slider_frame_layout.addWidget(max_label)
 
-        self.settings_frame_layout.addWidget(val_frame)
-        self.settings_frame_layout.addWidget(val_slider_frame)
-
-        self.val_frames.append(val_frame)
-        self.val_layouts.append(val_layout)
-        self.val_slider_frames.append(val_slider_frame)
-        self.val_slider_frame_layouts.append(val_slider_frame_layout)
-        self.min_labels.append(min_label)
-        self.max_labels.append(max_label)
-        self.val_sliders.append(val_slider)
-        self.current_vals.append(current_val)
-
-    def _create_iconed_button(self, 
-                        parent: QWidget, 
-                        icon_basepath: str, 
-                        icon: str,
-                        callback: Callable[[int], None], 
-                        icon_triggered: str = None,
-                        descr: str = ""):
+        base_layout.addWidget(val_frame)
+        base_layout.addWidget(val_slider_frame)
         
+        parent_layout.addWidget(base_frame)
+
+        slider_data.base_frame = base_frame
+        slider_data.base_layout = base_layout
+        slider_data.val_frame = val_frame
+        slider_data.val_layout = val_layout
+        slider_data.val_slider_frame = val_slider_frame
+        slider_data.val_slider_frame_layout = val_slider_frame_layout
+        slider_data.min_label = min_label
+        slider_data.max_label = max_label
+        slider_data.val_slider = val_slider
+        slider_data.current_val = current_val
+
+        return slider_data
+    
+    def create_iconed_button(self, 
+                parent: QWidget, 
+                parent_layout: Union[QHBoxLayout, QVBoxLayout],
+                icon_basepath: str, 
+                icon: str,
+                callback: Callable[[int], None], 
+                icon_triggered: str = None,
+                descr: str = "", 
+                size_x: int= 30, 
+                size_y: int = 30):
+        
+        button_data = self.IconedButtonData()
+
         button_frame = QFrame(parent)
         button_frame.setFrameShape(QFrame.StyledPanel)
         button_frame.setGeometry(100, 100, 200, 200)
-        button_frame_color = button_frame.palette().color(self.frame.backgroundRole()).name()
         button_layout = QHBoxLayout(button_frame)  # Use QVBoxLayout here
         button_layout.setContentsMargins(2, 2, 2, 2)
 
@@ -405,80 +418,153 @@ class SettingsWidget():
             iconpath_triggered = os.path.join(icon_basepath, 
                                    icon_triggered + ".svg")
             pixmap_triggered = QPixmap(iconpath_triggered)
-            triggereed_button_icon = QIcon(pixmap_triggered)
+            triggered_button_icon = QIcon(pixmap_triggered)
 
         else:
 
-            triggereed_button_icon = None
+            triggered_button_icon = None
 
         button.setIcon(button_icon)
-        button.setFixedSize(30, 30)
+        button.setFixedSize(size_x, size_y)
         button.setIconSize(button.size())
         
         button.clicked.connect(callback)
         
-        self.iconpaths.append(iconpath)
-
-        self.iconed_button_frames.append(button_frame)
-        self.iconed_button_layouts.append(button_layout)
-        self.iconed_buttons.append(button)
-        self.icones_buttons.append(button_icon)
-        self.triggered_icones_buttons.append(triggereed_button_icon)
-
-        self.pixmaps.append(pixmap)
-
-        self.button_descrs.append(button_descr)
+        button_data.iconpath = iconpath
+        button_data.iconed_button_frame = button_frame
+        button_data.iconed_button_layout = button_layout
+        button_data.iconed_button = button
+        button_data.icone_button = button_icon
+        button_data.triggered_icone_button = triggered_button_icon
+        button_data.pixmap = pixmap
+        button_data.button_descr = button_descr
 
         button_layout.addWidget(button_descr)
         button_layout.addWidget(button)
-        self.settings_frame_layout.addWidget(button_frame)
+        
+        parent_layout.addWidget(button_frame)
+
+        return button_data
     
-    def _create_plot_selector(self):
+    def create_scrollable_list(self, 
+                    parent: QWidget, 
+                    parent_layout: Union[QHBoxLayout, QVBoxLayout],
+                    list_names: List[str], 
+                    callback: Callable[[str], None], 
+                    title: str = ""
+                    ):
         
-        self.plot_selector_scroll_area = QScrollArea(parent=self.frame)
-        self.plot_selector_scroll_area.setWidgetResizable(True)
+        list_data = self.ScrollableListData()
 
-        # Create a frame for the plot selector
+        plot_selector_scroll_area = QScrollArea(parent=parent)
+        plot_selector_scroll_area.setWidgetResizable(True)
         
-        self.selectors_frame = QFrame(self.plot_selector_scroll_area)
-        self.selectors_frame.setFrameShape(QFrame.StyledPanel)
-        self.selectors_layout = QVBoxLayout(self.selectors_frame)
-        self.selectors_layout.setContentsMargins(2, 2, 2, 2)
+        list_frame = QFrame(plot_selector_scroll_area)
+        list_frame.setFrameShape(QFrame.StyledPanel)
+        list_layout = QVBoxLayout(list_frame)
+        list_layout.setContentsMargins(2, 2, 2, 2)
 
-        # Add title label to the plot selector frame
-        plot_selector_title = QLabel("plot selector")
-        self.selectors_layout.addWidget(plot_selector_title, 
+        plot_selector_title = QLabel(title)
+        list_layout.addWidget(plot_selector_title, 
                                 alignment=Qt.AlignHCenter)
 
-        self.legend_buttons = []
-
         # Add legend buttons to the plot selector frame
-        for label in self.rt_plot_widget.labels:
+        for label in list_names:
+
             button = QPushButton(label)
+
             button.setCheckable(True)
+
             button.setChecked(True)
-            button.clicked.connect(lambda checked, l=label: self.toggle_line_visibility(l))
-            self.legend_buttons.append(button)
-            self.selectors_layout.addWidget(button)
+
+            button.clicked.connect(lambda checked, 
+                                l=label: callback(l))
+
+            list_data.buttons.append(button)
+
+            list_layout.addWidget(button)
         
-        self.plot_selector_scroll_area.setWidget(self.selectors_frame)
-        self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        plot_selector_scroll_area.setWidget(list_frame)
         
-    def init_ui(self):
+        parent_layout.addWidget(plot_selector_scroll_area)
+
+        return list_data
+
+    class ClosableTabWidget(QTabWidget):
+
+        def __init__(self):
+
+            super().__init__()
+
+            self.setTabsClosable(True)
+
+            self.tabCloseRequested.connect(self.close_tab)
+
+        def close_tab(self, 
+                currentIndex):
+
+            if currentIndex != -1:
+
+                widget = self.widget(currentIndex)
+
+                if widget is not None:
+
+                    widget.deleteLater()
+
+                self.removeTab(currentIndex)
+
+                self.perform_other_closing_steps(currentIndex)
+
+        def add_closing_method(self, 
+                callback: Callable[[int], None]):
+
+            self.perform_other_closing_steps = callback
+
+class SettingsWidget():
+
+    def __init__(self, 
+            rt_plotter: RtPlotWidget,
+            parent: QWidget = None
+            ):
+
+        self.journal = Journal()
+
+        self.rt_plot_widget = rt_plotter
+
+        self.widget_utils = WidgetUtils()
+
+        self.frame = QFrame(parent=parent)
+        self.frame.setFrameShape(QFrame.StyledPanel)
+        self.frame.setContentsMargins(0, 0, 0, 0)
+        self.settings_frame_layout = QVBoxLayout(self.frame)  # Use QVBoxLayout here
+        self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.window_size_slider = None
+        self.window_offset_slider = None
+
+        self.pause_button = None
+
+        self.plot_selector = None
+
+        self.paused = False
+
+        self._init_ui()
+
+    def _init_ui(self):
         
         paths = PathsGetter()
         icon_basepath = paths.GUI_ICONS_PATH
-        self._create_iconed_button(parent=self.frame, 
-                            icon_basepath=icon_basepath, 
-                            icon="pause", 
-                            icon_triggered="unpause",
-                            descr="freeze/unfreeze", 
-                            callback=self.change_pause_state)
+        self.pause_button = self.widget_utils.create_iconed_button(parent=self.frame, 
+                                parent_layout=self.settings_frame_layout,
+                                icon_basepath=icon_basepath, 
+                                icon="pause", 
+                                icon_triggered="unpause",
+                                descr="freeze/unfreeze", 
+                                callback=self.change_pause_state)
         
-        # create slider for window size
-
-        self._generate_complex_slider(title="window size [s]: ", 
+        self.window_size_slider = self.widget_utils.generate_complex_slider(title="window size [s]: ", 
                                 parent=self.frame, 
+                                parent_layout=self.settings_frame_layout,
                                 callback=self.update_window_size, 
                                 min_shown=f'{self.rt_plot_widget.update_data_dt}', 
                                 min = 1,
@@ -487,8 +573,9 @@ class SettingsWidget():
                                 init_val_shown =f'{self.rt_plot_widget.update_data_dt * self.rt_plot_widget.window_size}', 
                                 init=self.rt_plot_widget.window_size)
 
-        self._generate_complex_slider(title="window offset [n.samples]: ", 
+        self.window_offset_slider = self.widget_utils.generate_complex_slider(title="window offset [n.samples]: ", 
                                 parent=self.frame, 
+                                parent_layout=self.settings_frame_layout,
                                 callback=self.update_window_offset, 
                                 min_shown=f'{0}', 
                                 min = 0,
@@ -496,20 +583,14 @@ class SettingsWidget():
                                 max = self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size,
                                 init_val_shown =f'{self.rt_plot_widget.window_offset}', 
                                 init=self.rt_plot_widget.window_offset)
-        
-        # self._generate_complex_slider(title="n. timestamps: ", 
-        #                         parent=self.frame, 
-        #                         callback=self.update_timestamps_res, 
-        #                         min_shown=f'{1}', 
-        #                         min = 1,
-        #                         max_shown=f'{self.rt_plot_widget.window_size}', 
-        #                         max = self.rt_plot_widget.window_size,
-        #                         init_val_shown =f'{self.rt_plot_widget.window_offset}', 
-        #                         init=self.rt_plot_widget.window_offset)
 
-        self._create_plot_selector()
- 
-        self.settings_frame_layout.addWidget(self.plot_selector_scroll_area)
+        self.plot_selector = self.widget_utils.create_scrollable_list(parent=self.frame, 
+                                        parent_layout=self.settings_frame_layout,
+                                        list_names=self.rt_plot_widget.labels, 
+                                        callback=self.toggle_line_visibility, 
+                                        title="line selector")
+
+        self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
     def change_pause_state(self):
         
@@ -517,11 +598,11 @@ class SettingsWidget():
         
         if self.paused: 
             
-            self.iconed_buttons[0].setIcon(self.triggered_icones_buttons[0])
+            self.pause_button.iconed_button.setIcon(self.pause_button.triggered_icone_button)
 
         else:
 
-            self.iconed_buttons[0].setIcon(self.icones_buttons[0])
+            self.pause_button.iconed_button.setIcon(self.pause_button.icone_button)
 
         self.rt_plot_widget.paused = self.paused
 
@@ -532,51 +613,39 @@ class SettingsWidget():
 
         # updated offset label
         max_offset_current = self.rt_plot_widget.window_buffer_size - self.rt_plot_widget.window_size
-        self.max_labels[1].setText(f'{max_offset_current}')
-        self.val_sliders[1].setMaximum(max_offset_current)
-
-        # updates resolution label
-        self.max_labels[2].setText(f'{int(self.rt_plot_widget.window_size)}')
-        self.val_sliders[2].setMaximum(int(self.rt_plot_widget.window_size))
+        self.window_offset_slider.max_label.setText(f'{max_offset_current}')
+        self.window_offset_slider.val_slider.setMaximum(max_offset_current)
 
         # updates displayed window size
-        self.current_vals[0].setText(f'{self.rt_plot_widget.update_data_dt * self.rt_plot_widget.window_size:.2f}')
+        self.window_size_slider.current_val.setText(\
+            f'{self.rt_plot_widget.update_data_dt * self.rt_plot_widget.window_size:.2f}')
 
     def update_window_offset(self, 
                     offset: int):
 
         self.rt_plot_widget.update_window_offset(offset)
 
-        self.current_vals[1].setText(f'{self.rt_plot_widget.window_offset}')
-
-    def update_timestamps_res(self, 
-                    res: int):
-
-        self.rt_plot_widget.update_timestamps_res(res)
-
-        self.current_vals[2].setText(f'{self.rt_plot_widget.ntimestamps_per_window}')
+        self.window_offset_slider.current_val.setText(f'{self.rt_plot_widget.window_offset}')
 
     def toggle_line_visibility(self, label):
 
         for i, legend_label in enumerate(self.rt_plot_widget.labels):
-
+                        
             if label == legend_label:
 
-                button = self.legend_buttons[i]
-
-                checked = button.isChecked()  # Get the new state of the button
+                checked = self.plot_selector.buttons[i].isChecked()  # Get the new state of the button
                 
                 if checked:
                     
                     self.rt_plot_widget.show_line(i)
 
-                    button.setStyleSheet("")  # Reset button style
+                    self.plot_selector.buttons[i].setStyleSheet("")  # Reset button style
 
                 if not checked:
 
                     self.rt_plot_widget.hide_line(i)
 
-                    button.setStyleSheet("color: darkgray")  # Change button style to dark gray
+                    self.plot_selector.buttons[i].setStyleSheet("color: darkgray")  # Change button style to dark gray
 
     def scroll_legend_names(self, 
                 value):
