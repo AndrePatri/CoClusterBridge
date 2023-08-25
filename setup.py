@@ -26,7 +26,7 @@ INSTALL_REQUIRES = [
 setup(
     name=package_name,
     author="AndrePatri",
-    version="0.0.1-py" + python_version,
+    version='1.0.0_py' + python_version,
     description="",
     keywords=["cluster", "rhc", "controller"],
     include_package_data=True,
