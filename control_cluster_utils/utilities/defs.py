@@ -116,6 +116,18 @@ def shared_sem_srvr_name():
 
     return name
 
+def shared_srvr_nrows_name():
+
+    name = "nrows_srvr"
+
+    return name
+
+def shared_srvr_ncols_name():
+
+    name = "ncols_srvr"
+
+    return name
+
 def shared_sem_clients_count_name():
 
     name = "semaphore_clients_count"

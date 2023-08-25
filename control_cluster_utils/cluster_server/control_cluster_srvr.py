@@ -93,7 +93,7 @@ class ControlClusterSrvr(ABC):
         print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": performing final initialization steps...")
 
         self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
-                                    n_contacts=len(self._controllers[0]._model.cmap.keys()))
+                                    n_contacts=self._controllers[0].n_contacts)
         
         for i in range(0, self.cluster_size):
 
@@ -103,6 +103,8 @@ class ControlClusterSrvr(ABC):
             self._controllers[i].create_jnt_maps()
 
             self._controllers[i].init_states() # initializes states
+
+            self._controllers[i].set_cmds_to_homing() # safe cmds
 
             self._controllers[i].init_rhc_task_cmds() # initializes rhc commands
     

@@ -287,9 +287,9 @@ class ControlClusterClient(ABC):
                 # we wait for all controllers to finish      
                 solved = self._solved() # this is blocking
                 
-            # at this point all controllers are done -> we synchronize the control commands on GPU
-            # with the ones written by each controller on CPU
-            self.controllers_cmds.synch()
+                # at this point all controllers are done -> we synchronize the control commands on GPU
+                # with the ones written by each controller on CPU
+                self.controllers_cmds.synch()
 
             self.solution_counter += 1
 

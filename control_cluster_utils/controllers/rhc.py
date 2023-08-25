@@ -8,6 +8,7 @@ from control_cluster_utils.utilities.rhc_defs import RhcTaskRefsChild
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import trigger_flagname
 from control_cluster_utils.utilities.defs import Journal
+from control_cluster_utils.utilities.homing import RobotHomer
 
 from typing import List, TypeVar
 
@@ -28,11 +29,9 @@ RHCCmdChild = TypeVar('RHCCmdChild', bound='RHCCmd')
 class RHController(ABC):
 
     def __init__(self, 
-            urdf_path: str, 
-            srdf_path: str,
-            config_path: str, 
             cluster_size: int,
             controller_index: int,
+            srdf_path: str,
             verbose = False, 
             debug = False,
             array_dtype = torch.float32):
@@ -43,26 +42,16 @@ class RHController(ABC):
 
         self.controller_index = controller_index
 
+        self.srdf_path = srdf_path
+
         self._verbose = verbose
         self._debug = debug
 
         self.cluster_size = cluster_size
 
-        self.urdf_path = urdf_path
-        self.srdf_path = srdf_path
-        # read urdf and srdf files
-        with open(self.urdf_path, 'r') as file:
-
-            self.urdf = file.read()
-            
-        with open(self.srdf_path, 'r') as file:
-
-            self.srdf = file.read()
-
-        self.config_path = config_path
-
         self.n_dofs = None
-
+        self.n_contacts = None
+        
         # shared mem
         self.robot_state = None 
         self.trigger_flag = None
@@ -86,6 +75,8 @@ class RHController(ABC):
         self.array_dtype = array_dtype
 
         self.add_data_lenght = 0
+
+        self._homer: RobotHomer = None
 
         self._init()
 
@@ -117,7 +108,10 @@ class RHController(ABC):
                                     client_index=self.controller_index, 
                                     dtype=dtype)
         self.trigger_flag.attach()
-    
+
+        self._homer = RobotHomer(self.srdf_path, 
+                            self._server_side_jnt_names)
+        
     def init_rhc_task_cmds(self):
         
         self.rhc_task_refs = self._init_rhc_task_cmds()
@@ -142,7 +136,21 @@ class RHController(ABC):
                                 verbose=self._verbose) 
 
         self._states_initialized = True
-         
+    
+    def set_cmds_to_homing(self):
+        
+        self.robot_cmds.jnt_cmd.set_q(torch.tensor(self._homer.get_homing()).reshape(1, 
+                            self.robot_cmds.jnt_cmd.q.shape[1]))
+
+        self.robot_cmds.jnt_cmd.set_v(torch.zeros((1, self.robot_cmds.jnt_cmd.v.shape[1]), 
+                        dtype=self.array_dtype))
+
+        self.robot_cmds.jnt_cmd.set_eff(torch.zeros((1, self.robot_cmds.jnt_cmd.eff.shape[1]), 
+                        dtype=self.array_dtype))
+
+        self.robot_cmds.slvr_state.set_info(torch.zeros((1, self.add_data_lenght), 
+                        dtype=self.array_dtype))
+        
     def _fill_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
