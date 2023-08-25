@@ -12,6 +12,9 @@ from control_cluster_utils.utilities.sysutils import PathsGetter
 from control_cluster_utils.utilities.defs import shared_clients_count_name
 from control_cluster_utils.utilities.defs import shared_sem_srvr_name
 from control_cluster_utils.utilities.defs import shared_sem_clients_count_name
+from control_cluster_utils.utilities.defs import shared_srvr_nrows_name
+from control_cluster_utils.utilities.defs import shared_srvr_ncols_name
+
 from control_cluster_utils.utilities.defs import Journal
 
 from typing import List
@@ -22,9 +25,12 @@ from perf_sleep.pyperfsleep import PerfSleep
 
 class SharedMemConfig:
 
-    def __init__(self):
+    def __init__(self, 
+            name: str):
         
         self.journal = Journal()
+
+        self.name = name
 
         paths = PathsGetter()
         self.config_path = paths.SHARED_MEM_CONFIGPATH
@@ -35,14 +41,33 @@ class SharedMemConfig:
 
         self.basename = yamldata["basename"]
 
-        self.mem_path = "/" + self.basename
+        self.mem_path = "/" + self.basename + \
+                self.name
+        
+        self.mem_path_nrows = "/" + self.basename + \
+                self.name + "_" + shared_srvr_nrows_name()
 
+        self.mem_path_ncols = "/" + self.basename + \
+                self.name + "_" + shared_srvr_ncols_name()
+            
+        self.mem_path_clients_counter = "/" + self.basename + \
+            self.name + "_" + shared_clients_count_name()
+        
+        self.mem_path_server_sem = "/" + self.basename + \
+            self.name + "_" + shared_sem_srvr_name()
+        
+        self.mem_path_clients_n_sem = "/" + self.basename + \
+            self.name + "_" + shared_sem_clients_count_name()
+        
+        self.mem_path_clients_semaphore = "/" + self.basename + \
+                self.name + "_" + shared_sem_clients_count_name()
+        
 class SharedMemSrvr:
 
     def __init__(self, 
                 n_rows: int, 
                 n_cols: int,
-                name = None, 
+                name: str, 
                 dtype=torch.float32, 
                 backend="torch"):
 
@@ -62,21 +87,7 @@ class SharedMemSrvr:
         self._terminate = False 
         self._started = False
 
-        self.mem_config = SharedMemConfig()
-
-        if self.name is not None: 
-            
-            self.mem_config.mem_path = "/" + self.mem_config.basename + \
-                self.name
-            
-            self.mem_path_clients_counter = "/" + self.mem_config.basename + \
-                self.name + "_" + shared_clients_count_name()
-            
-            self.mem_path_server_sem = "/" + self.mem_config.basename + \
-                self.name + "_" + shared_sem_srvr_name()
-            
-            self.mem_path_clients_n_sem = "/" + self.mem_config.basename + \
-                self.name + "_" + shared_sem_clients_count_name()
+        self.mem_config = SharedMemConfig(name)
             
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
@@ -166,21 +177,21 @@ class SharedMemSrvr:
         
     def _create_semaphores(self):
 
-        self.sem_client_n = posix_ipc.Semaphore(self.mem_path_clients_n_sem, 
+        self.sem_client_n = posix_ipc.Semaphore(self.mem_config.mem_path_clients_n_sem, 
                             flags=posix_ipc.O_CREAT, 
                             initial_value=1)
         
         message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
-                    f"created/opened sempaphore @ {self.mem_path_clients_n_sem}"
+                    f"created/opened sempaphore @ {self.mem_config.mem_path_clients_n_sem}"
         
         print(message)
 
-        self.sem_server = posix_ipc.Semaphore(self.mem_path_server_sem, 
+        self.sem_server = posix_ipc.Semaphore(self.mem_config.mem_path_server_sem, 
                             flags=posix_ipc.O_CREAT, 
                             initial_value=1)
         
         message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
-                    f"created/opened sempaphore @ {self.mem_path_server_sem}"
+                    f"created/opened sempaphore @ {self.mem_config.mem_path_server_sem}"
         
         print(message)
 
@@ -198,7 +209,7 @@ class SharedMemSrvr:
         
     def _create_clients_counter(self):
 
-        self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_path_clients_counter, 
+        self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_config.mem_path_clients_counter, 
                                 flags=posix_ipc.O_CREAT,
                                 size=8) # each client will increment this counter
 
@@ -209,7 +220,7 @@ class SharedMemSrvr:
         self.n_clients = memoryview(self.memory_clients_counter)
 
         message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_clients_counter.__name__}]: " + \
-                    f"created/opened clients counter @ {self.mem_path_clients_counter}"
+                    f"created/opened clients counter @ {self.mem_config.mem_path_clients_counter}"
         
         print(message)
 
@@ -294,7 +305,7 @@ class SharedMemSrvr:
             self.memory_clients_counter = None
 
             message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._close_mmaps.__name__}]: " + \
-                        f"closed clients counter @ {self.mem_path_clients_counter}"
+                        f"closed clients counter @ {self.mem_config.mem_path_clients_counter}"
         
             print(message)
 
@@ -313,7 +324,7 @@ class SharedMemSrvr:
             except posix_ipc.ExistentialError:
                 
                 message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
-                        f"could not close semaphor @ {self.mem_path_server_sem}. Probably something already did."
+                        f"could not close semaphor @ {self.mem_config.mem_path_server_sem}. Probably something already did."
 
                 print(message)
 
@@ -332,7 +343,7 @@ class SharedMemSrvr:
             except posix_ipc.ExistentialError:
                 
                 message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
-                        f"could not close semaphor @ {self.mem_path_clients_n_sem}. Probably something already did."
+                        f"could not close semaphor @ {self.mem_config.mem_path_clients_n_sem}. Probably something already did."
 
                 print(message)
 
@@ -373,7 +384,7 @@ class SharedMemSrvr:
             except posix_ipc.ExistentialError:
                 
                 message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
-                        f"could not unlink clients counter @ {self.mem_path_clients_counter}. Probably something already did."
+                        f"could not unlink clients counter @ {self.mem_config.mem_path_clients_counter}. Probably something already did."
 
                 print(message)
 
@@ -523,18 +534,7 @@ class SharedMemClient:
 
         self.client_index = client_index
 
-        self.mem_config = SharedMemConfig()
-
-        if self.name is not None: 
-            
-            self.mem_config.mem_path = "/" + self.mem_config.basename + \
-                self.name
-            
-            self.mem_path_clients_counter = "/" + self.mem_config.basename + \
-                self.name + "_" + shared_clients_count_name()
-            
-            self.mem_path_clients_semaphore = "/" + self.mem_config.basename + \
-                self.name + "_" + shared_sem_clients_count_name()
+        self.mem_config = SharedMemConfig(self.name)
         
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
@@ -658,10 +658,10 @@ class SharedMemClient:
             
             try:
 
-                self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_path_clients_counter, 
+                self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_config.mem_path_clients_counter, 
                             size=8) # each client will increment this counter
 
-                self._print_attached(self.mem_path_clients_counter)
+                self._print_attached(self.mem_config.mem_path_clients_counter)
 
                 self.memory_clients_counter = mmap.mmap(self.shm_clients_counter.fd, self.shm_clients_counter.size)
                 self.shm_clients_counter.close_fd()
@@ -674,7 +674,7 @@ class SharedMemClient:
 
             except posix_ipc.ExistentialError: 
             
-                self._handle_posix_error(self.mem_path_clients_counter)
+                self._handle_posix_error(self.mem_config.mem_path_clients_counter)
 
                 continue
 
@@ -688,10 +688,10 @@ class SharedMemClient:
 
             try:
 
-                self.sem_client_n = posix_ipc.Semaphore(self.mem_path_clients_semaphore, 
+                self.sem_client_n = posix_ipc.Semaphore(self.mem_config.mem_path_clients_n_sem, 
                     initial_value=1)
 
-                self._print_attached(self.mem_path_clients_semaphore)
+                self._print_attached(self.mem_config.mem_path_clients_n_sem)
 
                 time.sleep(self.wait_amount) # nano secs
 
@@ -699,7 +699,7 @@ class SharedMemClient:
 
             except posix_ipc.ExistentialError:
             
-                self._handle_posix_error(self.mem_path_clients_semaphore)
+                self._handle_posix_error(self.mem_config.mem_path_clients_semaphore)
                 
                 continue
 
@@ -961,7 +961,7 @@ class SharedMemClient:
 
                         message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
                                 f"[{self.journal.status}]" +  f"[{self._increment_client_count.__name__}]" + ": " + \
-                                f" failed to acquire semaphore @ {self.mem_path_clients_semaphore}." + \
+                                f" failed to acquire semaphore @ {self.mem_config.mem_path_clients_semaphore}." + \
                                 " Retrying ..."
 
                         print(message)
@@ -996,7 +996,7 @@ class SharedMemClient:
 
                         message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
                                 f"[{self.journal.status}]" +  f"[{self._decrement_client_count.__name__}]" + ": " + \
-                                f" failed to acquire semaphore @ {self.mem_path_clients_semaphore}." + \
+                                f" failed to acquire semaphore @ {self.mem_config.mem_path_clients_semaphore}." + \
                                 " Retrying ..."
 
                         print(message)
@@ -1037,7 +1037,7 @@ class SharedMemClient:
 
             self.memory_clients_counter = None
 
-            self._print_detached(self.mem_path_clients_counter)
+            self._print_detached(self.mem_config.mem_path_clients_counter)
                 
         if self.shm_clients_counter is not None:
 
@@ -1047,7 +1047,7 @@ class SharedMemClient:
             
             self.sem_client_n = None
 
-            self._print_detached(self.mem_path_clients_semaphore)
+            self._print_detached(self.mem_config.mem_path_clients_semaphore)
             
 class SharedStringArray:
 
