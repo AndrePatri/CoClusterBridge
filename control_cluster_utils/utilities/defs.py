@@ -121,3 +121,12 @@ def shared_sem_clients_count_name():
     name = "semaphore_clients_count"
 
     return name
+
+class Journal:
+
+    def __init__(self):
+
+        self.warning = "warning"
+        self.exception = "exception"
+        self.info = "info"
+        self.status = "status"

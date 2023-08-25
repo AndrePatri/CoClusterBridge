@@ -11,6 +11,7 @@ from control_cluster_utils.utilities.defs import states_name, cmds_name, task_re
 from control_cluster_utils.utilities.defs import cluster_size_name, additional_data_name, n_contacts_name
 from control_cluster_utils.utilities.defs import jnt_number_client_name
 from control_cluster_utils.utilities.defs import jnt_names_client_name
+from control_cluster_utils.utilities.defs import Journal
 
 class RobotClusterState:
 
@@ -108,6 +109,8 @@ class RobotClusterState:
                 device: torch.device = torch.device("cpu"), 
                 dtype: torch.dtype = torch.float32):
         
+        self.journal = Journal()
+
         self.dtype = dtype
 
         self.backend = "torch" # forcing torch backend
@@ -251,7 +254,9 @@ class RobotClusterCmd:
                 device: torch.device = torch.device("cpu"),  
                 dtype: torch.dtype = torch.float32, 
                 add_data_size: int = None):
-    
+
+        self.journal = Journal()
+
         self.dtype = dtype
 
         self.backend = "torch" # forcing torch backen
@@ -447,6 +452,8 @@ class RhcClusterTaskRefs:
                 device: torch.device = torch.device("cpu"), 
                 dtype: torch.dtype = torch.float32):
         
+        self.journal = Journal()
+
         self.dtype = dtype
 
         self.backend = "torch" # forcing torch backend
@@ -523,10 +530,8 @@ class HanshakeDataCntrlSrvr:
         # impossible 
         
         self.verbose = verbose
-        self.status = "status"
-        self.info = "info"
-        self.warning = "warning"
-        self.exception = "exception"
+
+        self.journal = Journal()
 
         self.handshake_done = False
         self._terminate = False
@@ -554,7 +559,7 @@ class HanshakeDataCntrlSrvr:
     def handshake(self):
         
         # first of all, we need to know the size of the cluster
-        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": executing handshake")
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": executing handshake")
 
         self.cluster_size.attach()
         self.jnt_number_client.attach()
@@ -566,7 +571,7 @@ class HanshakeDataCntrlSrvr:
                                     verbose=self.verbose)
         self.jnt_names_client.start()
 
-        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": handshake terminated")
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": handshake terminated")
 
         self.handshake_done = True
 
@@ -579,7 +584,7 @@ class HanshakeDataCntrlSrvr:
 
             # we create the clients (will wait for the memory to be 
             # created by the server)
-            print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + \
+            print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
                 f"{self.finalize_init.__name__}" + ": executing finalization steps")
             
             # we first create the servers (non-blocking)
@@ -598,7 +603,7 @@ class HanshakeDataCntrlSrvr:
         
         else:
 
-            exception = f"[{self.__class__.__name__}]" + f"[{self.status}]" + \
+            exception = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
                     f"{self.finalize_init.__name__}" + ": did you remember to call handshake() before?"
         
             raise Exception(exception)
@@ -643,10 +648,7 @@ class HanshakeDataCntrlClient:
 
         self.n_jnts = n_jnts
 
-        self.status = "status"
-        self.info = "info"
-        self.warning = "warning"
-        self.exception = "exception"
+        self.journal = Journal()
 
         self.wait_amount = 0.1
 
@@ -690,12 +692,12 @@ class HanshakeDataCntrlClient:
                 jnt_names: List[str]):
         
         # first of all, we need to know the size of the cluster
-        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": executing handshake")
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": executing handshake")
 
         # start servers
         if len(jnt_names) != self.n_jnts:
 
-            exception = f"[{self.__class__.__name__}]" + f"[{self.exception}]" + \
+            exception = f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
                 + f"[{self._handshake.__name__}]" +  f": provided jnt names lenght {len(jnt_names)} does not match {self.n_jnts}"
 
             raise Exception(exception)
@@ -715,7 +717,7 @@ class HanshakeDataCntrlClient:
 
         self.handshake_done = True
 
-        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": handshake terminated")
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": handshake terminated")
 
     def terminate(self):
                 

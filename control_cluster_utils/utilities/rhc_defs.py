@@ -6,6 +6,7 @@ from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_utils.utilities.defs import states_name, cmds_name
 from control_cluster_utils.utilities.defs import aggregate_refs_size, task_refs_name
+from control_cluster_utils.utilities.defs import Journal
 
 from abc import ABC, abstractmethod
 
@@ -177,6 +178,8 @@ class RobotState:
                 q_remapping: List[int] = None,
                 dtype = torch.float32, 
                 verbose=False):
+
+        self.journal = Journal()
 
         self.dtype = dtype
 
@@ -378,6 +381,8 @@ class RobotCmds:
                 add_info_size: int = None, 
                 dtype = torch.float32, 
                 verbose=False):
+
+        self.journal = Journal()
 
         self.dtype = dtype
 
@@ -670,6 +675,8 @@ class RhcTaskRefs:
                 dtype = torch.float32, 
                 verbose=False):
 
+        self.journal = Journal()
+        
         self.dtype = dtype
 
         self.device = torch.device('cpu') # born to live on CPU

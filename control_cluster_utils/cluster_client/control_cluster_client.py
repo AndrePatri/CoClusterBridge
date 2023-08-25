@@ -8,6 +8,7 @@ from control_cluster_utils.utilities.control_cluster_defs import RhcClusterTaskR
 
 from control_cluster_utils.utilities.shared_mem import SharedMemSrvr
 from control_cluster_utils.utilities.defs import trigger_flagname, launch_controllers_flagname
+from control_cluster_utils.utilities.defs import Journal
 
 import time
 
@@ -32,6 +33,8 @@ class ControlClusterClient(ABC):
             verbose = False, 
             debug = False):
 
+        self.journal = Journal()
+        
         self.perf_timer = PerfSleep()
 
         self._verbose = verbose
@@ -79,12 +82,6 @@ class ControlClusterClient(ABC):
         self.is_cluster_ready = False
         self._is_first_control_step = False
 
-        # message handling
-        self.status = "status"
-        self.info = "info"
-        self.warning = "warning"
-        self.exception = "exception"
-
         # other data
         self.add_data_length = 0
 
@@ -126,7 +123,7 @@ class ControlClusterClient(ABC):
         
         self._handshake_thread.start()
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+        print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
             ": spawned _heartbeat thread")
 
     def _init_shared_mem(self):
@@ -184,7 +181,7 @@ class ControlClusterClient(ABC):
 
         if self.cluster_dt < self.control_dt:
 
-            print(f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + \
+            print(f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + \
                 ": cluster_dt has to be >= control_dt")
 
             self.n_sim_step_per_cntrl = 1
@@ -194,7 +191,7 @@ class ControlClusterClient(ABC):
             self.n_sim_step_per_cntrl = round(self.cluster_dt / self.control_dt)
             self.cluster_dt = self.control_dt * self.n_sim_step_per_cntrl
 
-        message = f"[{self.__class__.__name__}]"  + f"[{self.info}]" + \
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.info}]" + \
                 ": the cluster controllers will run at a rate of " + \
                 str(1.0 / self.cluster_dt) + " Hz"\
                 ", while the low level control will run at " + str(1.0 / self.control_dt) + "Hz.\n" + \
@@ -211,7 +208,7 @@ class ControlClusterClient(ABC):
     
     def _finalize_init(self):
         
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+        print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": connecting to server...")
         
         # things to be done when everything is set but before starting to solve
@@ -235,7 +232,7 @@ class ControlClusterClient(ABC):
                                     dtype=self.torch_dtype)
         self.rhc_task_refs.start()
         
-        print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+        print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": connection achieved.")
         
     def cluster_ready(self):
@@ -256,7 +253,7 @@ class ControlClusterClient(ABC):
 
             if self._verbose: 
 
-                print(f"[{self.__class__.__name__}]"  + f"[{self.status}]" + \
+                print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": waiting connection to ControlCluster server")
 
         if self._is_first_control_step:
@@ -343,7 +340,7 @@ class ControlClusterClient(ABC):
         
         if thread.is_alive():
                         
-            print(f"[{self.__class__.__name__}]"  + f"[{self.info}]" + \
+            print(f"[{self.__class__.__name__}]"  + f"[{self.journal.info}]" + \
                 ": terminating child thread " + str(thread.name))
         
             thread.join() # wait for thread to join

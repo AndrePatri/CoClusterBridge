@@ -1,12 +1,12 @@
 import sys
 import time
 import numpy as np
+
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from PyQt5.QtWidgets import QHBoxLayout, QFrame
 from PyQt5.QtWidgets import QScrollArea, QPushButton, QSpacerItem, QSizePolicy, QSlider
-from PyQt5.QtWidgets import QSplitter, QLabel, QGridLayout
-
+from PyQt5.QtWidgets import QSplitter, QLabel
 from PyQt5.QtGui import QIcon, QPixmap
 
 import pyqtgraph as pg
@@ -14,15 +14,12 @@ import pyqtgraph as pg
 from typing import List, Callable
 
 from control_cluster_utils.utilities.sysutils import PathsGetter
+from control_cluster_utils.utilities.defs import Journal
+from control_cluster_utils.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState
 
 import os
 
 import torch
-from control_cluster_utils.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState
-from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
-from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
-from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
-from control_cluster_utils.utilities.defs import additional_data_name
 
 class RtPlotWidget(pg.PlotWidget):
 
@@ -38,7 +35,8 @@ class RtPlotWidget(pg.PlotWidget):
                 ylabel = "", 
                 window_buffer_factor: int = 2):
 
-        self.warning = "warning"
+        self.journal = Journal()
+        self.journal.warning = "warning"
 
         super().__init__(title=base_name,
                     parent=parent)
@@ -47,7 +45,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         if legend_list is not None and len(legend_list) != n_data:
             
-            warning = "[{self.__class__.__name__}]" + f"[{self.warning}]" \
+            warning = "[{self.__class__.__name__}]" + f"[{self.journal.warning}]" \
                 + f": provided legend list length {len(legend_list)} does not match data dimension {n_data}"
             
             print(warning)
@@ -63,7 +61,7 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.nightmode = False
 
-        self.ntimestamps_per_window = 10
+        # self.ntimestamps_per_window = 10
         
         self.n_data = n_data
 
@@ -283,6 +281,8 @@ class SettingsWidget():
             rt_plotter: RtPlotWidget,
             parent: QWidget = None
             ):
+
+        self.journal = Journal()
 
         self.rt_plot_widget = rt_plotter
 
@@ -599,6 +599,8 @@ class RtPlotWindow():
             window_buffer_factor: int = 2, 
             ylabel = ""):
 
+        self.journal = Journal()
+
         self.n_data = n_data
         self.update_data_dt = update_data_dt
         self.update_plot_dt = update_plot_dt    
@@ -646,6 +648,8 @@ class GridFrameWidget():
             cols, 
             parent: QWidget = None):
         
+        self.journal = Journal()
+
         self.base_frame = QFrame(parent = parent)
 
         self.rows = rows
@@ -721,6 +725,8 @@ class RhcTaskRefWindow():
             window_buffer_factor: int = 2,
             parent: QWidget = None, 
             verbose = False):
+
+        self.journal = Journal()
 
         self.cluster_size = cluster_size
         self.n_contacts = n_contacts
@@ -864,6 +870,8 @@ class RhcCmdsWindow():
             parent: QWidget = None, 
             verbose = False):
 
+        self.journal = Journal()
+
         self.cluster_size = cluster_size
         self.jnt_names = jnt_names 
         self.jnt_number = jnt_number
@@ -1006,6 +1014,8 @@ class RhcStateWindow():
             window_buffer_factor: int = 2,
             parent: QWidget = None, 
             verbose = False):
+        
+        self.journal = Journal()
 
         self.cluster_size = cluster_size
         self.jnt_names = jnt_names 
@@ -1163,64 +1173,4 @@ class RhcStateWindow():
             self.rhc_states[i].terminate()
         
         self._terminated = True
-
-class DataThread(QThread):
-
-    data_updated = pyqtSignal(np.ndarray)
-
-    def __init__(self, 
-                update_dt: float, 
-                n_data: int):
-        
-        super().__init__()
-
-        self.update_dt = update_dt
-
-        self.n_data = n_data
-
-    def run(self):
-
-        while True:
-
-            new_data = 2 * (np.random.rand(self.n_data, 1) - np.full((self.n_data, 1), 0.5))
-
-            self.data_updated.emit(new_data)
-
-            time.sleep(self.update_dt)
-
-class RealTimePlotApp(QMainWindow):
-
-    def __init__(self):
-
-        super().__init__()
-
-        n_data = 15
-        update_dt_thread = 0.001
-        update_dt_debug= 0.05
-        window_duration = 10 # [s]
-
-        # main window widget
-
-        self.rt_plot_window = RtPlotWindow(n_data, 
-                                update_dt_debug, 
-                                window_duration, 
-                                parent=self)
-        self.setCentralWidget(self.rt_plot_window.base_frame)
-
-        # this thread will handle the update of the plot
-        self.data_thread = DataThread(update_dt_thread, 
-                                self.rt_plot_window.n_data)
-        self.data_thread.data_updated.connect(self.rt_plot_window.rt_plot_widget.update,
-                                        Qt.QueuedConnection)
-        self.data_thread.start()
-
-        self.show()
-
-if __name__ == "__main__":  
-
-    app = QApplication(sys.argv)
-
-    main_window = RealTimePlotApp()
-
-    sys.exit(app.exec_())
 

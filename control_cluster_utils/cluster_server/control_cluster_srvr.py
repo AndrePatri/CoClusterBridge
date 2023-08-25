@@ -1,8 +1,8 @@
 from abc import ABC
 
 from control_cluster_utils.controllers.rhc import RHChild
-
 from control_cluster_utils.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
+from control_cluster_utils.utilities.defs import Journal
 
 from typing import List
 
@@ -23,10 +23,7 @@ class ControlClusterSrvr(ABC):
 
         self.verbose = verbose
 
-        self.status = "status"
-        self.info = "info"
-        self.warning = "warning"
-        self.exception = "exception"
+        self.journal = Journal()
 
         self.processes_basename = processes_basename
 
@@ -61,11 +58,11 @@ class ControlClusterSrvr(ABC):
                 
                 process.terminate()  # Forcefully terminate the process
             
-            print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": terminating child process " + str(process.name))
+            print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": terminating child process " + str(process.name))
         
     def _spawn_processes(self):
 
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": spawning processes...")
+        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": spawning processes...")
 
         if self._controllers_count == self.cluster_size:
             
@@ -83,17 +80,17 @@ class ControlClusterSrvr(ABC):
 
             self._is_cluster_ready = True
 
-            print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": processes spawned.")
+            print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": processes spawned.")
                 
         else:
 
-            raise Exception(f"[{self.__class__.__name__}]" + f"{self.exception}" + "You didn't finish to fill the cluster. Please call the add_controller() method to do so.")
+            raise Exception(f"[{self.__class__.__name__}]" + f"{self.journal.exception}" + "You didn't finish to fill the cluster. Please call the add_controller() method to do so.")
 
     def _finalize_init(self):
 
         # steps to be performed after the controllers are fully initialized 
 
-        print(f"[{self.__class__.__name__}]" + f"{self.status}" + ": performing final initialization steps...")
+        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": performing final initialization steps...")
 
         self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
                                     n_contacts=len(self._controllers[0]._model.cmap.keys()))
@@ -109,7 +106,7 @@ class ControlClusterSrvr(ABC):
 
             self._controllers[i].init_rhc_task_cmds() # initializes rhc commands
     
-        print(f"[{self.__class__.__name__}]" + f"[{self.status}]" + ": final initialization steps completed.")
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": final initialization steps completed.")
 
     def add_controller(self, controller: RHChild):
 
@@ -127,7 +124,7 @@ class ControlClusterSrvr(ABC):
 
         if self._controllers_count > self.cluster_size:
 
-            print(f"[{self.__class__.__name__}]" + f"[{self.warning}]" + ": cannot add any more controllers to the cluster. The cluster is full.")
+            print(f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + ": cannot add any more controllers to the cluster. The cluster is full.")
 
             return False
     
@@ -137,6 +134,6 @@ class ControlClusterSrvr(ABC):
 
     def terminate(self):
         
-        print(f"[{self.__class__.__name__}]" + f"[{self.info}]" + ": terminating cluster")
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.info}]" + ": terminating cluster")
 
         self._close_processes() # we also terminate all the child processes

@@ -2,6 +2,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QSlider
 from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
 from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
+from PyQt5.QtGui import QIcon, QPixmap
 
 from control_cluster_utils.utilities.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
 from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
@@ -10,7 +11,7 @@ from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_n
 from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
 from control_cluster_utils.utilities.defs import additional_data_name
 from control_cluster_utils.utilities.sysutils import PathsGetter
-from PyQt5.QtGui import QIcon, QPixmap
+from control_cluster_utils.utilities.defs import Journal
 
 import os
 
@@ -34,6 +35,8 @@ class SharedDataThread(QThread):
                 verbose = True):
         
         super().__init__()
+
+        self.journal = Journal()
 
         self.perf_timer = PerfSleep()
 
@@ -134,6 +137,8 @@ class RtClusterDebugger(QMainWindow):
                 window_buffer_factor: int = 2,
                 verbose: bool = False):
 
+        self.journal = Journal()
+
         self.data_update_dt = data_update_dt
         self.plot_update_dt = plot_update_dt
 
@@ -188,7 +193,7 @@ class RtClusterDebugger(QMainWindow):
         # This function is called when the window is being closed
         # You can perform your desired actions here
 
-        message = f"[{self.__class__.__name__}]" + f"[status]: " \
+        message = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]: " \
                 + f"closing debugger and performing some cleanup..."
             
         print(message)

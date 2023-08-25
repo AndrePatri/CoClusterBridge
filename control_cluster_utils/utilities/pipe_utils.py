@@ -6,6 +6,8 @@ from typing import List
 from enum import Enum
 from control_cluster_utils.utilities.sysutils import PathsGetter
 
+from control_cluster_utils.utilities.defs import Journal
+
 class NamedPipesHandler:
 
     OMode = {
@@ -24,10 +26,7 @@ class NamedPipesHandler:
 
         self.name = name
 
-        self.info = "info"
-        self.status = "status"
-        self.exception = "exception"
-        self.warning = "warning"
+        self.journal = Journal()
 
         paths = PathsGetter()
         self.pipes_config_path = paths.PIPES_CONFIGPATH
@@ -40,7 +39,7 @@ class NamedPipesHandler:
 
         if not os.path.exists(self.pipes_path):
             
-            print(f"[{self.name}]" + f"{self.status}" + ": creating pipe directory @" + self.pipes_path)
+            print(f"[{self.name}]" + f"{self.journal.status}" + ": creating pipe directory @" + self.pipes_path)
             os.mkdir(self.pipes_path)
 
         self.ext = self.yamldata["extension"]
@@ -80,7 +79,7 @@ class NamedPipesHandler:
 
             if not os.path.exists(pipe_path):
             
-                print(f"[{self.name}]" + f"[{self.status}]" + ": creating pipe @ " + pipe_path)
+                print(f"[{self.name}]" + f"[{self.journal.status}]" + ": creating pipe @ " + pipe_path)
 
                 os.mkfifo(pipe_path)
 
@@ -105,7 +104,7 @@ class NamedPipesHandler:
 
                     if not os.path.exists(pipe_path):
                     
-                        print(f"[{self.name}]" + f"[{self.status}]" + ": creating pipe @ " + pipe_path)
+                        print(f"[{self.name}]" + f"[{self.journal.status}]" + ": creating pipe @ " + pipe_path)
 
                         os.mkfifo(pipe_path)
 
@@ -113,7 +112,7 @@ class NamedPipesHandler:
 
         else:
 
-            print(f"[{self.name}]" + f"[{self.warning}]" + f"[{self._create_runtime_pipes.__name__}]" + \
+            print(f"[{self.name}]" + f"[{self.journal.warning}]" + f"[{self._create_runtime_pipes.__name__}]" + \
                   ": runtime pipes already initialized. This method can only be called once!!")
 
         self.runtime_pipes_created = True
@@ -129,14 +128,14 @@ class NamedPipesHandler:
 
             if not os.path.exists(self.pipes[pipe]):
                 
-                print(f"[{self.name}]" + f"[{self.warning}]"  + \
+                print(f"[{self.name}]" + f"[{self.journal.warning}]"  + \
                     ": will not open pipe @ " + self.pipes[pipe] + ". It does not exist!!")
 
                 return -1
             
             else:
 
-                print(f"[{self.name}]" + f"[{self.status}]"  +  \
+                print(f"[{self.name}]" + f"[{self.journal.status}]"  +  \
                     f"[{self._open.__name__}]" +": opening pipe @" + self.pipes[pipe])
 
                 self.is_open[pipe] = True
@@ -149,14 +148,14 @@ class NamedPipesHandler:
 
             if not os.path.exists(self.pipes[pipe][index]):
                 
-                print(f"[{self.name}]" + f"[{self.warning}]" +  f"[{self._open.__name__}]" + \
+                print(f"[{self.name}]" + f"[{self.journal.warning}]" +  f"[{self._open.__name__}]" + \
                     ": will not open pipe @ " + self.pipes[pipe][index] + ". It does not exist!!")
 
                 return -1
             
             else:
 
-                print(f"[{self.name}]" + f"[{self.status}]" +  f"[{self._open.__name__}]" + \
+                print(f"[{self.name}]" + f"[{self.journal.status}]" +  f"[{self._open.__name__}]" + \
                     ": opening pipe @" + self.pipes[pipe][index])
                 
                 self.is_open[pipe][index] = True
@@ -173,14 +172,14 @@ class NamedPipesHandler:
 
             if not os.path.exists(self.pipes[pipe]):
                 
-                print(f"[{self.name}]" + f"[{self.warning}]" +  f"[{self._close.__name__}]" + \
+                print(f"[{self.name}]" + f"[{self.journal.warning}]" +  f"[{self._close.__name__}]" + \
                     ": will not close pipe @ " + self.pipes[pipe] + ". It does not exist!!")
 
                 return -1
             
             else:
                 
-                print(f"[{self.name}]" + f"[{self.status}]" +  f"[{self._close.__name__}]" + \
+                print(f"[{self.name}]" + f"[{self.journal.status}]" +  f"[{self._close.__name__}]" + \
                     ": closing pipe @" + self.pipes[pipe])
 
                 self.is_open[pipe] = False
@@ -193,14 +192,14 @@ class NamedPipesHandler:
 
             if not os.path.exists(self.pipes[pipe][index]):
                 
-                print(f"[{self.name}]" + f"[{self.warning}]" +  f"[{self._close.__name__}]" +\
+                print(f"[{self.name}]" + f"[{self.journal.warning}]" +  f"[{self._close.__name__}]" +\
                     ": will not close pipe @ " + self.pipes[pipe][index] + ". It does not exist!!")
 
                 return -1
             
             else:
 
-                print(f"[{self.name}]" + f"[{self.status}]" +  f"[{self._close.__name__}]" + \
+                print(f"[{self.name}]" + f"[{self.journal.status}]" +  f"[{self._close.__name__}]" + \
                     ": closing pipe @" + self.pipes[pipe][index])
 
                 self.is_open[pipe][index] = False
@@ -222,7 +221,7 @@ class NamedPipesHandler:
                 
                 else:
 
-                    print(f"[{self.name}]" + f"[{self.warning}]" +  f"[{self.open_pipes.__name__}]" + \
+                    print(f"[{self.name}]" + f"[{self.journal.warning}]" +  f"[{self.open_pipes.__name__}]" + \
                         ": will not open pipe @ " + self.pipes[pipe] + ". It's already opened")
 
             if (not pipe in self.buildpipes) and (pipe in self.pipes): # runtime pipe
@@ -233,7 +232,7 @@ class NamedPipesHandler:
                 
                 else:
 
-                    print(f"[{self.name}]" + f"[{self.warning}]" +  f"[{self.open_pipes.__name__}]" + \
+                    print(f"[{self.name}]" + f"[{self.journal.warning}]" +  f"[{self.open_pipes.__name__}]" + \
                         ": will not open pipe @ " + self.pipes[pipe][index] + ". It's already opened")
 
     def close_pipes(self, 

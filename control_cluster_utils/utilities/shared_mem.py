@@ -12,6 +12,7 @@ from control_cluster_utils.utilities.sysutils import PathsGetter
 from control_cluster_utils.utilities.defs import shared_clients_count_name
 from control_cluster_utils.utilities.defs import shared_sem_srvr_name
 from control_cluster_utils.utilities.defs import shared_sem_clients_count_name
+from control_cluster_utils.utilities.defs import Journal
 
 from typing import List
 
@@ -22,6 +23,8 @@ from perf_sleep.pyperfsleep import PerfSleep
 class SharedMemConfig:
 
     def __init__(self):
+        
+        self.journal = Journal()
 
         paths = PathsGetter()
         self.config_path = paths.SHARED_MEM_CONFIGPATH
@@ -45,10 +48,7 @@ class SharedMemSrvr:
 
         self.perf_timer = PerfSleep()
 
-        self.status = "status"
-        self.info = "info"
-        self.exception = "exception"
-        self.warning = "warning"
+        self.journal = Journal()
 
         self.backend = backend
 
@@ -151,7 +151,7 @@ class SharedMemSrvr:
     def print_created_mem(self, 
                         path: str):
         
-        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
                     f"created shared memory of datatype {self.dtype}" + \
                     f", size {self.n_rows} x {self.n_cols} @ {path}"
         
@@ -159,7 +159,7 @@ class SharedMemSrvr:
 
     def mult_srvrs_error(self):
 
-        error = f"\n[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
+        error = f"\n[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
                         f"a server @ {self.mem_config.mem_path} already exists. Only one server can be created at a time!\n"
 
         return error
@@ -170,7 +170,7 @@ class SharedMemSrvr:
                             flags=posix_ipc.O_CREAT, 
                             initial_value=1)
         
-        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_semaphores.__name__}]: " + \
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
                     f"created/opened sempaphore @ {self.mem_path_clients_n_sem}"
         
         print(message)
@@ -179,7 +179,7 @@ class SharedMemSrvr:
                             flags=posix_ipc.O_CREAT, 
                             initial_value=1)
         
-        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_semaphores.__name__}]: " + \
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
                     f"created/opened sempaphore @ {self.mem_path_server_sem}"
         
         print(message)
@@ -208,7 +208,7 @@ class SharedMemSrvr:
 
         self.n_clients = memoryview(self.memory_clients_counter)
 
-        message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._create_clients_counter.__name__}]: " + \
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_clients_counter.__name__}]: " + \
                     f"created/opened clients counter @ {self.mem_path_clients_counter}"
         
         print(message)
@@ -281,7 +281,7 @@ class SharedMemSrvr:
 
             self.memory = None
 
-            message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._close_mmaps.__name__}]: " + \
+            message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._close_mmaps.__name__}]: " + \
                         f"closed shared memory of datatype {self.dtype}" + \
                         f", size {self.n_rows} x {self.n_cols} @ {self.mem_config.mem_path}"
         
@@ -293,7 +293,7 @@ class SharedMemSrvr:
 
             self.memory_clients_counter = None
 
-            message = f"[{self.__class__.__name__}]"  + f"[{self.status}]" + f"[{self._close_mmaps.__name__}]: " + \
+            message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._close_mmaps.__name__}]: " + \
                         f"closed clients counter @ {self.mem_path_clients_counter}"
         
             print(message)
@@ -312,7 +312,7 @@ class SharedMemSrvr:
 
             except posix_ipc.ExistentialError:
                 
-                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
+                message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
                         f"could not close semaphor @ {self.mem_path_server_sem}. Probably something already did."
 
                 print(message)
@@ -331,7 +331,7 @@ class SharedMemSrvr:
 
             except posix_ipc.ExistentialError:
                 
-                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
+                message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
                         f"could not close semaphor @ {self.mem_path_clients_n_sem}. Probably something already did."
 
                 print(message)
@@ -352,7 +352,7 @@ class SharedMemSrvr:
 
             except posix_ipc.ExistentialError:
                 
-                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
+                message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
                         f"could not unlink shared memory of datatype {self.dtype}" + \
                         f", size {self.n_rows} x {self.n_cols} @ {self.mem_config.mem_path}. Probably something already did."
 
@@ -372,7 +372,7 @@ class SharedMemSrvr:
 
             except posix_ipc.ExistentialError:
                 
-                message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self._unlink.__name__}]: " + \
+                message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
                         f"could not unlink clients counter @ {self.mem_path_clients_counter}. Probably something already did."
 
                 print(message)
@@ -422,7 +422,7 @@ class SharedMemSrvr:
         else:
 
             exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
                             ":" + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
@@ -437,7 +437,7 @@ class SharedMemSrvr:
         else:
 
             exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.exception}]" + f"[{self.none.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.none.__name__}]" + \
                             ":" + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
@@ -460,7 +460,7 @@ class SharedMemSrvr:
         else:
 
             exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
                             ": " + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
@@ -475,7 +475,7 @@ class SharedMemSrvr:
             if len(vals) != len(self.bool_bytearray_view):
 
                 exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
                             ": " + f" provided boolean list of length {len(vals)} does" + \
                             f" not match the required lentgh of {len(self.bool_bytearray_view)}"
 
@@ -486,7 +486,7 @@ class SharedMemSrvr:
         else:
 
             exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
                             ": " + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
@@ -504,6 +504,8 @@ class SharedMemClient:
                 verbose = False, 
                 wait_amount = 0.05):
         
+        self.journal = Journal()
+
         self.perf_timer = PerfSleep()
 
         self.backend = backend
@@ -511,11 +513,6 @@ class SharedMemClient:
         self.verbose = verbose
 
         self.wait_amount = wait_amount
-
-        self.status = "status"
-        self.info = "info"
-        self.exception = "exception"
-        self.warning = "warning"
 
         self.dtype = dtype
 
@@ -623,7 +620,7 @@ class SharedMemClient:
         
         index = "" if self.client_index is None else self.client_index
         status = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
-                        f"[{self.status}]" + ": " + \
+                        f"[{self.journal.status}]" + ": " + \
                             f"waiting for memory at {path} to be allocated by the server..."
                     
         print(status)
@@ -633,7 +630,7 @@ class SharedMemClient:
 
         index = "" if self.client_index is None else self.client_index
         message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
-                                f"[{self.status}]" + ": " + f"attaced to memory @ {path}."
+                                f"[{self.journal.status}]" + ": " + f"attaced to memory @ {path}."
         
         print(message)
 
@@ -642,7 +639,7 @@ class SharedMemClient:
 
         index = "" if self.client_index is None else self.client_index
         message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
-                                f"[{self.status}]" + ": " + f"detached from memory @ {path}."
+                                f"[{self.journal.status}]" + ": " + f"detached from memory @ {path}."
         
         print(message)
 
@@ -804,7 +801,7 @@ class SharedMemClient:
                         if index >= self.n_cols:
 
                             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                                            f"[{self.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
+                                            f"[{self.journal.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
                                             ": " + f"the provided index {index} exceeds {self.n_cols - 1}"
                         
                             raise ValueError(exception)
@@ -812,7 +809,7 @@ class SharedMemClient:
                         if length > (self.n_cols - index):
 
                             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                                            f"[{self.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
+                                            f"[{self.journal.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
                                             ": " + f"the provided length {length} exceeds {(self.n_cols - index)}"
                         
                             raise ValueError(exception)
@@ -840,7 +837,7 @@ class SharedMemClient:
                         if index >= self.n_cols:
 
                             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                                            f"[{self.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
+                                            f"[{self.journal.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
                                             ": " + f"the provided index {index} exceeds {self.n_cols - 1}"
                         
                             raise ValueError(exception)
@@ -848,7 +845,7 @@ class SharedMemClient:
                         if length > (self.n_cols - index):
 
                             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                                            f"[{self.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
+                                            f"[{self.journal.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
                                             ": " + f"the provided length {length} exceeds {(self.n_cols - index)}"
                         
                             raise ValueError(exception)
@@ -864,7 +861,7 @@ class SharedMemClient:
             else:
 
                 exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                                f"[{self.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
+                                f"[{self.journal.exception}]" + f"[{self.create_partial_tensor_view.__name__}]" + \
                                 ": " + f"can only call create_partial_tensor_view is " + \
                                 "a client_index was provided upon initialization."
                     
@@ -888,7 +885,7 @@ class SharedMemClient:
             else:
 
                 exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.exception}]" + f"[{self.set_bool.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.set_bool.__name__}]" + \
                             ": " + f"bool val will not be assigned for dim incompatibility." + \
                             f"Client index: {self.client_index}, len bytearray view: {len(self.bool_bytearray_view)}."
                 
@@ -898,7 +895,7 @@ class SharedMemClient:
         else:
 
             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.exception}]" + f"[{self.set_bool.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.set_bool.__name__}]" + \
                             ": " + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
@@ -918,7 +915,7 @@ class SharedMemClient:
                 self.client_index >= len(self.bool_bytearray_view):
 
                 exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
                             ": " + f"bool val will not be read for dim incompatibility."
 
                 raise Exception(exception)
@@ -930,7 +927,7 @@ class SharedMemClient:
         else:
 
             exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.exception}]" + f"[{self.all.__name__}]" + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
                             ": " + f"no bytearray view available." + \
                             "Did you initialize the class with boolean dtype and at least one dimension = 1?"
 
@@ -963,7 +960,7 @@ class SharedMemClient:
                         index = "" if self.client_index is None else self.client_index
 
                         message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
-                                f"[{self.status}]" +  f"[{self._increment_client_count.__name__}]" + ": " + \
+                                f"[{self.journal.status}]" +  f"[{self._increment_client_count.__name__}]" + ": " + \
                                 f" failed to acquire semaphore @ {self.mem_path_clients_semaphore}." + \
                                 " Retrying ..."
 
@@ -998,7 +995,7 @@ class SharedMemClient:
                         index = "" if self.client_index is None else self.client_index
 
                         message = "[" + self.__class__.__name__ + str(self.name) + str(index) + "]"  + \
-                                f"[{self.status}]" +  f"[{self._decrement_client_count.__name__}]" + ": " + \
+                                f"[{self.journal.status}]" +  f"[{self._decrement_client_count.__name__}]" + ": " + \
                                 f" failed to acquire semaphore @ {self.mem_path_clients_semaphore}." + \
                                 " Retrying ..."
 
@@ -1065,6 +1062,8 @@ class SharedStringArray:
             verbose: bool = False, 
             wait_amount: float = 0.01):
         
+        self.journal = Journal()
+
         self.verbose = verbose
 
         self.length = length
@@ -1083,11 +1082,6 @@ class SharedStringArray:
         self.basename = f"{self.__class__.__name__}"
 
         self.name = self.basename + name
-        
-        self.status = "status"
-        self.info = "info"
-        self.exception = "exception"
-        self.warning = "warning"
 
         if self.is_server:
 
@@ -1142,7 +1136,7 @@ class SharedStringArray:
 
         else:
 
-            message = f"[{self.__class__.__name__}]"  + f"[{self.warning}]" + f"[{self.write.__name__}]: " + \
+            message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self.write.__name__}]: " + \
                         f"can only call the write() method on server!!"
         
             print(message)
@@ -1233,7 +1227,7 @@ class SharedStringArray:
         if len(lst) != self.length:
 
             exception = "[" + self.__class__.__name__ +  "]"  + \
-                f"[{self.exception}]" + ": " + f" length mismatch in provided list. It's {len(lst)} but should be {self.length}."
+                f"[{self.journal.exception}]" + ": " + f" length mismatch in provided list. It's {len(lst)} but should be {self.length}."
             
             raise Exception(exception)
         

@@ -7,6 +7,7 @@ from control_cluster_utils.utilities.rhc_defs import RhcTaskRefsChild
 
 from control_cluster_utils.utilities.shared_mem import SharedMemClient
 from control_cluster_utils.utilities.defs import trigger_flagname
+from control_cluster_utils.utilities.defs import Journal
 
 from typing import List, TypeVar
 
@@ -36,14 +37,11 @@ class RHController(ABC):
             debug = False,
             array_dtype = torch.float32):
         
+        self.journal = Journal()
+
         self.perf_timer = PerfSleep()
 
         self.controller_index = controller_index
-
-        self.status = "status"
-        self.info = "info"
-        self.exception = "exception"
-        self.warning = "warning"
 
         self._verbose = verbose
         self._debug = debug
@@ -162,7 +160,7 @@ class RHController(ABC):
         if not self._jnt_maps_created:
 
             exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.exception}]" + f"[{self.solve.__name__}]" + \
+                                f"[{self.journal.exception}]" + f"[{self.solve.__name__}]" + \
                                 ":" + f"jnt maps not initialized. Did you call the create_jnt_maps()?"
 
             raise Exception(exception)
@@ -170,7 +168,7 @@ class RHController(ABC):
         if not self._states_initialized:
 
             exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.exception}]" + f"[{self.solve.__name__}]" + \
+                                f"[{self.journal.exception}]" + f"[{self.solve.__name__}]" + \
                                 ":" + f"states not initialized. Did you call the init_states()?"
 
             raise Exception(exception)
@@ -178,7 +176,7 @@ class RHController(ABC):
         if self.rhc_task_refs is None:
 
             exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.exception}]" + f"[{self.solve.__name__}]" + \
+                                f"[{self.journal.exception}]" + f"[{self.solve.__name__}]" + \
                                 ":" + f"RHC task references non initialized. Did you call init_rhc_task_cmds()?"
 
             raise Exception(exception)
@@ -213,7 +211,7 @@ class RHController(ABC):
                     if self._verbose and self._debug:
 
                         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                            f"[{self.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+                            f"[{self.journal.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                 
                 else:
                     
@@ -247,7 +245,7 @@ class RHController(ABC):
 
         if not set_srvr == set_client:
 
-            exception = f"[{self.__class__.__name__}]" + f"{self.controller_index}" + f"{self.exception}" + \
+            exception = f"[{self.__class__.__name__}]" + f"{self.controller_index}" + f"{self.journal.exception}" + \
                 ": server-side and client-side joint names do not match!"
 
             raise Exception(exception)
@@ -259,14 +257,14 @@ class RHController(ABC):
         if not self._got_jnt_names_client:
 
             exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                f"[{self.exception}]" + ":" + f"Cannot run the solve().  assign_client_side_jnt_names() was not called!"
+                f"[{self.journal.exception}]" + ":" + f"Cannot run the solve().  assign_client_side_jnt_names() was not called!"
 
             raise Exception(exception)
         
         if not self._got_jnt_names_server:
 
             exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                f"[{self.exception}]" + ":" + f"Cannot run the solve().  _assign_server_side_jnt_names() was not called!"
+                f"[{self.journal.exception}]" + ":" + f"Cannot run the solve().  _assign_server_side_jnt_names() was not called!"
 
             raise Exception(exception)
         
