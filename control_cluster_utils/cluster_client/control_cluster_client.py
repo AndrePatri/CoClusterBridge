@@ -81,7 +81,7 @@ class ControlClusterClient(ABC):
         self._was_cluster_ready = False
         self.is_cluster_ready = False
         self._is_first_control_step = False
-
+        self.controllers_active = False
         # other data
         self.add_data_length = 0
 
@@ -152,18 +152,19 @@ class ControlClusterClient(ABC):
 
         self.trigger_flags.reset_bool(True) # sets all flags
 
-    def _solved(self):
+    def _wait_for_solution(self):
 
         solved = False
             
-        while not self.trigger_flags.none(): # far too much CPU intensive?
+        while not self.trigger_flags.none(): 
 
             if (not self._terminate) and \
                 (self.trigger_flags.get_clients_count() == self.cluster_size):
                 
                 self.perf_timer.clock_sleep(1000) # nanoseconds (but this
-                # # accuracy cannot be reached on a non-rt system)
-                # # on a modern laptop, this sleeps for about 5e-5s
+                # accuracy cannot be reached on a non-rt system)
+                # on a modern laptop, this sleeps for about 5e-5s, but it does
+                # so in a CPU-cheap manner
 
                 continue
             
@@ -249,6 +250,8 @@ class ControlClusterClient(ABC):
 
         handshake_done = self.handshake_manager.handshake_done
 
+        self.controllers_active = self.launch_controllers.all()
+
         if not handshake_done or (self.trigger_flags.get_clients_count() != self.cluster_size):
 
             if self._verbose: 
@@ -280,16 +283,23 @@ class ControlClusterClient(ABC):
             
             self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
 
-            if self.launch_controllers.all():
+            if self.controllers_active:
                 
                 self._trigger_solution() # triggers solution of all controllers in the cluster 
 
                 # we wait for all controllers to finish      
-                solved = self._solved() # this is blocking
+                solved = self._wait_for_solution() # this is blocking
                 
                 # at this point all controllers are done -> we synchronize the control commands on GPU
                 # with the ones written by each controller on CPU
                 self.controllers_cmds.synch()
+            
+            else:
+            
+                if self._verbose: 
+
+                    print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
+                        ": controllers waiting to be activated...")
 
             self.solution_counter += 1
 
