@@ -867,7 +867,6 @@ class RhcTaskRefWindow():
         for i in range(0, self.cluster_size):
 
             self.rhc_task_refs.append(RhcTaskRefs( 
-                cluster_size=self.cluster_size,
                 n_contacts=self.n_contacts,
                 index=i,
                 q_remapping=None,
@@ -1013,7 +1012,6 @@ class RhcCmdsWindow():
         for i in range(0, self.cluster_size):
 
             self.rhc_cmds.append(RobotCmds(n_dofs=self.jnt_number, 
-                                    cluster_size=self.cluster_size, 
                                     index=i, 
                                     jnt_remapping=None, # we see everything as seen on the simulator side 
                                     add_info_size=self.add_data_length, 
@@ -1182,7 +1180,6 @@ class RhcStateWindow():
         for i in range(0, self.cluster_size):
 
             self.rhc_states.append(RobotState(n_dofs=self.jnt_number, 
-                                    cluster_size=self.cluster_size, 
                                     index=i, 
                                     jnt_remapping=None, 
                                     q_remapping=None, 

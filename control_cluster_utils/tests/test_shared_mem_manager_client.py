@@ -21,11 +21,9 @@ def profile_read_write_cmds_states():
     for i in range(0, n_envs):
 
         print("Creating client n." + str(i))
-        clients_state.append(SharedMemClient(n_envs, 
-                                    n_jnts, 
-                                    'state', 
-                                    i, 
-                                    dtype))
+        clients_state.append(SharedMemClient('state', 
+                                i, 
+                                dtype))
         clients_state[i].attach()
         
     clients_cmds = []
@@ -33,11 +31,9 @@ def profile_read_write_cmds_states():
     for i in range(0, n_envs):
 
         print("Creating client n." + str(i))
-        clients_cmds.append(SharedMemClient(n_envs, 
-                                    n_jnts, 
-                                    'cmds', 
-                                    i, 
-                                    dtype))
+        clients_cmds.append(SharedMemClient('cmds', 
+                                i, 
+                                dtype))
         clients_cmds[i].attach()
     
     a = np.zeros((clients_state[0].tensor_view.shape[0], \
@@ -79,8 +75,7 @@ def profile_writing_bool_array():
 
     for i in range(0, n_envs):
 
-        clients.append(SharedMemClient(n_envs, n_jnts,
-                        "solved", 
+        clients.append(SharedMemClient("solved", 
                         i,
                         dtype=dtype))
         clients[i].attach()
@@ -115,8 +110,7 @@ def profile_reading_global_bool():
 
     for i in range(0, n_envs):
 
-        clients.append(SharedMemClient(1, 1,
-                        "trigger", 
+        clients.append(SharedMemClient("trigger", 
                         i, 
                         dtype=dtype))
         clients[i].attach()

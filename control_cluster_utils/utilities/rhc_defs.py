@@ -172,7 +172,6 @@ class RobotState:
         
     def __init__(self, 
                 n_dofs: int, 
-                cluster_size: int,
                 index: int,
                 jnt_remapping: List[int] = None,
                 q_remapping: List[int] = None,
@@ -187,16 +186,11 @@ class RobotState:
 
         self._terminated = False
 
-        self.n_dofs = n_dofs
-        self.cluster_size = cluster_size
-        aggregate_view_columnsize = aggregate_state_size(self.n_dofs)
-        
         self.jnt_remapping = jnt_remapping
         self.q_remapping = q_remapping
 
         # this creates the view of the shared data for the robot specificed by index
-        self.shared_memman = SharedMemClient(n_rows=self.cluster_size, 
-                        n_cols=aggregate_view_columnsize, 
+        self.shared_memman = SharedMemClient(
                         client_index=index, 
                         name=states_name(), 
                         dtype=self.dtype, 
@@ -208,8 +202,8 @@ class RobotState:
         # shared memory pointed to by the manager
 
         self.jnt_state = self.JntState(n_dofs, 
-                                        self.shared_memman, 
-                                        self.jnt_remapping) # created as a view of the
+                                self.shared_memman, 
+                                self.jnt_remapping) # created as a view of the
         # shared memory pointed to by the manager
         
         # we now make all the data in root_state and jnt_state a view of the memory viewed by the manager
@@ -375,7 +369,6 @@ class RobotCmds:
 
     def __init__(self, 
                 n_dofs: int, 
-                cluster_size: int,
                 index: int,
                 jnt_remapping: List[int] = None,
                 add_info_size: int = None, 
@@ -389,26 +382,13 @@ class RobotCmds:
         self.device = torch.device('cpu') # born to live on CPU
 
         self.n_dofs = n_dofs
-        self.cluster_size = cluster_size
         self.add_info_size = add_info_size
 
         self.jnt_remapping = jnt_remapping 
         
         self._terminated = False
 
-        aggregate_view_columnsize = -1
-
-        if add_info_size is not None:
-
-            aggregate_view_columnsize = aggregate_cmd_size(self.n_dofs, 
-                                                self.add_info_size)
-        else:
-
-            aggregate_view_columnsize = aggregate_cmd_size(self.n_dofs, 
-                                                        0)
-        
-        self.shared_memman = SharedMemClient(n_rows=self.cluster_size, 
-                        n_cols=aggregate_view_columnsize, 
+        self.shared_memman = SharedMemClient(
                         client_index=index, 
                         name=cmds_name(), 
                         dtype=self.dtype, 
@@ -668,7 +648,6 @@ class RhcTaskRefs:
             return self.com_pos[:, :]
         
     def __init__(self, 
-                cluster_size: int,
                 n_contacts: int,
                 index: int,
                 q_remapping: List[int] = None,
@@ -683,16 +662,12 @@ class RhcTaskRefs:
 
         self._terminated = False
 
-        self.cluster_size = cluster_size
         self.n_contacts = n_contacts
-        aggregate_view_columnsize = aggregate_refs_size(self.n_contacts)
         
         self.q_remapping = q_remapping
 
         # this creates the view of the shared refs data for the robot specificed by index
-        self.shared_memman = SharedMemClient(n_rows=self.cluster_size, 
-                        n_cols=aggregate_view_columnsize, 
-                        client_index=index, 
+        self.shared_memman = SharedMemClient(client_index=index, 
                         name=task_refs_name(), 
                         dtype=self.dtype, 
                         verbose=verbose) 

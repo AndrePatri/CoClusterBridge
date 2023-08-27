@@ -347,20 +347,17 @@ class RtClusterDebugger(QMainWindow):
         wait_amount = 0.05
         
         # getting info
-        self.cluster_size_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=cluster_size_name(), 
+        self.cluster_size_clnt = SharedMemClient(name=cluster_size_name(), 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
                                     verbose=self.verbose)
         self.cluster_size_clnt.attach()
-        self.n_contacts_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=n_contacts_name(), 
+        self.n_contacts_clnt = SharedMemClient(name=n_contacts_name(), 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
                                     verbose=True)
         self.n_contacts_clnt.attach()
-        self.jnt_number_clnt = SharedMemClient(n_rows=1, n_cols=1,
-                                        name=jnt_number_client_name(), 
+        self.jnt_number_clnt = SharedMemClient(name=jnt_number_client_name(), 
                                         dtype=torch.int64, 
                                         wait_amount=wait_amount, 
                                         verbose=self.verbose)
@@ -371,15 +368,13 @@ class RtClusterDebugger(QMainWindow):
                                     wait_amount=wait_amount, 
                                     verbose=self.verbose)
         self.jnt_names_clnt.start()
-        self.add_data_length_clnt = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=additional_data_name(), 
+        self.add_data_length_clnt = SharedMemClient(name=additional_data_name(), 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
                                     verbose=True)
         self.add_data_length_clnt.attach()
 
-        self.launch_controllers = SharedMemClient(1, 1, 
-                                launch_controllers_flagname(), 
+        self.launch_controllers = SharedMemClient(launch_controllers_flagname(), 
                                 dtype=torch.bool, 
                                 client_index=0)
 

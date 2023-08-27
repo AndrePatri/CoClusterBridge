@@ -544,14 +544,12 @@ class HanshakeDataCntrlSrvr:
         self.add_data_length = None
         self.n_contacts = None
 
-        self.cluster_size = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=cluster_size_name(), 
+        self.cluster_size = SharedMemClient(name=cluster_size_name(), 
                                     dtype=torch.int64, 
                                     wait_amount=self.wait_amount, 
                                     verbose=self.verbose)
         
-        self.jnt_number_client = SharedMemClient(n_rows=1, n_cols=1,
-                                        name=jnt_number_client_name(), 
+        self.jnt_number_client = SharedMemClient(name=jnt_number_client_name(), 
                                         dtype=torch.int64, 
                                         wait_amount=self.wait_amount, 
                                         verbose=self.verbose)
@@ -585,7 +583,7 @@ class HanshakeDataCntrlSrvr:
             # we create the clients (will wait for the memory to be 
             # created by the server)
             print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
-                f"{self.finalize_init.__name__}" + ": executing finalization steps")
+                f"[{self.finalize_init.__name__}]" + ": executing finalization steps...")
             
             # we first create the servers (non-blocking)
 
@@ -600,7 +598,10 @@ class HanshakeDataCntrlSrvr:
                                     dtype=torch.int64)
             self.n_contacts.start()
             self.n_contacts.tensor_view[0, 0] = n_contacts
-        
+
+            print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
+                f"[{self.finalize_init.__name__}]" + ": done.")
+            
         else:
 
             exception = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
@@ -664,14 +665,12 @@ class HanshakeDataCntrlClient:
                                     name=jnt_number_client_name(), 
                                     dtype=torch.int64)
 
-        self.add_data_length = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=additional_data_name(), 
+        self.add_data_length = SharedMemClient(name=additional_data_name(), 
                                     dtype=torch.int64, 
                                     wait_amount=self.wait_amount, 
                                     verbose=True)
         
-        self.n_contacts = SharedMemClient(n_rows=1, n_cols=1, 
-                                    name=n_contacts_name(), 
+        self.n_contacts = SharedMemClient(name=n_contacts_name(), 
                                     dtype=torch.int64, 
                                     wait_amount=self.wait_amount, 
                                     verbose=True)

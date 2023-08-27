@@ -61,7 +61,7 @@ class SharedMemConfig:
         
         self.mem_path_clients_semaphore = "/" + self.basename + \
                 self.name + "_" + shared_sem_clients_count_name()
-        
+
 class SharedMemSrvr:
 
     def __init__(self, 
@@ -96,15 +96,21 @@ class SharedMemSrvr:
         self.shm_clients_counter = None
         self.sem_server = None
         self.sem_client_n = None
-
+        self.shm_n_cols = None
+        self.shm_n_rows = None
+    
         # mem maps
         self.memory = None
         self.memory_clients_counter = None
+        self.memory_n_cols = None
+        self.memory_n_rows = None
 
         # views
         self.bool_bytearray_view = None
         self.tensor_view = None
         self.n_clients = None
+        self.n_cols_shared = None
+        self.n_rows_shared = None
 
         self.torch_to_np_dtype = {
             torch.float16: np.float16,
@@ -120,11 +126,15 @@ class SharedMemSrvr:
 
         self._create_shared_memory()
 
+    def __del__(self):
+
+        self.terminate()
+
     def start(self):
         
-        if not self.is_server_unique():
+        if not self._is_server_unique():
                         
-            raise Exception(self.mult_srvrs_error())
+            raise Exception(self._mult_srvrs_error())
         
         self._create_tensor_view()
         
@@ -146,84 +156,7 @@ class SharedMemSrvr:
                 self._create_bytearray_view()
         
         self._started = True
-                
-    def __del__(self):
-
-        self.terminate()
-
-    def terminate(self):
-        
-        if not self._terminate:
-
-            self._terminate = True
-
-            self._close_shared_memory()
-
-    def print_created_mem(self, 
-                        path: str):
-        
-        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
-                    f"created shared memory of datatype {self.dtype}" + \
-                    f", size {self.n_rows} x {self.n_cols} @ {path}"
-        
-        print(message)
-
-    def mult_srvrs_error(self):
-
-        error = f"\n[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
-                        f"a server @ {self.mem_config.mem_path} already exists. Only one server can be created at a time!\n"
-
-        return error
-        
-    def _create_semaphores(self):
-
-        self.sem_client_n = posix_ipc.Semaphore(self.mem_config.mem_path_clients_n_sem, 
-                            flags=posix_ipc.O_CREAT, 
-                            initial_value=1)
-        
-        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
-                    f"created/opened sempaphore @ {self.mem_config.mem_path_clients_n_sem}"
-        
-        print(message)
-
-        self.sem_server = posix_ipc.Semaphore(self.mem_config.mem_path_server_sem, 
-                            flags=posix_ipc.O_CREAT, 
-                            initial_value=1)
-        
-        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
-                    f"created/opened sempaphore @ {self.mem_config.mem_path_server_sem}"
-        
-        print(message)
-
-    def is_server_unique(self):
-        
-        try:
-
-            self.sem_server.acquire(timeout=0.1)
-
-            return True
-        
-        except posix_ipc.BusyError: # failed to acquire --> another server
-            
-            return False
-        
-    def _create_clients_counter(self):
-
-        self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_config.mem_path_clients_counter, 
-                                flags=posix_ipc.O_CREAT,
-                                size=8) # each client will increment this counter
-
-        self.memory_clients_counter = mmap.mmap(self.shm_clients_counter.fd, self.shm_clients_counter.size)
-
-        self.shm_clients_counter.close_fd()
-
-        self.n_clients = memoryview(self.memory_clients_counter)
-
-        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_clients_counter.__name__}]: " + \
-                    f"created/opened clients counter @ {self.mem_config.mem_path_clients_counter}"
-        
-        print(message)
-
+    
     def get_clients_count(self):
         
         if self.n_clients is not None:
@@ -244,13 +177,193 @@ class SharedMemSrvr:
 
                     continue
         
+    def all(self):
+
+        if self.bool_bytearray_view is not None:
+
+            return all(value == 1 for value in self.bool_bytearray_view)
+        
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+        
+    def none(self):
+
+        if self.bool_bytearray_view is not None:
+
+            return all(value == 0 for value in self.bool_bytearray_view)
+        
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.none.__name__}]" + \
+                            ":" + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+
+    def reset_bool(self, 
+                to_true: bool = False):
+
+        # sets all to either True or False
+        if self.bool_bytearray_view is not None:
+            
+            if to_true:
+
+                self.bool_bytearray_view[:] = self.bytearray_reset_true
+
+            else:
+
+                self.bool_bytearray_view[:] = self.bytearray_reset_false
+
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
+                            ": " + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+        
+    def set_bool(self, 
+                vals: List[bool]):
+
+        # sets all to either True or False
+        if self.bool_bytearray_view is not None:
+            
+            if len(vals) != len(self.bool_bytearray_view):
+
+                exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
+                            ": " + f" provided boolean list of length {len(vals)} does" + \
+                            f" not match the required lentgh of {len(self.bool_bytearray_view)}"
+
+                raise Exception(exception)
+        
+            self.bool_bytearray_view[:] = bytearray(vals)
+
+        else:
+
+            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
+                            ": " + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+        
+    def terminate(self):
+        
+        if not self._terminate:
+
+            self._terminate = True
+
+            self._close_shared_memory()
+
+    def _print_created_mem(self, 
+                        path: str):
+        
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
+                    f"created shared memory of datatype {self.dtype}" + \
+                    f", size {self.n_rows} x {self.n_cols} @ {path}"
+        
+        print(message)
+
+    def _mult_srvrs_error(self):
+
+        error = f"\n[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_shared_memory.__name__}]: " + \
+                        f"a server @ {self.mem_config.mem_path} already exists. Only one server can be created at a time!\n"
+
+        return error
+        
+    def _create_semaphores(self):
+
+        self.sem_client_n = posix_ipc.Semaphore(self.mem_config.mem_path_clients_n_sem, 
+                            flags=posix_ipc.O_CREAT, 
+                            initial_value=1)
+        
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
+                    f"created/opened semaphore @ {self.mem_config.mem_path_clients_n_sem}"
+        
+        print(message)
+
+        self.sem_server = posix_ipc.Semaphore(self.mem_config.mem_path_server_sem, 
+                            flags=posix_ipc.O_CREAT, 
+                            initial_value=1)
+        
+        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._create_semaphores.__name__}]: " + \
+                    f"created/opened semaphore @ {self.mem_config.mem_path_server_sem}"
+        
+        print(message)
+
+    def _is_server_unique(self):
+        
+        try:
+
+            self.sem_server.acquire(timeout=0.1)
+
+            return True
+        
+        except posix_ipc.BusyError: # failed to acquire --> another server
+            
+            return False
+    
+    def _create_int_shared_var(self, 
+                    path: str):
+        
+        shm = posix_ipc.SharedMemory(name = path, 
+                                flags=posix_ipc.O_CREAT,
+                                size=8) # each client will increment this counter
+
+        memmap = mmap.mmap(shm.fd, 
+                                        shm.size)
+
+        shm.close_fd()
+
+        memview = memoryview(memmap)
+
+        return (shm, memmap, memview)
+    
+    def _create_clients_counter(self):
+        
+        var = self._create_int_shared_var(self.mem_config.mem_path_clients_counter)
+
+        self._print_created_mem(self.mem_config.mem_path_clients_counter)
+        
+        self.shm_clients_counter = var[0]
+
+        self.memory_clients_counter = var[1]
+
+        self.n_clients = var[2]
+
+    def _create_data_dim_shared_info(self):
+
+        n_rows = self._create_int_shared_var(self.mem_config.mem_path_nrows)
+        self.shm_n_rows = n_rows[0]
+        self.memory_n_rows = n_rows[1]
+        self.n_rows_shared = n_rows[2]
+        self.n_rows_shared[:8] = struct.pack('q', self.n_rows)
+
+        n_cols = self._create_int_shared_var(self.mem_config.mem_path_ncols)
+        self.shm_n_cols = n_cols[0]
+        self.memory_n_cols = n_cols[1]
+        self.n_cols_shared = n_cols[2]
+        self.n_cols_shared[:8] = struct.pack('q', self.n_cols)
+        
+        self._print_created_mem(self.mem_config.mem_path_nrows)
+        
     def _create_data_memory(self, 
                     tensor_size: int):
 
         self.shm = posix_ipc.SharedMemory(name = self.mem_config.mem_path, 
                                 flags=posix_ipc.O_CREAT, # creates it if not existent
                                 size=tensor_size) 
-        self.print_created_mem(self.mem_config.mem_path)
+        
+        self._print_created_mem(self.mem_config.mem_path)
         
         self.memory = mmap.mmap(self.shm.fd, self.shm.size)
 
@@ -263,13 +376,16 @@ class SharedMemSrvr:
 
         # semaphore
         self._create_semaphores()
-    
-        # clients counter
-        self._create_clients_counter()
+
+        # shared (with clients) data dim. info 
+        self._create_data_dim_shared_info()
 
         # data memory
         self._create_data_memory(tensor_size)
-    
+
+        # clients counter
+        self._create_clients_counter()
+
     def _detach_vars(self):
 
         if self.bool_bytearray_view is not None:
@@ -283,6 +399,14 @@ class SharedMemSrvr:
         if self.n_clients is not None:
 
             self.n_clients = None
+        
+        if self.n_cols_shared is not None:
+
+            self.n_cols_shared = None
+        
+        if self.n_rows_shared is not None:
+            
+            self.n_rows_shared = None
 
     def _close_mmaps(self):
         
@@ -306,6 +430,24 @@ class SharedMemSrvr:
 
             message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._close_mmaps.__name__}]: " + \
                         f"closed clients counter @ {self.mem_config.mem_path_clients_counter}"
+        
+            print(message)
+
+        if self.memory_n_cols is not None:
+
+            self.memory_n_cols = None
+
+            message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._close_mmaps.__name__}]: " + \
+                        f"closed share n cols @ {self.mem_config.mem_path_ncols}"
+        
+            print(message)
+
+        if self.memory_n_rows is not None:
+
+            self.memory_n_rows = None
+
+            message = f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + f"[{self._close_mmaps.__name__}]: " + \
+                        f"closed share n rows @ {self.mem_config.mem_path_nrows}"
         
             print(message)
 
@@ -389,6 +531,44 @@ class SharedMemSrvr:
                 print(message)
 
                 pass
+        
+        if self.shm_n_cols is not None:
+
+            try:
+
+                # self.shm_n_cols.unlink() # should we unlink it?
+
+                self.shm_n_cols.close_fd()
+
+                self.shm_n_cols = None
+
+            except posix_ipc.ExistentialError:
+                
+                message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
+                        f"could not unlink share mem. @ {self.mem_config.mem_path_ncols}. Probably something already did."
+
+                print(message)
+
+                pass
+
+        if self.shm_n_rows is not None:
+
+            try:
+
+                # self.shm_n_cols.unlink() # should we unlink it?
+
+                self.shm_n_rows.close_fd()
+
+                self.shm_n_rows = None
+
+            except posix_ipc.ExistentialError:
+                
+                message = f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + f"[{self._unlink.__name__}]: " + \
+                        f"could not unlink share mem. @ {self.mem_config.mem_path_nrows}. Probably something already did."
+
+                print(message)
+
+                pass
 
     def _close_shared_memory(self):
         
@@ -424,90 +604,9 @@ class SharedMemSrvr:
 
         self.bytearray_reset_true = bytearray([1] * len(self.bool_bytearray_view))
 
-    def all(self):
-
-        if self.bool_bytearray_view is not None:
-
-            return all(value == 1 for value in self.bool_bytearray_view)
-        
-        else:
-
-            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
-                            ":" + f"no bytearray view available." + \
-                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
-
-            raise Exception(exception)
-        
-    def none(self):
-
-        if self.bool_bytearray_view is not None:
-
-            return all(value == 0 for value in self.bool_bytearray_view)
-        
-        else:
-
-            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.none.__name__}]" + \
-                            ":" + f"no bytearray view available." + \
-                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
-
-            raise Exception(exception)
-
-    def reset_bool(self, 
-                to_true: bool = False):
-
-        # sets all to either True or False
-        if self.bool_bytearray_view is not None:
-            
-            if to_true:
-
-                self.bool_bytearray_view[:] = self.bytearray_reset_true
-
-            else:
-
-                self.bool_bytearray_view[:] = self.bytearray_reset_false
-
-        else:
-
-            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
-                            ": " + f"no bytearray view available." + \
-                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
-
-            raise Exception(exception)
-        
-    def set_bool(self, 
-                vals: List[bool]):
-
-        # sets all to either True or False
-        if self.bool_bytearray_view is not None:
-            
-            if len(vals) != len(self.bool_bytearray_view):
-
-                exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
-                            ": " + f" provided boolean list of length {len(vals)} does" + \
-                            f" not match the required lentgh of {len(self.bool_bytearray_view)}"
-
-                raise Exception(exception)
-        
-            self.bool_bytearray_view[:] = bytearray(vals)
-
-        else:
-
-            exception = "[" + self.__class__.__name__ + str(self.client_index) + "]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
-                            ": " + f"no bytearray view available." + \
-                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
-
-            raise Exception(exception)
-        
 class SharedMemClient:
 
     def __init__(self, 
-                n_rows: int, 
-                n_cols: int,
                 name: str, 
                 client_index: int = None, 
                 dtype=torch.float32, 
@@ -529,8 +628,8 @@ class SharedMemClient:
 
         self.name = name
 
-        self.n_rows = n_rows
-        self.n_cols = n_cols
+        self.n_rows = -1
+        self.n_cols = -1
 
         self.client_index = client_index
 
@@ -538,17 +637,27 @@ class SharedMemClient:
         
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
+        # mem maps
         self.memory = None
         self.memory_clients_counter = None
         self.sem_client_n = None
+        self.memory_n_cols = None
+        self.memory_n_rows = None
 
+        # shared mem
         self.shm = None
         self.shm_clients_counter = None
-        
+        self.shm_n_cols = None
+        self.shm_n_rows = None
+
+        # mem views
         self.bool_bytearray_view = None
         self.tensor_view = None
         self.n_clients = None
+        self.n_cols_shared = None
+        self.n_rows_shared = None
 
+        # flags
         self._terminate = False
         self._attached = False
 
@@ -570,6 +679,9 @@ class SharedMemClient:
         
         self._attach_shared_memory()
         
+        print("UAAAAAAA" + str(self.n_rows))
+        print("UIIIIIII" + str(self.n_cols))
+
         if self._attached:
 
             if self.backend == "torch": 
@@ -615,6 +727,68 @@ class SharedMemClient:
 
             return False
 
+    def set_bool(self, 
+            val: bool = False):
+
+        if self.bool_bytearray_view is not None:
+            
+            if self.client_index >= 0 and \
+                self.client_index < len(self.bool_bytearray_view) and \
+                len(self.bool_bytearray_view) > 0:
+
+                self.bool_bytearray_view[self.client_index] = val
+
+            else:
+
+                exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.set_bool.__name__}]" + \
+                            ": " + f"bool val will not be assigned for dim incompatibility." + \
+                            f"Client index: {self.client_index}, len bytearray view: {len(self.bool_bytearray_view)}."
+                
+
+                print(exception)
+        
+        else:
+
+            exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.set_bool.__name__}]" + \
+                            ": " + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+    
+    def read_bool(self):
+    
+        if self.bool_bytearray_view is not None:
+            
+            if self.client_index >= 0 and \
+                self.client_index < len(self.bool_bytearray_view) and \
+                len(self.bool_bytearray_view) > 1:
+
+                return self.bool_bytearray_view[self.client_index]
+
+            if self.client_index < 0 or \
+                self.client_index >= len(self.bool_bytearray_view):
+
+                exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
+                            ": " + f"bool val will not be read for dim incompatibility."
+
+                raise Exception(exception)
+
+            if len(self.bool_bytearray_view) == 1:
+
+                return self.bool_bytearray_view[0]
+            
+        else:
+
+            exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
+                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
+                            ": " + f"no bytearray view available." + \
+                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
+
+            raise Exception(exception)
+    
     def _print_wait(self, 
                 path: str):
         
@@ -650,25 +824,39 @@ class SharedMemClient:
                 
             self._print_wait(path)
             
-        time.sleep(self.wait_amount) # nano secs
+        time.sleep(self.wait_amount) 
+    
+    def _attach_int_shared_var(self, 
+                path: str):
+        
+        shm = posix_ipc.SharedMemory(name = path, 
+                                flags=posix_ipc.O_CREAT,
+                                size=8) # each client will increment this counter
 
+        memmap = mmap.mmap(shm.fd, 
+                        shm.size)
+
+        shm.close_fd()
+
+        memview = memoryview(memmap)
+
+        return (shm, memmap, memview)
+    
     def _attach_clients_counter(self):
 
         while not self._terminate:
             
             try:
+                
+                clients_counter = self._attach_int_shared_var(self.mem_config.mem_path_clients_counter)
 
-                self.shm_clients_counter = posix_ipc.SharedMemory(name = self.mem_config.mem_path_clients_counter, 
-                            size=8) # each client will increment this counter
+                self.shm_clients_counter = clients_counter[0]
+                self.memory_clients_counter = clients_counter[1]
+                self.n_clients = clients_counter[2]
+                
+                time.sleep(self.wait_amount) 
 
                 self._print_attached(self.mem_config.mem_path_clients_counter)
-
-                self.memory_clients_counter = mmap.mmap(self.shm_clients_counter.fd, self.shm_clients_counter.size)
-                self.shm_clients_counter.close_fd()
-                
-                time.sleep(self.wait_amount) # nano secs
-
-                self.n_clients = memoryview(self.memory_clients_counter)
 
                 return True
 
@@ -706,7 +894,65 @@ class SharedMemClient:
             except KeyboardInterrupt:
 
                 self.terminate()
+
+    def _attach_shared_dims(self):
+        
+        while not self._terminate:
             
+            try:
+                
+                n_rows = self._attach_int_shared_var(self.mem_config.mem_path_nrows)
+
+                self.shm_n_rows = n_rows[0]
+                self.memory_n_rows = n_rows[1]
+                self.n_rows_shared = n_rows[2]
+                
+                time.sleep(self.wait_amount) 
+
+                self.n_rows = struct.unpack('q', self.n_rows_shared[:8])[0]
+
+                self._print_attached(self.mem_config.mem_path_nrows)
+
+                break
+
+            except posix_ipc.ExistentialError: 
+            
+                self._handle_posix_error(self.mem_config.mem_path_nrows)
+
+                continue
+
+            except KeyboardInterrupt:
+
+                self.terminate()
+
+        while not self._terminate:
+            
+            try:
+                
+                n_cols = self._attach_int_shared_var(self.mem_config.mem_path_ncols)
+
+                self.shm_n_cols = n_cols[0]
+                self.memory_n_cols = n_cols[1]
+                self.n_cols_shared = n_cols[2]
+                
+                time.sleep(self.wait_amount) 
+
+                self.n_cols = struct.unpack('q', self.n_cols_shared[:8])[0]
+
+                self._print_attached(self.mem_config.mem_path_ncols)
+
+                return True
+
+            except posix_ipc.ExistentialError: 
+            
+                self._handle_posix_error(self.mem_config.mem_path_ncols)
+
+                continue
+
+            except KeyboardInterrupt:
+
+                self.terminate()
+
     def _attach_shared_data(self, 
                     tensor_size: int):
 
@@ -739,15 +985,19 @@ class SharedMemClient:
                 
     def _attach_shared_memory(self):
 
-        tensor_size = self.n_rows * self.n_cols * self.element_size
+        success_sem = self._attach_semaphore() # semaphore for incrementing 
+        # clients count
+        success_counter = self._attach_clients_counter() # inteeger shared mem 
+        # for keeping ref of the number of clients
+        
+        success_dims = self._attach_shared_dims() # retrieve data dimensions from server
 
-        success_sem = self._attach_semaphore()
-
-        success_counter = self._attach_clients_counter()
-                
+        tensor_size = self.n_rows * self.n_cols * self.element_size # we can
+        # now compute data size
+        
         success_data = self._attach_shared_data(tensor_size)
 
-        if success_sem and success_counter and success_data:
+        if success_sem and success_counter and success_data and success_dims:
 
             self._attached = True
         
@@ -871,68 +1121,6 @@ class SharedMemClient:
 
         self.bool_bytearray_view = memoryview(self.memory)
         
-    def set_bool(self, 
-                val: bool = False):
-
-        if self.bool_bytearray_view is not None:
-            
-            if self.client_index >= 0 and \
-                self.client_index < len(self.bool_bytearray_view) and \
-                len(self.bool_bytearray_view) > 0:
-
-                self.bool_bytearray_view[self.client_index] = val
-
-            else:
-
-                exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.set_bool.__name__}]" + \
-                            ": " + f"bool val will not be assigned for dim incompatibility." + \
-                            f"Client index: {self.client_index}, len bytearray view: {len(self.bool_bytearray_view)}."
-                
-
-                print(exception)
-        
-        else:
-
-            exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.set_bool.__name__}]" + \
-                            ": " + f"no bytearray view available." + \
-                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
-
-            raise Exception(exception)
-    
-    def read_bool(self):
-    
-        if self.bool_bytearray_view is not None:
-            
-            if self.client_index >= 0 and \
-                self.client_index < len(self.bool_bytearray_view) and \
-                len(self.bool_bytearray_view) > 1:
-
-                return self.bool_bytearray_view[self.client_index]
-
-            if self.client_index < 0 or \
-                self.client_index >= len(self.bool_bytearray_view):
-
-                exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
-                            ": " + f"bool val will not be read for dim incompatibility."
-
-                raise Exception(exception)
-
-            if len(self.bool_bytearray_view) == 1:
-
-                return self.bool_bytearray_view[0]
-            
-        else:
-
-            exception = f"[{self.__class__.__name__}{self.client_index}]"  + \
-                            f"[{self.journal.exception}]" + f"[{self.all.__name__}]" + \
-                            ": " + f"no bytearray view available." + \
-                            "Did you initialize the class with boolean dtype and at least one dimension = 1?"
-
-            raise Exception(exception)
-    
     def _increment_client_count(self):
         
         if self._attached:
@@ -1005,6 +1193,7 @@ class SharedMemClient:
 
     def _detach_shared_memory(self):
         
+        # views
         if self.bool_bytearray_view is not None:
 
             self.bool_bytearray_view = None
@@ -1016,7 +1205,16 @@ class SharedMemClient:
         if self.n_clients is not None:
 
             self.n_clients = None
+        
+        if self.n_cols_shared is not None:
 
+            self.n_cols_shared = None
+
+        if self.n_rows_shared is not None:
+
+            self.n_rows_shared = None
+
+        # mmaps
         if self.memory is not None:
             
             self.memory.close() # memory remains available to other clients
@@ -1024,11 +1222,7 @@ class SharedMemClient:
             self.memory = None
 
             self._print_detached(self.mem_config.mem_path)
-            
-        if self.shm is not None:
-
-            self.shm.close_fd()
-
+        
         if self.memory_clients_counter is not None:
                         
             self.n_clients = None # we destroy memory view
@@ -1037,18 +1231,49 @@ class SharedMemClient:
 
             self.memory_clients_counter = None
 
-            self._print_detached(self.mem_config.mem_path_clients_counter)
+        if self.memory_n_cols is not None:
+
+            self.memory_n_cols.close()
+
+            self.memory_n_cols = None
+        
+        if self.memory_n_rows is not None:
+
+            self.memory_n_rows.close()
+
+            self.memory_n_rows = None
+
+        # shared mem
+        if self.shm is not None:
+
+            self.shm.close_fd()
+
+            self._print_detached(self.mem_config.mem_path)
                 
         if self.shm_clients_counter is not None:
 
             self.shm_clients_counter.close_fd()
+
+            self._print_detached(self.mem_config.mem_path_clients_counter)
 
         if self.sem_client_n is not None:
             
             self.sem_client_n = None
 
             self._print_detached(self.mem_config.mem_path_clients_semaphore)
+        
+        if self.shm_n_cols is not None:
             
+            self.shm_n_cols = None
+
+            self._print_detached(self.mem_config.mem_path_ncols)
+
+        if self.shm_n_rows is not None:
+            
+            self.shm_n_rows = None
+
+            self._print_detached(self.mem_config.mem_path_nrows)
+
 class SharedStringArray:
 
     # not specifically designed to be low-latency
@@ -1091,9 +1316,7 @@ class SharedStringArray:
                                         dtype=self.dtype)
         else:
 
-            self.mem_manager = SharedMemClient(n_rows=self.n_rows, 
-                                        n_cols=self.length, 
-                                        name=self.name, 
+            self.mem_manager = SharedMemClient(name=self.name, 
                                         dtype=self.dtype, 
                                         verbose=verbose, 
                                         wait_amount=wait_amount)

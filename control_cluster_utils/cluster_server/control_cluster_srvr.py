@@ -62,7 +62,8 @@ class ControlClusterSrvr(ABC):
         
     def _spawn_processes(self):
 
-        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": spawning processes...")
+        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + \
+            ": spawning processes...")
 
         if self._controllers_count == self.cluster_size:
             
@@ -84,14 +85,16 @@ class ControlClusterSrvr(ABC):
                 
         else:
 
-            raise Exception(f"[{self.__class__.__name__}]" + f"{self.journal.exception}" + "You didn't finish to fill the cluster. Please call the add_controller() method to do so.")
+            raise Exception(f"[{self.__class__.__name__}]" + f"{self.journal.exception}" + \
+                    "You didn't finish to fill the cluster. Please call the add_controller() method to do so.")
 
     def _finalize_init(self):
 
         # steps to be performed after the controllers are fully initialized 
 
-        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": performing final initialization steps...")
-
+        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + \
+            ": performing final initialization steps...")
+        
         self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
                                     n_contacts=self._controllers[0].n_contacts)
         

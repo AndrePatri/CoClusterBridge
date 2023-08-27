@@ -103,8 +103,7 @@ class RHController(ABC):
         self._init_problem() # we call the child's initialization method
 
         dtype = torch.bool
-        self.trigger_flag = SharedMemClient(n_rows=self.cluster_size, n_cols=1, 
-                                    name=trigger_flagname(), 
+        self.trigger_flag = SharedMemClient(name=trigger_flagname(), 
                                     client_index=self.controller_index, 
                                     dtype=dtype)
         self.trigger_flag.attach()
@@ -120,7 +119,6 @@ class RHController(ABC):
         
         # to be called after n_dofs is known
         self.robot_state = RobotState(n_dofs=self.n_dofs, 
-                                    cluster_size=self.cluster_size,
                                     index=self.controller_index,
                                     dtype=self.array_dtype,
                                     jnt_remapping=self._to_server, 
@@ -128,7 +126,6 @@ class RHController(ABC):
                                     verbose = self._verbose) 
 
         self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
-                                cluster_size=self.cluster_size, 
                                 index=self.controller_index,
                                 add_info_size=2, 
                                 dtype=self.array_dtype, 
