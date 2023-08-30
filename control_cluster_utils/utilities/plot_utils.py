@@ -451,7 +451,8 @@ class WidgetUtils:
                     parent_layout: Union[QHBoxLayout, QVBoxLayout],
                     list_names: List[str], 
                     callback: Callable[[str], None], 
-                    title: str = ""
+                    title: str = "", 
+                    default_checked = True
                     ):
         
         list_data = self.ScrollableListData()
@@ -475,7 +476,7 @@ class WidgetUtils:
 
             button.setCheckable(True)
 
-            button.setChecked(True)
+            button.setChecked(default_checked)
 
             button.clicked.connect(lambda checked, 
                                 l=label: callback(l))

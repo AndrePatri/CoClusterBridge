@@ -678,9 +678,6 @@ class SharedMemClient:
     def attach(self):
         
         self._attach_shared_memory()
-        
-        print("UAAAAAAA" + str(self.n_rows))
-        print("UIIIIIII" + str(self.n_cols))
 
         if self._attached:
 

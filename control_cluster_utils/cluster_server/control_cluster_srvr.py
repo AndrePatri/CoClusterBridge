@@ -62,7 +62,7 @@ class ControlClusterSrvr(ABC):
         
     def _spawn_processes(self):
 
-        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + \
+        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
             ": spawning processes...")
 
         if self._controllers_count == self.cluster_size:
@@ -81,11 +81,11 @@ class ControlClusterSrvr(ABC):
 
             self._is_cluster_ready = True
 
-            print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": processes spawned.")
+            print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": processes spawned.")
                 
         else:
 
-            raise Exception(f"[{self.__class__.__name__}]" + f"{self.journal.exception}" + \
+            raise Exception(f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
                     "You didn't finish to fill the cluster. Please call the add_controller() method to do so.")
 
     def _finalize_init(self):
