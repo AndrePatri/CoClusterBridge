@@ -1,2 +1,2 @@
-flit build --format wheel
-python -m pip install .
+#!/bin/bash
+$PYTHON -m pip install .

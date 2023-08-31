@@ -628,7 +628,8 @@ class SettingsWidget():
 
         self.window_offset_slider.current_val.setText(f'{self.rt_plot_widget.window_offset}')
 
-    def toggle_line_visibility(self, label):
+    def toggle_line_visibility(self, 
+                        label):
 
         for i, legend_label in enumerate(self.rt_plot_widget.labels):
                         
