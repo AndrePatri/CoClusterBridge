@@ -124,6 +124,11 @@ class RtPlotWidget(pg.PlotWidget):
 
         self.lines[index].show() 
 
+    def update_data_sample_dt(self, 
+                        dt: float):
+        
+        self.update_data_dt = dt
+        
     def update_window_size(self, 
                 new_size: int):
         
@@ -289,6 +294,7 @@ class WidgetUtils:
             self.max_label = None
             self.val_slider = None
             self.current_val = None
+            self.title = None
         
     class IconedButtonData:
 
@@ -334,13 +340,13 @@ class WidgetUtils:
         val_layout = QHBoxLayout(val_frame)  # Use QVBoxLayout here
         val_layout.setContentsMargins(2, 2, 2, 2)
 
-        self.val_title = QLabel(title)
+        val_title = QLabel(title)
         current_val = QLabel(init_val_shown)
         current_val.setAlignment(Qt.AlignRight)
         current_val.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
 
-        val_layout.addWidget(self.val_title, 
-                                    alignment=Qt.AlignLeft)
+        val_layout.addWidget(val_title, 
+                                alignment=Qt.AlignLeft)
         val_layout.addWidget(current_val)
 
         val_slider_frame = QFrame(base_frame)
@@ -380,6 +386,7 @@ class WidgetUtils:
         slider_data.max_label = max_label
         slider_data.val_slider = val_slider
         slider_data.current_val = current_val
+        slider_data.title = title 
 
         return slider_data
     
@@ -487,6 +494,8 @@ class WidgetUtils:
         
         plot_selector_scroll_area.setWidget(list_frame)
         
+        list_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
         parent_layout.addWidget(plot_selector_scroll_area)
 
         return list_data
@@ -620,6 +629,11 @@ class SettingsWidget():
         # updates displayed window size
         self.window_size_slider.current_val.setText(\
             f'{self.rt_plot_widget.update_data_dt * self.rt_plot_widget.window_size:.2f}')
+    
+    def synch_max_window_size(self):
+
+        # update max window size depending on data sample update dt (which might have changed)
+        self.window_size_slider.max_label.setText(f'{self.rt_plot_widget.window_buffer_size * self.rt_plot_widget.update_data_dt}')
 
     def update_window_offset(self, 
                     offset: int):
@@ -893,6 +907,16 @@ class RhcTaskRefWindow():
                 self.rt_plotters[i].rt_plot_widget.paused = \
                     not self.rt_plotters[i].rt_plot_widget.paused
 
+    def change_sample_update_dt(self, 
+                dt: float):
+
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.update_data_sample_dt(dt)
+                self.rt_plotters[i].settings_widget.synch_max_window_size()
+
     def change_plot_update_dt(self, 
                     dt: float):
         
@@ -901,7 +925,7 @@ class RhcTaskRefWindow():
             for i in range(len(self.rt_plotters)):
 
                 self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
-
+                
     def nightshift(self):
 
         if not self._terminated:
@@ -1038,6 +1062,16 @@ class RhcCmdsWindow():
                 self.rt_plotters[i].rt_plot_widget.paused = \
                     not self.rt_plotters[i].rt_plot_widget.paused
     
+    def change_sample_update_dt(self, 
+                dt: float):
+
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.update_data_sample_dt(dt)
+                self.rt_plotters[i].settings_widget.synch_max_window_size()
+
     def change_plot_update_dt(self, 
                     dt: float):
         
@@ -1191,7 +1225,7 @@ class RhcStateWindow():
     def update(self):
 
         if not self._terminated:
-        
+            
             # root state
             self.rt_plotters[0].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.p.numpy())
             self.rt_plotters[1].rt_plot_widget.update(self.rhc_states[self.cluster_idx].root_state.q.numpy())
@@ -1211,6 +1245,16 @@ class RhcStateWindow():
                 self.rt_plotters[i].rt_plot_widget.paused = \
                     not self.rt_plotters[i].rt_plot_widget.paused
     
+    def change_sample_update_dt(self, 
+                dt: float):
+
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.update_data_sample_dt(dt)
+                self.rt_plotters[i].settings_widget.synch_max_window_size()
+                
     def change_plot_update_dt(self, 
                     dt: float):
         
