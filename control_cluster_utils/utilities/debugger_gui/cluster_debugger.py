@@ -4,8 +4,8 @@ from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
 from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
 from PyQt5.QtGui import QIcon, QPixmap
 
-from control_cluster_utils.utilities.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
-from control_cluster_utils.utilities.plot_utils import WidgetUtils
+from control_cluster_utils.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
+from control_cluster_utils.utilities.debugger_gui.plot_utils import WidgetUtils
 from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
 from control_cluster_utils.utilities.defs import launch_controllers_flagname
 from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
@@ -133,17 +133,17 @@ class RtClusterDebugger(QMainWindow):
         self.add_data_length_clnt = None
         self.launch_controllers = None
 
-        self.rhc_task_plotter = None
-        self.rhc_cmds_plotter = None
-        self.rhc_states_plotter = None
-
+        # shared data
         self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState"]
+        self.shared_data_window = [None] * len(self.shared_data_tabs_name)
+        self.shared_data_tabs_map = {}
+        for i in range(len(self.shared_data_tabs_name)):
+            self.shared_data_tabs_map[self.shared_data_tabs_name[i]] = \
+                None
 
         super().__init__()
 
-        self._init_shared_data()
-
-        # self._init_windows()
+        self._init_add_shared_data()
 
         self._init_ui()     
 
@@ -159,6 +159,7 @@ class RtClusterDebugger(QMainWindow):
 
     def terminate(self):
 
+        # terminating additinal shared memory data
         if self.data_thread is not None:
             self.data_thread.terminate()
 
@@ -179,15 +180,13 @@ class RtClusterDebugger(QMainWindow):
         
         if self.launch_controllers is not None:
             self.launch_controllers.terminate()
-
-        if self.rhc_task_plotter is not None:
-            self.rhc_task_plotter.terminate()
         
-        if self.rhc_cmds_plotter is not None:
-            self.rhc_cmds_plotter.terminate()
-            
-        if self.rhc_states_plotter is not None:
-            self.rhc_states_plotter.terminate()
+        # terminate shared data windows
+        for i in range(len(self.shared_data_tabs_name)):
+
+            if self.shared_data_window[i] is not None:
+
+                self.shared_data_window[i].terminate()
 
         self._terminated = True
 
@@ -317,7 +316,7 @@ class RtClusterDebugger(QMainWindow):
         
         self.data_thread.start()
 
-    def _init_shared_data(self):
+    def _init_add_shared_data(self):
 
         wait_amount = 0.05
         
@@ -362,32 +361,8 @@ class RtClusterDebugger(QMainWindow):
         self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
         self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
     
-    def _pause_all(self):
-
-        if not self._tabs_terminated[0]:
-
-            self.rhc_task_plotter.swith_pause()
-
-        if not self._tabs_terminated[1]:
-
-            self.rhc_cmds_plotter.swith_pause()
-
-        if not self._tabs_terminated[2]:
-
-            self.rhc_states_plotter.swith_pause()
-
-        self._paused = not self._paused
-
-        if self._paused:
-
-            self.pause_button.iconed_button.setIcon(self.pause_button.triggered_icone_button)
-
-        if not self._paused:
-
-            self.pause_button.iconed_button.setIcon(self.pause_button.icone_button)
-
     def _spawn_shared_data_tabs(self, 
-                    label: int):
+                    label: str):
         
         if label == self.shared_data_tabs_name[0]:
                 
@@ -395,7 +370,7 @@ class RtClusterDebugger(QMainWindow):
 
                 if checked and self._tabs_terminated[0]:
                     
-                    self.rhc_task_plotter = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
+                    self.shared_data_window[0] = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
                                         update_plot_dt=self.plot_update_dt,
                                         window_duration=self.window_length, 
                                         cluster_size=self.cluster_size,
@@ -407,10 +382,12 @@ class RtClusterDebugger(QMainWindow):
                     self.tab_rhc_task_refs = QWidget()
                     self.tab_rhc_task_refs_layout = QVBoxLayout()
                     self.tab_rhc_task_refs.setLayout(self.tab_rhc_task_refs_layout)
+
+                    self.shared_data_tabs_map[self.shared_data_tabs_name[0]] = self.tabs.count()
                     self.tabs.addTab(self.tab_rhc_task_refs, 
                         "RhcTaskRef")
                     
-                    self.tab_rhc_task_refs_layout.addWidget(self.rhc_task_plotter.base_frame)
+                    self.tab_rhc_task_refs_layout.addWidget(self.shared_data_window[0].base_frame)
 
                     # self.data_spawner.buttons[0].setStyleSheet("")  # Reset button style
 
@@ -432,7 +409,7 @@ class RtClusterDebugger(QMainWindow):
 
                 if checked and self._tabs_terminated[1]:
                     
-                    self.rhc_cmds_plotter = RhcCmdsWindow(update_data_dt=self.data_update_dt, 
+                    self.shared_data_window[1] = RhcCmdsWindow(update_data_dt=self.data_update_dt, 
                                     update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
                                     cluster_size=self.cluster_size,
@@ -446,10 +423,12 @@ class RtClusterDebugger(QMainWindow):
                     self.tab_rhc_cmds = QWidget()
                     self.tab_rhc_cmds_layout = QVBoxLayout()
                     self.tab_rhc_cmds.setLayout(self.tab_rhc_cmds_layout)
+
+                    self.shared_data_tabs_map[self.shared_data_tabs_name[1]] = self.tabs.count()
                     self.tabs.addTab(self.tab_rhc_cmds, 
                         "RhcCmds")
 
-                    self.tab_rhc_cmds_layout.addWidget(self.rhc_cmds_plotter.base_frame)
+                    self.tab_rhc_cmds_layout.addWidget(self.shared_data_window[1].base_frame)
 
                     # self.data_spawner.buttons[1].setStyleSheet("")  # Reset button style
 
@@ -471,7 +450,7 @@ class RtClusterDebugger(QMainWindow):
 
                 if checked and self._tabs_terminated[2]:
                     
-                    self.rhc_states_plotter = RhcStateWindow(update_data_dt=self.data_update_dt, 
+                    self.shared_data_window[2] = RhcStateWindow(update_data_dt=self.data_update_dt, 
                                     update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
                                     cluster_size=self.cluster_size,
@@ -484,10 +463,12 @@ class RtClusterDebugger(QMainWindow):
                     self.tab_rhc_state = QWidget()
                     self.tab_rhc_state_layout = QVBoxLayout()
                     self.tab_rhc_state.setLayout(self.tab_rhc_state_layout)
+
+                    self.shared_data_tabs_map[self.shared_data_tabs_name[2]] = self.tabs.count()
                     self.tabs.addTab(self.tab_rhc_state, 
                                     "RhcState")
                     
-                    self.tab_rhc_state_layout.addWidget(self.rhc_states_plotter.base_frame)
+                    self.tab_rhc_state_layout.addWidget(self.shared_data_window[2].base_frame)
 
                     # self.data_spawner.buttons[2].setStyleSheet("")  # Reset button style
 
@@ -502,15 +483,34 @@ class RtClusterDebugger(QMainWindow):
                 # if not checked:
 
                     # self.data_spawner.buttons[2].setStyleSheet("color: darkgray")  # Change button style to dark gray
+
+    def _pause_all(self):
         
+        for i in range(len(self.shared_data_tabs_name)):
+
+            if not self._tabs_terminated[i]:
+
+                self.shared_data_window[i].swith_pause()
+
+        self._paused = not self._paused
+
+        if self._paused:
+
+            self.pause_button.iconed_button.setIcon(self.pause_button.triggered_icone_button)
+
+        if not self._paused:
+
+            self.pause_button.iconed_button.setIcon(self.pause_button.icone_button)
+
     def _change_plot_update_dt(self, 
                     millisec: int):
         
         dt_sec = float(millisec * 1e-3)
-        self.rhc_task_plotter.change_plot_update_dt(dt_sec)
-        self.rhc_cmds_plotter.change_plot_update_dt(dt_sec)
-        self.rhc_states_plotter.change_plot_update_dt(dt_sec)
 
+        for i in range(0, len(self.shared_data_tabs_name)):
+
+            self.shared_data_window[i].change_plot_update_dt(dt_sec)
+       
         self.plot_update_dt_slider.current_val.setText(f'{dt_sec:.3f}')
 
     def _change_samples_update_dt(self, 
@@ -522,48 +522,29 @@ class RtClusterDebugger(QMainWindow):
 
         self.samples_update_dt_slider.current_val.setText(f'{dt_sec:.4f}')
         
-        if self.rhc_task_plotter is not None:
-            self.rhc_task_plotter.change_sample_update_dt(dt_sec)
+        for i in range(len(self.shared_data_tabs_name)):
 
-        if self.rhc_cmds_plotter is not None:
-            self.rhc_cmds_plotter.change_sample_update_dt(dt_sec)
-        
-        if self.rhc_states_plotter is not None:
-            self.rhc_states_plotter.change_sample_update_dt(dt_sec)
+            self.shared_data_window[i].change_sample_update_dt(dt_sec)
         
     def _update_from_shared_data(self):
         
-        if not self._tabs_terminated[0] and \
-            self.rhc_task_plotter is not None:
+        for i in range(len(self.shared_data_tabs_name)):
 
-            self.rhc_task_plotter.update()
+            if not self._tabs_terminated[i] and \
+                self.shared_data_window[i] is not None:
 
-        if not self._tabs_terminated[1] and \
-            self.rhc_cmds_plotter is not None:
-
-            self.rhc_cmds_plotter.update()
-
-        if not self._tabs_terminated[2] and \
-            self.rhc_states_plotter is not None:
-
-            self.rhc_states_plotter.update()
+                self.shared_data_window[i].update()
 
     def _update_cluster_idx(self, 
                         idx: int):
 
         self.cluster_idx_slider.current_val.setText(f'{idx}')
 
-        if not self._tabs_terminated[0]:
+        for i in range(len(self.shared_data_tabs_name)):
 
-            self.rhc_task_plotter.cluster_idx = idx
-        
-        if not self._tabs_terminated[1]:
+            if not self._tabs_terminated[i]:
 
-            self.rhc_cmds_plotter.cluster_idx = idx
-
-        if not self._tabs_terminated[2]:
-            
-            self.rhc_states_plotter.cluster_idx = idx
+                self.shared_data_window[i].cluster_idx = idx
 
     def _toggle_controllers(self):
 
@@ -589,27 +570,21 @@ class RtClusterDebugger(QMainWindow):
             
             self.nightshift_button.iconed_button.setIcon(self.nightshift_button.triggered_icone_button)
 
-            if self.rhc_cmds_plotter is not None:
-                self.rhc_cmds_plotter.nightshift()
-            
-            if self.rhc_states_plotter is not None:
-                self.rhc_states_plotter.nightshift()
-            
-            if self.rhc_task_plotter is not None:
-                self.rhc_task_plotter.nightshift()
+            for i in range(len(self.shared_data_tabs_name)):
+
+                if self.shared_data_window[i] is not None:
+
+                    self.shared_data_window[i].nightshift()
 
         if not self.dark_mode_enabled:
             
             self.nightshift_button.iconed_button.setIcon(self.nightshift_button.icone_button)
 
-            if self.rhc_cmds_plotter is not None:
-                self.rhc_cmds_plotter.dayshift()
-            
-            if self.rhc_states_plotter is not None:
-                self.rhc_states_plotter.dayshift()
+            for i in range(len(self.shared_data_tabs_name)):
 
-            if self.rhc_task_plotter is not None:
-                self.rhc_task_plotter.dayshift()
+                if self.shared_data_window[i] is not None:
+
+                    self.shared_data_window[i].dayshift()
 
     def _toggle_dark_mode(self):
 
@@ -692,6 +667,17 @@ class RtClusterDebugger(QMainWindow):
 
         """
     
+    def _get_key_by_value(self, 
+                dictionary, target_value):
+
+        for key, value in dictionary.items():
+
+            if value == target_value:
+
+                return key
+            
+        return None 
+
     def closeEvent(self, event):
         # This function is called when the window is being closed
         # You can perform your desired actions here
@@ -708,31 +694,22 @@ class RtClusterDebugger(QMainWindow):
     def _terminate_tab(self, 
                     tab_idx: int):
         
-        self._tabs_terminated[tab_idx] = True
+        print(self.shared_data_tabs_map)
+        index = self.shared_data_tabs_name.index(
+                            self._get_key_by_value(self.shared_data_tabs_map, \
+                                        tab_idx))
 
-        if tab_idx == 0 and self.rhc_task_plotter is not None:
+        self._tabs_terminated[index] = True
 
-            self.rhc_task_plotter.terminate()
+        for i in range(len(self.shared_data_window)):
 
-            self.data_spawner.buttons[0].setChecked(False)
+            if index == i and self.shared_data_window[i] is not None:
 
-            self.data_spawner.buttons[0].setCheckable(True)
+                self.shared_data_window[i].terminate()
 
-        if tab_idx == 1 and self.rhc_cmds_plotter is not None:
-            
-            self.rhc_cmds_plotter.terminate()
+                self.data_spawner.buttons[i].setChecked(False)
 
-            self.data_spawner.buttons[1].setChecked(False)
-
-            self.data_spawner.buttons[1].setCheckable(True)
-
-        if tab_idx == 2 and self.rhc_states_plotter is not None:
-
-            self.rhc_states_plotter.terminate()     
-
-            self.data_spawner.buttons[2].setChecked(False)  
-
-            self.data_spawner.buttons[2].setCheckable(True)     
+                self.data_spawner.buttons[i].setCheckable(True)
 
 if __name__ == "__main__":  
 
