@@ -32,3 +32,4 @@ Some notes:
 #### ToDo:
 
 - [] RhcTaskRef setting throrugh keyboard commands for controller debugging.  
+- [] add basename to shared memory to avoid conflicts with other running instances of the clients and server
