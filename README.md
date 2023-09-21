@@ -14,7 +14,7 @@ The low-level implementation of the shared data mechanism is hosted in `utilitie
 
 - Additionally, a debugging Qt5-based gui is also provided:
 
-    <center><img src="control_cluster_utils/docs/images/overview/debugger_gui.png" alt="drawing" width="800"/> </center>
+    <center><img src="control_cluster_utils/docs/images/overview/debugger_gui.png" alt="drawing" width="600"/> </center>
 
     At its current state, the GUI has the following main features:
     - selection of which shared data to monitor (all or a subset of them).
