@@ -4,6 +4,12 @@ Utilities to bridge parallel simulations (typically GPU-based simulators, e.g. [
 
 <center><img src="control_cluster_utils/docs/images/overview/architecture.png" alt="drawing" width="1000"/> </center>
 
+The package is tailored to *Learning-Based Receding Horizon Control* approaches, in which classical Optimal Control and Trajectory Optimization meet Machine Learning. 
+For instance, a possible usage for this package is in frameworks similar to the following one:
+<center><img src="control_cluster_utils/docs/images/overview/learning_based.png" alt="drawing" width="900"/> </center>
+
+where a R.L. agent is coupled with a MPC controller to achieve maximum performance, while guaranteeing constraint satisfaction and, hence, safety. 
+
 At its core, the package is made of the following components:
 - A `ControlClusterSrvr` object is in charge of loading and spawning a number of controllers over separate child processes. Each controller must inherit from a base `RHController` class. Controllers are added to the server via the `add_controller` method.
 - A `ControlClusterClient` object represents the interface between the controllers and the parallel simulation environment (e.g. Omniverse Isaac Sim). 
