@@ -5,10 +5,11 @@ Utilities to bridge parallel simulations (typically GPU-based simulators, e.g. [
 <center><img src="control_cluster_utils/docs/images/overview/architecture.png" alt="drawing" width="1000"/> </center>
 
 The package is tailored to *Learning-Based Receding Horizon Control* approaches, in which classical Optimal Control and Trajectory Optimization meet Machine Learning. 
+
 For instance, a possible usage for this package is in frameworks similar to the following one:
 <center><img src="control_cluster_utils/docs/images/overview/learning_based.png" alt="drawing" width="900"/> </center>
 
-where a R.L. agent is coupled with a MPC controller to achieve maximum performance, while guaranteeing constraint satisfaction and, hence, safety. 
+where a R.L. agent is coupled with a MPC controller to maintain performance, while guaranteeing constraint satisfaction and, hence, safety. 
 
 At its core, the package is made of the following components:
 - A `ControlClusterSrvr` object is in charge of loading and spawning a number of controllers over separate child processes. Each controller must inherit from a base `RHController` class. Controllers are added to the server via the `add_controller` method.
@@ -29,8 +30,9 @@ The low-level implementation of the shared data mechanism is hosted in `utilitie
     - online sample and update rate selection
     - for each window, line selection/deselection
     - pause/unpause of all or individual plots for better debugging
-    - control cluster solution triggering
+    - control cluster triggering
     - day/night mode
+
 Some notes: 
 - The package is also available through Anaconda at [control_cluster_utils](https://anaconda.org/AndrePatri/control_cluster_utils). `ControlClusterUtils` is under active development, so its Anaconda version might not be always updated with the tip of this repo. For cutting-edge features, always refer to the source code hosted here.
 - The reasons for using the third party library `posix_ipc` instead of the newest [multiprocessing.shared_memory](https://docs.python.org/3/library/multiprocessing.shared_memory.html) are twofold. First, `posix_ipc` is more flexible since it allows potentially communication with non-python applications. Second, and more importantly, `multiprocessing.shared_memory` is available only from Python 3.8 onwards and this might cause issues if interfacing with a simulator supporting earlier versions of Python (like IsaacSim 2022.2.1, which is only compatible with Python 3.7). Choosing `posix_ipc` thus enables maximum compatibility.
