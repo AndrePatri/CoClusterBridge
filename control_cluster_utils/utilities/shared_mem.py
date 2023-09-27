@@ -26,40 +26,34 @@ from perf_sleep.pyperfsleep import PerfSleep
 class SharedMemConfig:
 
     def __init__(self, 
-            name: str):
+            name: str, 
+            namespace = ""):
         
         self.journal = Journal()
 
         self.name = name
 
-        paths = PathsGetter()
-        self.config_path = paths.SHARED_MEM_CONFIGPATH
+        self.namespace = namespace
 
-        with open(self.config_path) as file:
-            
-            yamldata = yaml.load(file, Loader=yaml.FullLoader)
-
-        self.basename = yamldata["basename"]
-
-        self.mem_path = "/" + self.basename + \
+        self.mem_path = "/" + self.namespace + \
                 self.name
         
-        self.mem_path_nrows = "/" + self.basename + \
+        self.mem_path_nrows = "/" + self.namespace + \
                 self.name + "_" + shared_srvr_nrows_name()
 
-        self.mem_path_ncols = "/" + self.basename + \
+        self.mem_path_ncols = "/" + self.namespace + \
                 self.name + "_" + shared_srvr_ncols_name()
             
-        self.mem_path_clients_counter = "/" + self.basename + \
+        self.mem_path_clients_counter = "/" + self.namespace + \
             self.name + "_" + shared_clients_count_name()
         
-        self.mem_path_server_sem = "/" + self.basename + \
+        self.mem_path_server_sem = "/" + self.namespace + \
             self.name + "_" + shared_sem_srvr_name()
         
-        self.mem_path_clients_n_sem = "/" + self.basename + \
+        self.mem_path_clients_n_sem = "/" + self.namespace + \
             self.name + "_" + shared_sem_clients_count_name()
         
-        self.mem_path_clients_semaphore = "/" + self.basename + \
+        self.mem_path_clients_semaphore = "/" + self.namespace + \
                 self.name + "_" + shared_sem_clients_count_name()
 
 class SharedMemSrvr:
@@ -68,6 +62,7 @@ class SharedMemSrvr:
                 n_rows: int, 
                 n_cols: int,
                 name: str, 
+                namespace = "",
                 dtype=torch.float32, 
                 backend="torch"):
 
@@ -80,6 +75,7 @@ class SharedMemSrvr:
         self.dtype = dtype
 
         self.name = name
+        self.namespace = namespace
 
         self.n_rows = n_rows
         self.n_cols = n_cols
@@ -87,7 +83,8 @@ class SharedMemSrvr:
         self._terminate = False 
         self._started = False
 
-        self.mem_config = SharedMemConfig(name)
+        self.mem_config = SharedMemConfig(name=name, 
+                                    namespace=self.namespace)
             
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
@@ -608,6 +605,7 @@ class SharedMemClient:
 
     def __init__(self, 
                 name: str, 
+                namespace = "",
                 client_index: int = None, 
                 dtype=torch.float32, 
                 backend="torch",
@@ -627,13 +625,15 @@ class SharedMemClient:
         self.dtype = dtype
 
         self.name = name
+        self.namespace = namespace
 
         self.n_rows = -1
         self.n_cols = -1
 
         self.client_index = client_index
 
-        self.mem_config = SharedMemConfig(self.name)
+        self.mem_config = SharedMemConfig(name = self.name, 
+                                    namespace=self.namespace)
         
         self.element_size = torch.tensor([], dtype=self.dtype).element_size()
 
@@ -1280,6 +1280,7 @@ class SharedStringArray:
             length: int, 
             name: str, 
             is_server: bool,
+            namespace = "",
             init: List[str] = None, 
             verbose: bool = False, 
             wait_amount: float = 0.01):
@@ -1301,19 +1302,23 @@ class SharedStringArray:
         import math
         self.n_rows = math.ceil(self.max_string_length / 
                             torch.tensor([0],dtype=self.dtype).element_size())
-        self.basename = f"{self.__class__.__name__}"
+        self.classname = f"{self.__class__.__name__}"
 
-        self.name = self.basename + name
+        self.name = self.classname + name
 
+        self.namespace = namespace
+        
         if self.is_server:
 
-            self.mem_manager = SharedMemSrvr(self.n_rows, 
-                                        self.length, 
-                                        self.name, 
+            self.mem_manager = SharedMemSrvr(n_rows=self.n_rows, 
+                                        n_cols=self.length, 
+                                        name=self.name, 
+                                        namespace=self.namespace,
                                         dtype=self.dtype)
         else:
 
             self.mem_manager = SharedMemClient(name=self.name, 
+                                        namespace=self.namespace,
                                         dtype=self.dtype, 
                                         verbose=verbose, 
                                         wait_amount=wait_amount)

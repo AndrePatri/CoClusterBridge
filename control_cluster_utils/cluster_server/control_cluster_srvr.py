@@ -15,12 +15,15 @@ ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterSrvr')
 class ControlClusterSrvr(ABC):
 
     def __init__(self, 
-                processes_basename: str = "controller", 
-                verbose: bool = False):
+            namespace = "",
+            processes_basename: str = "controller", 
+            verbose: bool = False):
 
         # ciao :D
         #        CR 
 
+        self.namespace = namespace
+        
         self.verbose = verbose
 
         self.journal = Journal()
@@ -34,7 +37,8 @@ class ControlClusterSrvr(ABC):
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
 
-        self.handshake_srvr = HanshakeDataCntrlSrvr(self.verbose)
+        self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
+                                        namespace=self.namespace)
         self.handshake_srvr.handshake()
         self.cluster_size = self.handshake_srvr.cluster_size.tensor_view[0, 0].item()
 

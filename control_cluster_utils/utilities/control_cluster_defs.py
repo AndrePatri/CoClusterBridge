@@ -105,10 +105,13 @@ class RobotClusterState:
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
+                namespace = "",
                 backend: str = "torch", 
                 device: torch.device = torch.device("cpu"), 
                 dtype: torch.dtype = torch.float32):
         
+        self.namespace = namespace
+
         self.journal = Journal()
 
         self.dtype = dtype
@@ -141,7 +144,8 @@ class RobotClusterState:
         # and a corresponding view of it
         self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
                                     n_cols=cluster_aggregate_columnsize, 
-                                    name=states_name(), 
+                                    name=states_name(),
+                                    namespace=self.namespace, 
                                     dtype=self.dtype)
     
     def start(self):
@@ -250,10 +254,13 @@ class RobotClusterCmd:
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
+                namespace = "",
                 backend: str = "torch", 
                 device: torch.device = torch.device("cpu"),  
                 dtype: torch.dtype = torch.float32, 
                 add_data_size: int = None):
+
+        self.namespace = namespace
 
         self.journal = Journal()
 
@@ -306,6 +313,7 @@ class RobotClusterCmd:
         self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
                                     n_cols=cluster_aggregate_columnsize, 
                                     name=cmds_name(), 
+                                    namespace=self.namespace,
                                     dtype=self.dtype) 
 
     def start(self):
@@ -448,10 +456,13 @@ class RhcClusterTaskRefs:
     def __init__(self, 
                 n_contacts: int, 
                 cluster_size: int = 1, 
+                namespace = "",
                 backend: str = "torch", 
                 device: torch.device = torch.device("cpu"), 
                 dtype: torch.dtype = torch.float32):
         
+        self.namespace = namespace
+
         self.journal = Journal()
 
         self.dtype = dtype
@@ -490,6 +501,7 @@ class RhcClusterTaskRefs:
         self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
                                     n_cols=cluster_aggregate_columnsize, 
                                     name=task_refs_name(), 
+                                    namespace=self.namespace,
                                     dtype=self.dtype)
     
     def start(self):
@@ -524,12 +536,15 @@ class RhcClusterTaskRefs:
 class HanshakeDataCntrlSrvr:
 
     def __init__(self, 
-                verbose = False):
+                verbose = False, 
+                namespace = ""):
         
         # for now we use the wait amount to make race conditions practically 
         # impossible 
         
         self.verbose = verbose
+
+        self.namespace = namespace
 
         self.journal = Journal()
 
@@ -545,14 +560,16 @@ class HanshakeDataCntrlSrvr:
         self.n_contacts = None
 
         self.cluster_size = SharedMemClient(name=cluster_size_name(), 
+                                    namespace=self.namespace,
                                     dtype=torch.int64, 
                                     wait_amount=self.wait_amount, 
                                     verbose=self.verbose)
         
         self.jnt_number_client = SharedMemClient(name=jnt_number_client_name(), 
-                                        dtype=torch.int64, 
-                                        wait_amount=self.wait_amount, 
-                                        verbose=self.verbose)
+                                    namespace=self.namespace,
+                                    dtype=torch.int64, 
+                                    wait_amount=self.wait_amount, 
+                                    verbose=self.verbose)
         
     def handshake(self):
         
@@ -564,6 +581,7 @@ class HanshakeDataCntrlSrvr:
 
         self.jnt_names_client = SharedStringArray(length=self.jnt_number_client.tensor_view[0, 0].item(), 
                                     name=jnt_names_client_name(), 
+                                    namespace=self.namespace,
                                     is_server=False, 
                                     wait_amount=self.wait_amount, 
                                     verbose=self.verbose)
@@ -589,12 +607,14 @@ class HanshakeDataCntrlSrvr:
 
             self.add_data_length = SharedMemSrvr(n_rows=1, n_cols=1, 
                                     name=additional_data_name(), 
+                                    namespace=self.namespace,
                                     dtype=torch.int64)
             self.add_data_length.start()
             self.add_data_length.tensor_view[0, 0] = add_data_length
 
             self.n_contacts = SharedMemSrvr(n_rows=1, n_cols=1, 
                                     name=n_contacts_name(), 
+                                    namespace=self.namespace, 
                                     dtype=torch.int64)
             self.n_contacts.start()
             self.n_contacts.tensor_view[0, 0] = n_contacts
@@ -642,12 +662,15 @@ class HanshakeDataCntrlSrvr:
 class HanshakeDataCntrlClient:
 
     def __init__(self, 
-            n_jnts: int):
+            n_jnts: int, 
+            namespace = ""):
         
         # for now we use the wait amount to make race conditions practically 
         # impossible 
 
         self.n_jnts = n_jnts
+
+        self.namespace = namespace
 
         self.journal = Journal()
 
@@ -655,22 +678,27 @@ class HanshakeDataCntrlClient:
 
         self.jnt_names_client = SharedStringArray(length=self.n_jnts, 
                                     name=jnt_names_client_name(), 
+                                    namespace=self.namespace,
                                     is_server=True)
 
         self.cluster_size = SharedMemSrvr(n_rows=1, n_cols=1, 
                                     name=cluster_size_name(), 
+                                    namespace=self.namespace, 
                                     dtype=torch.int64)
 
         self.jnt_number_client = SharedMemSrvr(n_rows=1, n_cols=1, 
                                     name=jnt_number_client_name(), 
+                                    namespace=self.namespace, 
                                     dtype=torch.int64)
 
-        self.add_data_length = SharedMemClient(name=additional_data_name(), 
+        self.add_data_length = SharedMemClient(name=additional_data_name(),  
+                                    namespace=self.namespace,
                                     dtype=torch.int64, 
                                     wait_amount=self.wait_amount, 
                                     verbose=True)
         
-        self.n_contacts = SharedMemClient(name=n_contacts_name(), 
+        self.n_contacts = SharedMemClient(name=n_contacts_name(),  
+                                    namespace=self.namespace,
                                     dtype=torch.int64, 
                                     wait_amount=self.wait_amount, 
                                     verbose=True)

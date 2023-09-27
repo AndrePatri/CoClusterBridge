@@ -95,6 +95,7 @@ class SharedDataThread(QThread):
 class RtClusterDebugger(QMainWindow):
 
     def __init__(self, 
+                namespace = "",
                 data_update_dt: float = 0.01,
                 plot_update_dt: float = 0.5, 
                 window_length: float = 10.0, # [s]
@@ -103,6 +104,8 @@ class RtClusterDebugger(QMainWindow):
 
         self.journal = Journal()
 
+        self.namespace = namespace
+        
         self.widget_utils = WidgetUtils()
 
         self.data_update_dt = data_update_dt
@@ -322,33 +325,39 @@ class RtClusterDebugger(QMainWindow):
         
         # getting info
         self.cluster_size_clnt = SharedMemClient(name=cluster_size_name(), 
+                                    namespace=self.namespace,
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
                                     verbose=self.verbose)
         self.cluster_size_clnt.attach()
         self.n_contacts_clnt = SharedMemClient(name=n_contacts_name(), 
+                                    namespace=self.namespace, 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
                                     verbose=True)
         self.n_contacts_clnt.attach()
         self.jnt_number_clnt = SharedMemClient(name=jnt_number_client_name(), 
+                                        namespace=self.namespace, 
                                         dtype=torch.int64, 
                                         wait_amount=wait_amount, 
                                         verbose=self.verbose)
         self.jnt_number_clnt.attach()
         self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
                                     name=jnt_names_client_name(), 
+                                    namespace=self.namespace, 
                                     is_server=False, 
                                     wait_amount=wait_amount, 
                                     verbose=self.verbose)
         self.jnt_names_clnt.start()
         self.add_data_length_clnt = SharedMemClient(name=additional_data_name(), 
+                                    namespace=self.namespace, 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
                                     verbose=True)
         self.add_data_length_clnt.attach()
 
-        self.launch_controllers = SharedMemClient(launch_controllers_flagname(), 
+        self.launch_controllers = SharedMemClient(name=launch_controllers_flagname(), 
+                                namespace=self.namespace, 
                                 dtype=torch.bool, 
                                 client_index=0)
 
@@ -376,6 +385,7 @@ class RtClusterDebugger(QMainWindow):
                                         cluster_size=self.cluster_size,
                                         n_contacts=self.n_contacts,
                                         window_buffer_factor=self.window_buffer_factor, 
+                                        namespace=self.namespace,
                                         parent=None, 
                                         verbose = self.verbose)
 
@@ -417,6 +427,7 @@ class RtClusterDebugger(QMainWindow):
                                     jnt_names=self.jnt_names, 
                                     jnt_number=self.jnt_number,
                                     window_buffer_factor=self.window_buffer_factor, 
+                                    namespace=self.namespace,
                                     parent=None, 
                                     verbose = self.verbose)
                     
@@ -457,6 +468,7 @@ class RtClusterDebugger(QMainWindow):
                                     jnt_names=self.jnt_names, 
                                     jnt_number=self.jnt_number,
                                     window_buffer_factor=self.window_buffer_factor, 
+                                    namespace=self.namespace,
                                     parent=None, 
                                     verbose = self.verbose)
 

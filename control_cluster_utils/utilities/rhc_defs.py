@@ -175,8 +175,11 @@ class RobotState:
                 index: int,
                 jnt_remapping: List[int] = None,
                 q_remapping: List[int] = None,
-                dtype = torch.float32, 
+                dtype = torch.float32,
+                namespace = "", 
                 verbose=False):
+
+        self.namespace = namespace
 
         self.journal = Journal()
 
@@ -193,6 +196,7 @@ class RobotState:
         self.shared_memman = SharedMemClient(
                         client_index=index, 
                         name=states_name(), 
+                        namespace=self.namespace,
                         dtype=self.dtype, 
                         verbose=verbose) 
         self.shared_memman.attach() # this blocks untils the server creates the associated memory
@@ -373,10 +377,13 @@ class RobotCmds:
                 jnt_remapping: List[int] = None,
                 add_info_size: int = None, 
                 dtype = torch.float32, 
+                namespace = "",
                 verbose=False):
 
         self.journal = Journal()
 
+        self.namespace = namespace
+        
         self.dtype = dtype
 
         self.device = torch.device('cpu') # born to live on CPU
@@ -391,6 +398,7 @@ class RobotCmds:
         self.shared_memman = SharedMemClient(
                         client_index=index, 
                         name=cmds_name(), 
+                        namespace=self.namespace,
                         dtype=self.dtype, 
                         verbose=verbose) # this blocks untils the server creates the associated memory
         self.shared_memman.attach()
@@ -652,10 +660,13 @@ class RhcTaskRefs:
                 index: int,
                 q_remapping: List[int] = None,
                 dtype = torch.float32, 
+                namespace = "",
                 verbose=False):
 
         self.journal = Journal()
         
+        self.namespace = namespace
+
         self.dtype = dtype
 
         self.device = torch.device('cpu') # born to live on CPU
@@ -669,6 +680,7 @@ class RhcTaskRefs:
         # this creates the view of the shared refs data for the robot specificed by index
         self.shared_memman = SharedMemClient(client_index=index, 
                         name=task_refs_name(), 
+                        namespace=self.namespace,
                         dtype=self.dtype, 
                         verbose=verbose) 
         self.shared_memman.attach() # this blocks untils the server creates the associated memory

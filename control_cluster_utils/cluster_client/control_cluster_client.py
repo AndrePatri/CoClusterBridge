@@ -31,7 +31,10 @@ class ControlClusterClient(ABC):
             device = torch.device("cpu"), 
             np_array_dtype = np.float32, 
             verbose = False, 
-            debug = False):
+            debug = False, 
+            namespace = ""):
+
+        self.namespace = namespace
 
         self.journal = Journal()
         
@@ -128,25 +131,31 @@ class ControlClusterClient(ABC):
 
     def _init_shared_mem(self):
         
-        self.robot_states = RobotClusterState(self.n_dofs, 
+        self.robot_states = RobotClusterState(n_dofs=self.n_dofs, 
                                             cluster_size=self.cluster_size, 
+                                            namespace=self.namespace,
                                             backend=self._backend, 
                                             device=self._device, 
                                             dtype=self.torch_dtype) # from robot to controllers
 
-        self.handshake_manager = HanshakeDataCntrlClient(self.n_dofs) # handles handshake process
+        self.handshake_manager = HanshakeDataCntrlClient(n_jnts=self.n_dofs, 
+                                                    namespace=self.namespace) # handles handshake process
         # between client and server
 
         dtype = torch.bool # using a boolean type shared data, 
         # exposes low-latency boolean writing and reading methods
 
-        self.trigger_flags = SharedMemSrvr(self.cluster_size, 1, 
-                                trigger_flagname(), 
+        self.trigger_flags = SharedMemSrvr(n_rows=self.cluster_size, 
+                                n_cols=1, 
+                                name=trigger_flagname(), 
+                                namespace=self.namespace,
                                 dtype=dtype) 
         
-        self.launch_controllers = SharedMemSrvr(1, 1, 
-                                launch_controllers_flagname(), 
-                                dtype=dtype) 
+        self.launch_controllers = SharedMemSrvr(n_rows=1, 
+                                    n_cols=1, 
+                                    name=launch_controllers_flagname(), 
+                                    namespace=self.namespace,
+                                    dtype=dtype) 
 
     def _trigger_solution(self):
 
@@ -217,8 +226,9 @@ class ControlClusterClient(ABC):
         add_data_length_from_server = self.handshake_manager.add_data_length.tensor_view[0, 0].item()
         n_contacts_from_server = self.handshake_manager.n_contacts.tensor_view[0, 0].item()
 
-        self.controllers_cmds = RobotClusterCmd(self.n_dofs, 
+        self.controllers_cmds = RobotClusterCmd(n_dofs=self.n_dofs, 
                                             cluster_size=self.cluster_size,
+                                            namespace=self.namespace,
                                             add_data_size = add_data_length_from_server, 
                                             backend=self._backend, 
                                             device=self._device, 
@@ -228,6 +238,7 @@ class ControlClusterClient(ABC):
 
         self.rhc_task_refs = RhcClusterTaskRefs(n_contacts=n_contacts_from_server, 
                                     cluster_size=self.cluster_size, 
+                                    namespace=self.namespace,
                                     device=self._device, 
                                     backend=self._backend, 
                                     dtype=self.torch_dtype)

@@ -34,7 +34,10 @@ class RHController(ABC):
             srdf_path: str,
             verbose = False, 
             debug = False,
-            array_dtype = torch.float32):
+            array_dtype = torch.float32, 
+            namespace = ""):
+        
+        self.namespace = namespace
         
         self.journal = Journal()
 
@@ -104,6 +107,7 @@ class RHController(ABC):
 
         dtype = torch.bool
         self.trigger_flag = SharedMemClient(name=trigger_flagname(), 
+                                    namespace=self.namespace,
                                     client_index=self.controller_index, 
                                     dtype=dtype)
         self.trigger_flag.attach()
@@ -123,12 +127,14 @@ class RHController(ABC):
                                     dtype=self.array_dtype,
                                     jnt_remapping=self._to_server, 
                                     q_remapping=self._quat_remap, 
+                                    namespace=self.namespace,
                                     verbose = self._verbose) 
 
         self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
                                 index=self.controller_index,
                                 add_info_size=2, 
                                 dtype=self.array_dtype, 
+                                namespace=self.namespace,
                                 jnt_remapping=self._to_client,
                                 verbose=self._verbose) 
 

@@ -808,8 +808,11 @@ class RhcTaskRefWindow():
             cluster_size: int, 
             n_contacts: int,
             window_buffer_factor: int = 2,
+            namespace = "",
             parent: QWidget = None, 
             verbose = False):
+
+        self.namespace = namespace
 
         self.journal = Journal()
 
@@ -886,6 +889,7 @@ class RhcTaskRefWindow():
                 n_contacts=self.n_contacts,
                 index=i,
                 q_remapping=None,
+                namespace=self.namespace,
                 dtype=torch.float32, 
                 verbose=self.verbose))
             
@@ -961,10 +965,13 @@ class RhcCmdsWindow():
             jnt_names: List[str], 
             add_data_length: int,
             window_buffer_factor: int = 2,
+            namespace = "",
             parent: QWidget = None, 
             verbose = False):
 
         self.journal = Journal()
+
+        self.namespace = namespace
 
         self.cluster_size = cluster_size
         self.jnt_names = jnt_names 
@@ -1042,6 +1049,7 @@ class RhcCmdsWindow():
                                     jnt_remapping=None, # we see everything as seen on the simulator side 
                                     add_info_size=self.add_data_length, 
                                     dtype=torch.float32, 
+                                    namespace=self.namespace,
                                     verbose=self.verbose))
 
     def update(self):
@@ -1115,10 +1123,13 @@ class RhcStateWindow():
             jnt_number: int, 
             jnt_names: List[str], 
             window_buffer_factor: int = 2,
+            namespace = "",
             parent: QWidget = None, 
             verbose = False):
         
         self.journal = Journal()
+
+        self.namespace = namespace
 
         self.cluster_size = cluster_size
         self.jnt_names = jnt_names 
@@ -1219,6 +1230,7 @@ class RhcStateWindow():
                                     index=i, 
                                     jnt_remapping=None, 
                                     q_remapping=None, 
+                                    namespace=self.namespace,
                                     dtype=torch.float32, 
                                     verbose=self.verbose))
 
