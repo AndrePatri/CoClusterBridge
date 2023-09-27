@@ -13,7 +13,7 @@ For instance, a possible usage for this package is in frameworks similar to the 
 
 where a R.L. agent is coupled with a MPC controller. This allows to maintain performance, while guaranteeing constraints satisfaction and, hence, safety. 
 
-This tool can be easily embedded into gyms (e.g [Gymnasium](https://gymnasium.farama.org/)) to perform the training phase of a R.L. agent. For minimal usage examples of this package with [Omniverse Isaac Sim](https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim.html), have a look [here](https://github.com/AndrePatri/AliengoExample/tree/main).
+This tool can be easily embedded into gyms (e.g [Gymnasium](https://gymnasium.farama.org/)) to perform the training phase of a R.L. agent. For minimal usage examples of this package with [Omniverse Isaac Sim](https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim.html), have a look [here](https://github.com/AndrePatri/LRhcExamples).
 
 As can be seen from the top picture, the package is made, at its core, of the following components:
 - A `ControlClusterSrvr` object is in charge of loading and spawning a number of controllers over separate child processes. Each controller must inherit from a base `RHController` class. Controllers are added to the server via the `add_controller` method.
