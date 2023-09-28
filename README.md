@@ -9,7 +9,7 @@ ControlClusterUtils is a tool for bridging parallel simulations (typically GPU-b
 The package is tailored to *Learning-Based Receding Horizon Control* approaches, in which classical Optimal Control and Trajectory Optimization meet Machine Learning. 
 
 For instance, a possible usage for this package is in frameworks similar to the following one:
-<center><img src="control_cluster_utils/docs/images/overview/learning_based.png" alt="drawing" width="900"/> </center>
+<center><img src="control_cluster_utils/docs/images/overview/learning_based_rhc.png" alt="drawing" width="900"/> </center>
 
 where a R.L. agent is coupled with a MPC controller. This allows to maintain performance, while guaranteeing constraints satisfaction and, hence, safety. 
 
