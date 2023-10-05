@@ -611,8 +611,8 @@ class RhcTaskRefs:
         def get_base_xy(self):
 
             return self.p[0:2]
-        
-    class ComPos:
+    
+    class CoMPose:
         
         def __init__(self, 
                     mem_manager: SharedMemClient, 
@@ -675,7 +675,7 @@ class RhcTaskRefs:
                                         length=3)
 
                 self.com_pos[:, 2] = 0.4
-                
+
             if varname == "com_q":
                 
                 self.com_q = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7 + 3, 
@@ -684,14 +684,15 @@ class RhcTaskRefs:
         def get_com_height(self):
             
             return self.com_pos[:, 2].item()
-        
+
         def get_com_pos(self):
             
             return self.com_pos[:, :]
         
-        def get_com_orientation(self):
+        def get_com_orientation(self, 
+                        remap = True):
             
-            if self.q_remapping is not None:
+            if self.q_remapping is not None and remap:
 
                 return self.com_q[:, self.q_remapping]
             
@@ -703,6 +704,26 @@ class RhcTaskRefs:
             
             return self.com_pose[:, :]
         
+        def set_com_height(self, 
+                height: float):
+
+            self.com_pos[:, 2] = height
+
+        def set_com_pos(self, 
+                pos: torch.tensor):
+
+            self.com_pos[:, :] = pos
+
+        def set_com_q(self, 
+                q: torch.tensor):
+
+            self.com_q[:, :] = q
+
+        def set_com_pose(self, 
+                pose: torch.tensor):
+
+            self.com_pose[:, :] = pose
+
     def __init__(self, 
                 n_contacts: int,
                 index: int,
@@ -743,7 +764,7 @@ class RhcTaskRefs:
                                     q_remapping=self.q_remapping, 
                                     dtype=self.dtype)
 
-        self.com_pos = self.ComPos(mem_manager=self.shared_memman, 
+        self.com_pose = self.CoMPose(mem_manager=self.shared_memman, 
                                 n_contacts=self.n_contacts,
                                 q_remapping=self.q_remapping,
                                 dtype=self.dtype)
@@ -762,7 +783,7 @@ class RhcTaskRefs:
 
             self.base_pose.terminate()
 
-            self.com_pos.terminate()
+            self.com_pose.terminate()
 
             self.shared_memman.terminate()
 

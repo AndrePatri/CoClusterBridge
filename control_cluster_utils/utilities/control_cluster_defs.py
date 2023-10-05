@@ -521,7 +521,7 @@ class RhcClusterTaskRefs:
         self.base_pose = self.BasePose(cluster_aggregate=self.cluster_aggregate, 
                                     n_contacts=self.n_contacts)
         
-        self.com_pos = self.ComPos(cluster_aggregate=self.cluster_aggregate, 
+        self.com_pose = self.ComPos(cluster_aggregate=self.cluster_aggregate, 
                                     n_contacts=self.n_contacts)
         
         # this creates a shared memory block of the right size for the state

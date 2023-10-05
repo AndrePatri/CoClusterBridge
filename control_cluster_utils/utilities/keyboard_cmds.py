@@ -25,6 +25,10 @@ class RhcRefsFromKeyboard:
         self.contacts = None 
         
         self.enable_heightchange = False
+        self.com_height_dh = 0.008 # [m]
+
+        self.enable_navigation = False
+        self.dxy = 0.05 # [m]
 
         self.cluster_size = -1
         self.n_contacts = -1
@@ -117,6 +121,49 @@ class RhcRefsFromKeyboard:
         self.rhc_task_refs[self.cluster_idx].phase_id.set_contacts(
                                 self.contacts)
 
+    def _update_com_height(self, 
+                decrement = False):
+        
+        current_com_ref = self.rhc_task_refs[self.cluster_idx].com_pose.get_com_height()
+
+        if decrement:
+
+            new_com_ref = current_com_ref - self.com_height_dh
+
+        else:
+
+            new_com_ref = current_com_ref + self.com_height_dh
+
+        self.rhc_task_refs[self.cluster_idx].com_pose.set_com_height(new_com_ref)
+    
+    def _update_navigation(self, 
+                    lateral = False, 
+                    increment = True):
+
+        current_com_pos_ref = self.rhc_task_refs[self.cluster_idx].com_pose.get_com_pos()
+
+        if lateral and increment:
+            # lateral motion
+            
+            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] + self.dxy
+
+        if lateral and not increment:
+            # lateral motion
+            
+            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] - self.dxy
+
+        if not lateral and not increment:
+            # frontal motion
+            
+            current_com_pos_ref[:, 0] = current_com_pos_ref[:, 0] - self.dxy
+
+        if not lateral and increment:
+            # frontal motion
+            
+            current_com_pos_ref[:, 0] = current_com_pos_ref[:, 0] + self.dxy
+
+        self.rhc_task_refs[self.cluster_idx].com_pose.set_com_pos(current_com_pos_ref)
+
     def _on_press(self, key):
 
         if self.launch_keyboard_cmds.all():
@@ -128,6 +175,7 @@ class RhcRefsFromKeyboard:
                 
                 print('Key {0} pressed.'.format(key.char))
                 
+                # stepping ph
                 if key.char == "7":
                     
                     self.contacts[0, 0] = False
@@ -143,7 +191,45 @@ class RhcRefsFromKeyboard:
                 if key.char == "3":
                     
                     self.contacts[0, 3] = False
+                
+                # height change
+                if key.char == "h" and not self.enable_heightchange:
+                    
+                    self.enable_heightchange = True
 
+                if key.char == "+" and self.enable_heightchange:
+
+                    self._update_com_height(decrement=False)
+                
+                if key.char == "-" and self.enable_heightchange:
+
+                    self._update_com_height(decrement=True)
+
+                # navigation
+                if key.char == "n" and not self.enable_navigation:
+                    
+                    self.enable_navigation = True
+                
+                if key.char == "6" and self.enable_navigation:
+                    
+                    self._update_navigation(lateral = True, 
+                                    increment = True)
+
+                if key.char == "4" and self.enable_navigation:
+                    
+                    self._update_navigation(lateral = True, 
+                                    increment = False)
+                
+                if key.char == "8" and self.enable_navigation:
+                    
+                    self._update_navigation(lateral = False, 
+                                    increment = True)
+                
+                if key.char == "2" and self.enable_navigation:
+                    
+                    self._update_navigation(lateral = False, 
+                                    increment = False)
+                    
             self._set_cmds()
 
     def _on_release(self, key):
