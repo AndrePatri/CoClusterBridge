@@ -71,6 +71,7 @@ class RhcRefsFromKeyboard:
                                         wait_amount=wait_amount, 
                                         verbose=self._verbose)
         self.env_index.attach()
+        self.env_index.tensor_view[0, 0] = 0 # inizialize to 1st environment
 
         # while self.launch_keyboard_cmds.get_clients_count() != 1:
 
@@ -80,7 +81,7 @@ class RhcRefsFromKeyboard:
         self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
         self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
         
-        self.cluster_idx = self.env_index.tensor_view[0, 0]
+        # self.cluster_idx = self.env_index.tensor_view[0, 0]
         
         self.contacts = torch.tensor([[True] * self.n_contacts], 
                         dtype=torch.float32)
@@ -114,7 +115,7 @@ class RhcRefsFromKeyboard:
     
     def _update(self):
 
-        self.cluster_idx = int(self.env_index.tensor_view[0, 0])
+        self.cluster_idx = self.env_index.tensor_view[0, 0].item()
 
     def _set_cmds(self):
 
