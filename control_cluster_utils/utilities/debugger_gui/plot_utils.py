@@ -865,15 +865,15 @@ class RhcTaskRefWindow():
                     legend_list=["p_x", "p_y", "p_z", 
                                 "q_w", "q_i", "q_j", "q_k"]))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=3, 
+        self.rt_plotters.append(RtPlotWindow(n_data=7, 
                     update_data_dt=update_data_dt, 
                     update_plot_dt=update_plot_dt,
                     window_duration=window_duration, 
                     parent=None, 
-                    base_name="CoM pos", 
+                    base_name="CoM pose", 
                     window_buffer_factor=window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z"], 
-                    ylabel="[m]"))
+                    legend_list=["p_x", "p_y", "p_z", 
+                                "q_w", "q_i", "q_j", "q_k"]))
         
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
@@ -900,7 +900,7 @@ class RhcTaskRefWindow():
             self.rt_plotters[0].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_contacts().numpy())
             self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
             self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pos().numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pos.get_com_pose().numpy())
 
     def swith_pause(self):
 

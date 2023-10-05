@@ -24,11 +24,11 @@ def aggregate_refs_size(contact_n: int):
     # hardcoded
     phase_id = contact_n + 1
     base_pose = 3 + 4
-    com_pos = 3
+    com_pose = 3 + 4
     
     refs_size = phase_id + \
             base_pose + \
-            com_pos
+            com_pose
 
     return refs_size
 

@@ -128,11 +128,11 @@ class RhcRefsFromKeyboard:
                 
                 print('Key {0} pressed.'.format(key.char))
                 
-                if key.char == "9":
+                if key.char == "7":
                     
                     self.contacts[0, 0] = False
 
-                if key.char == "7":
+                if key.char == "9":
                     
                     self.contacts[0, 1] = False
 
@@ -157,11 +157,11 @@ class RhcRefsFromKeyboard:
                 
                 print('Key {0} released.'.format(key.char))
 
-                if key.char == "9":
+                if key.char == "7":
                     
                     self.contacts[0, 0] = True
 
-                if key.char == "7":
+                if key.char == "9":
                     
                     self.contacts[0, 1] = True
 

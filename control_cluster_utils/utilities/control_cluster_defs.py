@@ -430,19 +430,38 @@ class RhcClusterTaskRefs:
 
         def __init__(self, 
                     cluster_aggregate: torch.Tensor,
-                    n_contacts: int):
+                    n_contacts: int,
+                    q_remapping: List[int] = None):
         
             self.n_contacts = n_contacts
+
+            self.q_remapping = None
+
+            if q_remapping is not None:
+                self.q_remapping = torch.tensor(q_remapping)
 
             self.cluster_size = cluster_aggregate.shape[0]
         
             self.com_pos = None # full com position
-
+            self.com_q = None # com orientation
+            self.com_pose = None # com pose
+            
+            self.assign_views(cluster_aggregate, "com_pose")
             self.assign_views(cluster_aggregate, "com_pos")
+            self.assign_views(cluster_aggregate, "com_q")
 
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
             varname: str):
+            
+            if varname == "com_pose":
+
+                # (can only make views of contigous memory)
+
+                offset = 1 + self.n_contacts + 7
+                
+                self.com_pose = cluster_aggregate[:, offset:(offset + 7)].view(self.cluster_size, 
+                                                7)
             
             if varname == "com_pos":
 
@@ -452,7 +471,16 @@ class RhcClusterTaskRefs:
                 
                 self.com_pos = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
                                                 3)
-            
+
+            if varname == "com_q":
+
+                # (can only make views of contigous memory)
+
+                offset = 1 + self.n_contacts + 7 + 3
+                
+                self.com_pos = cluster_aggregate[:, offset:(offset + 4)].view(self.cluster_size, 
+                                                4)
+                
     def __init__(self, 
                 n_contacts: int, 
                 cluster_size: int = 1, 

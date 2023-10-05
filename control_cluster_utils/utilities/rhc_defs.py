@@ -617,18 +617,28 @@ class RhcTaskRefs:
         def __init__(self, 
                     mem_manager: SharedMemClient, 
                     n_contacts: int,
+                    q_remapping: List[int] = None,
                     dtype = torch.float32):
             
             self.dtype = dtype
 
             self.n_contacts = n_contacts
+            
+            self.q_remapping = None
 
-            self.com_pos = None # full com position
+            if q_remapping is not None:
+                self.q_remapping = torch.tensor(q_remapping)
+
+            self.com_pos = None # com position
+            self.com_q = None # com orientation
+            self.com_pose = None # com pose
 
             self._terminated = False
             
             # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "com_pose")
             self.assign_views(mem_manager, "com_pos")
+            self.assign_views(mem_manager, "com_q")
 
         def __del__(self):
 
@@ -643,6 +653,8 @@ class RhcTaskRefs:
                 # release any memory view
 
                 self.com_pos = None
+                self.com_q = None 
+                self.com_pose = None
     
         def assign_views(self, 
                     mem_manager: SharedMemClient,
@@ -650,12 +662,24 @@ class RhcTaskRefs:
             
             # we create views 
 
+            if varname == "com_pose":
+                
+                self.com_pose = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
+                                        length=7)
+
+                self.com_pose[:, :] = torch.tensor([0])
+
             if varname == "com_pos":
                 
                 self.com_pos = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
                                         length=3)
 
                 self.com_pos[:, 2] = 0.4
+                
+            if varname == "com_q":
+                
+                self.com_q = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7 + 3, 
+                                        length=4)
 
         def get_com_height(self):
             
@@ -664,6 +688,20 @@ class RhcTaskRefs:
         def get_com_pos(self):
             
             return self.com_pos[:, :]
+        
+        def get_com_orientation(self):
+            
+            if self.q_remapping is not None:
+
+                return self.com_q[:, self.q_remapping]
+            
+            else:
+
+                return self.com_q[:, :]
+                    
+        def get_com_pose(self):
+            
+            return self.com_pose[:, :]
         
     def __init__(self, 
                 n_contacts: int,
@@ -707,6 +745,7 @@ class RhcTaskRefs:
 
         self.com_pos = self.ComPos(mem_manager=self.shared_memman, 
                                 n_contacts=self.n_contacts,
+                                q_remapping=self.q_remapping,
                                 dtype=self.dtype)
 
     def __del__(self):
