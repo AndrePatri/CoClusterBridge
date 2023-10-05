@@ -496,7 +496,17 @@ class RhcTaskRefs:
         def get_contacts(self):
             
             return self.is_contact[:, :]
-          
+        
+        def set_contacts(self, 
+                contacts: torch.Tensor):
+                                            
+            self.is_contact[:, :] = contacts
+
+        def set_phase_id(self, 
+                phase_id: int):
+                                            
+            self.phase_id[:, :] = phase_id
+
     class BasePose:
 
         def __init__(self, 

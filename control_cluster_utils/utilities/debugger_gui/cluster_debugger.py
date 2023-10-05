@@ -6,11 +6,13 @@ from PyQt5.QtGui import QIcon, QPixmap
 
 from control_cluster_utils.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
 from control_cluster_utils.utilities.debugger_gui.plot_utils import WidgetUtils
-from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedStringArray
+from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedMemSrvr, SharedStringArray
 from control_cluster_utils.utilities.defs import launch_controllers_flagname
+from control_cluster_utils.utilities.defs import launch_keybrd_cmds_flagname
 from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
 from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
 from control_cluster_utils.utilities.defs import additional_data_name
+from control_cluster_utils.utilities.defs import env_selector_name
 from control_cluster_utils.utilities.sysutils import PathsGetter
 from control_cluster_utils.utilities.defs import Journal
 
@@ -116,6 +118,7 @@ class RtClusterDebugger(QMainWindow):
         self._terminated = False
 
         self._controllers_triggered = False
+        self._keyboard_cmds_triggered = False
 
         self.window_length = window_length 
         self.window_buffer_factor = window_buffer_factor
@@ -135,6 +138,7 @@ class RtClusterDebugger(QMainWindow):
         self.jnt_names_clnt = None
         self.add_data_length_clnt = None
         self.launch_controllers = None
+        self.launch_keyboard_cmds = None
 
         # shared data
         self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState"]
@@ -184,6 +188,9 @@ class RtClusterDebugger(QMainWindow):
         if self.launch_controllers is not None:
             self.launch_controllers.terminate()
         
+        if self.launch_keyboard_cmds is not None:
+            self.launch_keyboard_cmds.terminate()
+
         # terminate shared data windows
         for i in range(len(self.shared_data_tabs_name)):
 
@@ -297,6 +304,17 @@ class RtClusterDebugger(QMainWindow):
                         title="samples update dt [s]", 
                         callback=self._change_samples_update_dt)
         
+        self.trigger_keyboard_cmds_button = self.widget_utils.create_iconed_button(
+                            parent=self.settings_frame, 
+                            parent_layout=self.settings_frame_layout,
+                            icon_basepath=icon_basepath, 
+                            icon="stop_keyboard_cmds", 
+                            icon_triggered="start_keyboard_cmds",
+                            callback=self._toggle_keyboard_cmds, 
+                            descr="launch/stop cmds from keyboard", 
+                            size_x = 80, 
+                            size_y = 50)
+        
         self.data_spawner = self.widget_utils.create_scrollable_list(parent=self.settings_frame, 
                                                 parent_layout=self.settings_frame_layout, 
                                                 list_names=self.shared_data_tabs_name, 
@@ -363,6 +381,13 @@ class RtClusterDebugger(QMainWindow):
 
         self.launch_controllers.attach()
         self.launch_controllers.set_bool(False) # by default don't trigger the controllers
+
+        self.env_index = SharedMemSrvr(n_rows=1, n_cols=1, 
+                                name=env_selector_name(), 
+                                namespace=self.namespace, 
+                                dtype=torch.int64)
+        self.env_index.start()
+        self.env_index.tensor_view[0, 0] = 0 # inizialize to 1st environment
 
         self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
         self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
@@ -552,6 +577,8 @@ class RtClusterDebugger(QMainWindow):
 
         self.cluster_idx_slider.current_val.setText(f'{idx}')
 
+        self.env_index.tensor_view[0, 0] = idx
+
         for i in range(len(self.shared_data_tabs_name)):
 
             if not self._tabs_terminated[i]:
@@ -559,9 +586,9 @@ class RtClusterDebugger(QMainWindow):
                 self.shared_data_window[i].cluster_idx = idx
 
     def _toggle_controllers(self):
-
+        
         self._controllers_triggered = not self._controllers_triggered
-
+            
         self.launch_controllers.set_bool(self._controllers_triggered)
 
         if self._controllers_triggered:
@@ -571,6 +598,37 @@ class RtClusterDebugger(QMainWindow):
         if not self._controllers_triggered:
 
             self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.icone_button)
+    
+    def _connect_to_keyboard_cmds(self):
+
+        self.launch_keyboard_cmds = SharedMemClient(name=launch_keybrd_cmds_flagname(), 
+                        namespace=self.namespace, 
+                        dtype=torch.bool, 
+                        client_index=0, 
+                        verbose=self.verbose)
+        self.launch_keyboard_cmds.attach()
+        self.launch_keyboard_cmds.set_bool(False) # we disable cmds by default
+
+    def _toggle_keyboard_cmds(self):
+
+        self._keyboard_cmds_triggered = not self._keyboard_cmds_triggered
+        
+        if self.launch_keyboard_cmds is None:
+            
+            # we spawn the necessary shared mem client if not already done
+            self._connect_to_keyboard_cmds()
+
+        self.launch_keyboard_cmds.set_bool(self._keyboard_cmds_triggered)
+
+        if self._keyboard_cmds_triggered:
+            
+            self.trigger_keyboard_cmds_button.iconed_button.setIcon(
+                self.trigger_keyboard_cmds_button.triggered_icone_button)
+
+        if not self._keyboard_cmds_triggered:
+
+            self.trigger_keyboard_cmds_button.iconed_button.setIcon(
+                self.trigger_keyboard_cmds_button.icone_button)
 
     def _update_dark_mode(self):
 

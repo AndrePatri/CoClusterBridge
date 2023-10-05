@@ -62,6 +62,18 @@ def launch_controllers_flagname():
 
     return name
 
+def launch_keybrd_cmds_flagname():
+
+    name = "LaunchKeyboardCmds"
+
+    return name
+
+def env_selector_name():
+
+    name = "EnvIndexSelector"
+
+    return name
+
 def solved_flagname():
 
     name = "Solved"
