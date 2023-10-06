@@ -139,6 +139,7 @@ class RtClusterDebugger(QMainWindow):
         self.add_data_length_clnt = None
         self.launch_controllers = None
         self.launch_keyboard_cmds = None
+        self.env_index = None
 
         # shared data
         self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState"]
@@ -187,9 +188,12 @@ class RtClusterDebugger(QMainWindow):
         
         if self.launch_controllers is not None:
             self.launch_controllers.terminate()
-        
+                
         if self.launch_keyboard_cmds is not None:
             self.launch_keyboard_cmds.terminate()
+
+        if self.env_index is not None:
+            self.env_index.terminate()
 
         # terminate shared data windows
         for i in range(len(self.shared_data_tabs_name)):
@@ -352,7 +356,7 @@ class RtClusterDebugger(QMainWindow):
                                     namespace=self.namespace, 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
-                                    verbose=True)
+                                    verbose=self.verbose)
         self.n_contacts_clnt.attach()
         self.jnt_number_clnt = SharedMemClient(name=jnt_number_client_name(), 
                                         namespace=self.namespace, 
@@ -371,13 +375,14 @@ class RtClusterDebugger(QMainWindow):
                                     namespace=self.namespace, 
                                     dtype=torch.int64, 
                                     wait_amount=wait_amount, 
-                                    verbose=True)
+                                    verbose=self.verbose)
         self.add_data_length_clnt.attach()
 
         self.launch_controllers = SharedMemClient(name=launch_controllers_flagname(), 
                                 namespace=self.namespace, 
                                 dtype=torch.bool, 
-                                client_index=0)
+                                client_index=0,
+                                verbose=self.verbose)
 
         self.launch_controllers.attach()
         self.launch_controllers.set_bool(False) # by default don't trigger the controllers

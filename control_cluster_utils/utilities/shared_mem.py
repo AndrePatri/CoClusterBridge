@@ -130,11 +130,11 @@ class SharedMemSrvr:
     def start(self):
         
         if not self._is_server_unique():
-                        
+            
             raise Exception(self._mult_srvrs_error())
         
         self._create_tensor_view()
-        
+                
         self.bool_bytearray_view = None
 
         if self.backend == "torch": 
@@ -300,7 +300,7 @@ class SharedMemSrvr:
     def _is_server_unique(self):
         
         try:
-
+            
             self.sem_server.acquire(timeout=0.1)
 
             return True
