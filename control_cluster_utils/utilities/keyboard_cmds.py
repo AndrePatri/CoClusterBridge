@@ -174,7 +174,7 @@ class RhcRefsFromKeyboard:
 
             if hasattr(key, 'char'):
                 
-                print('Key {0} pressed.'.format(key.char))
+                # print('Key {0} pressed.'.format(key.char))
                 
                 # stepping ph
                 if key.char == "7":
@@ -242,7 +242,7 @@ class RhcRefsFromKeyboard:
             
             if hasattr(key, 'char'):
                 
-                print('Key {0} released.'.format(key.char))
+                # print('Key {0} released.'.format(key.char))
 
                 if key.char == "7":
                     
