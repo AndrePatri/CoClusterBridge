@@ -600,10 +600,20 @@ class RhcTaskRefs:
 
                 return self.q[:, :]
         
+        def set_q(self,
+                q: torch.tensor):
+            
+            self.q[:, :] = q
+
         def get_p(self):
 
             return self.p[:, :]
         
+        def set_p(self, 
+                p: torch.tensor):
+            
+            self.p[:, :] = p
+            
         def get_pose(self):
 
             return self.pose[:, :]
@@ -667,8 +677,6 @@ class RhcTaskRefs:
                 self.com_pose = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
                                         length=7)
 
-                self.com_pose[:, :] = torch.tensor([0])
-
             if varname == "com_pos":
                 
                 self.com_pos = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
@@ -681,6 +689,8 @@ class RhcTaskRefs:
                 self.com_q = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7 + 3, 
                                         length=4)
 
+                self.com_q[:, :] = torch.tensor([[1, 0, 0, 0]], dtype=self.dtype)
+
         def get_com_height(self):
             
             return self.com_pos[:, 2].item()
@@ -689,7 +699,7 @@ class RhcTaskRefs:
             
             return self.com_pos[:, :]
         
-        def get_com_orientation(self, 
+        def get_com_q(self, 
                         remap = True):
             
             if self.q_remapping is not None and remap:

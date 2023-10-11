@@ -10,6 +10,10 @@ from control_cluster_utils.utilities.defs import n_contacts_name
 from control_cluster_utils.utilities.defs import launch_keybrd_cmds_flagname
 from control_cluster_utils.utilities.defs import env_selector_name
 
+from control_cluster_utils.utilities.math_utils import incremental_rotate
+
+import math
+
 class RhcRefsFromKeyboard:
 
     def __init__(self, 
@@ -29,6 +33,7 @@ class RhcRefsFromKeyboard:
 
         self.enable_navigation = False
         self.dxy = 0.05 # [m]
+        self.dtheta_z = 0.5 * math.pi / 180.0 # [rad]
 
         self.cluster_size = -1
         self.n_contacts = -1
@@ -138,32 +143,55 @@ class RhcRefsFromKeyboard:
         self.rhc_task_refs[self.cluster_idx].com_pose.set_com_height(new_com_ref)
     
     def _update_navigation(self, 
-                    lateral = False, 
+                    lateral = None, 
+                    orientation = None,
                     increment = True):
 
         current_com_pos_ref = self.rhc_task_refs[self.cluster_idx].com_pose.get_com_pos()
+        current_q_ref = self.rhc_task_refs[self.cluster_idx].base_pose.get_q()
 
-        if lateral and increment:
+        if lateral is not None and lateral and increment:
             # lateral motion
             
             current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] + self.dxy
 
-        if lateral and not increment:
+        if lateral is not None and lateral and not increment:
             # lateral motion
             
             current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] - self.dxy
 
-        if not lateral and not increment:
+        if lateral is not None and not lateral and not increment:
             # frontal motion
             
             current_com_pos_ref[:, 0] = current_com_pos_ref[:, 0] - self.dxy
 
-        if not lateral and increment:
+        if lateral is not None and not lateral and increment:
             # frontal motion
             
             current_com_pos_ref[:, 0] = current_com_pos_ref[:, 0] + self.dxy
 
+        if orientation is not None and orientation and increment:
+            
+            q_result = torch.tensor([[1, 0, 0, 0]], dtype=torch.float32)
+            # rotate counter-clockwise
+            q_result[0] = incremental_rotate(current_q_ref[0], 
+                            self.dtheta_z, 
+                            [0, 0, 1])
+            current_q_ref = q_result
+
+        if orientation is not None and orientation and not increment:
+            
+            # rotate clockwise
+            # rotate counter-clockwise
+            q_result = torch.tensor([[1, 0, 0, 0]], dtype=torch.float32)
+            q_result[0] = incremental_rotate(current_q_ref[0], 
+                            - self.dtheta_z, 
+                            [0, 0, 1])
+            current_q_ref = q_result
+
         self.rhc_task_refs[self.cluster_idx].com_pose.set_com_pos(current_com_pos_ref)
+        # self.rhc_task_refs[self.cluster_idx].com_pose.set_com_q(current_com_q_ref)
+        self.rhc_task_refs[self.cluster_idx].base_pose.set_q(current_q_ref)
 
     def _on_press(self, key):
 
@@ -174,7 +202,7 @@ class RhcRefsFromKeyboard:
 
             if hasattr(key, 'char'):
                 
-                # print('Key {0} pressed.'.format(key.char))
+                print('Key {0} pressed.'.format(key.char))
                 
                 # stepping ph
                 if key.char == "7":
@@ -210,7 +238,7 @@ class RhcRefsFromKeyboard:
                 if key.char == "n" and not self.enable_navigation:
                     
                     self.enable_navigation = True
-                
+
                 if key.char == "6" and self.enable_navigation:
                     
                     self._update_navigation(lateral = True, 
@@ -230,7 +258,17 @@ class RhcRefsFromKeyboard:
                     
                     self._update_navigation(lateral = False, 
                                     increment = False)
-                    
+            
+            if key == keyboard.Key.left and self.enable_navigation:
+                
+                self._update_navigation(orientation=True,
+                                    increment = True)
+
+            if key == keyboard.Key.right and self.enable_navigation:
+                
+                self._update_navigation(orientation=True,
+                                    increment = False)
+
             self._set_cmds()
 
     def _on_release(self, key):
@@ -240,6 +278,7 @@ class RhcRefsFromKeyboard:
             self._update() # updates  data like
             # current cluster index
             
+            print(key)
             if hasattr(key, 'char'):
                 
                 # print('Key {0} released.'.format(key.char))
