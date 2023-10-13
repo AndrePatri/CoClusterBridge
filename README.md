@@ -20,8 +20,8 @@ As can be seen from the top picture, the package is made, at its core, of the fo
 - A `ControlClusterClient` object represents the interface between the controllers and the parallel simulation environment (e.g. Omniverse Isaac Sim). 
 - Data is shared and passed between *cluster server*, *cluster client* and the *control cluster* employing shared memory, for minimum latency (no need for serialization/deserialization and/or messages exchange) and maximum flexibility. 
 The low-level implementation of the shared data mechanism is hosted in `utilities/shared_mem.py`. Specifically, the package uses [posix_ipc](https://github.com/osvenskan/posix_ipc) and [mmap](https://docs.python.org/3.7/library/mmap.html) to build shared memory clients and servers which create and manage (Torch) views of specific memory regions. 
-
-- When `ControlClusterClient`'s `solve` is called, the shared cluster state is synched with the one from the simulator (this might require a copy from GPU to CPU), all the controllers in the cluster run the solution of their associated control problem and fill a shared solution object with updated data. By design, the client's `solve` will block until all controllers have returned. This way, the cluster is always synchronized with the simulator.
+- At its current version, the framework uses 3 main shared data structures built on top of the low-level memory mechanism: `RobotClusterState` for the state of the whole cluster (from the simulator), `RobotClusterCmd` for the commands computed by the controllers and `RhcClusterTaskRefs` for the run-time configurable parameters of the controllers. Each of these objects basically holds a big tensor and a series of views of it, which represent the data it holds (e.g. root position, orientation, etc...). Additionally, each of them also holds a *mirror* of their tensor on GPU. When necessary, the mirror is synched with its CPU counterpart or viceversa.
+- When `ControlClusterClient`'s `solve` is called, the shared cluster state is synched with the one from the simulator (this might require a copy from GPU to CPU), all the controllers in the cluster run the solution of their associated control problem and fill a shared solution object with updated data. This final passage also implies an additional copy, this time from CPU to GPU, of the obtained control commands. By design, the client's `solve` will block until all controllers have returned. This way, the cluster is always synchronized with the simulator.
 
 - Additionally, a debugging Qt5-based gui is also provided:
 
@@ -43,5 +43,5 @@ Some notes:
 
 #### ToDo:
 
-- [] RhcTaskRef setting throrugh keyboard commands for controller debugging.  
-- [] add basename to shared memory to avoid conflicts with other running instances of the clients and server
+- [] Move shared memory implementation to separate package.
+- [] Add optional shared structure to the cluster client for exposing the FULL internal MPC state (RHCInternal?).
