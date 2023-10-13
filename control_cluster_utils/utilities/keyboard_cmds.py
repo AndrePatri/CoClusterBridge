@@ -50,7 +50,7 @@ class RhcRefsFromKeyboard:
 
         self.enable_navigation = False
         self.dxy = 0.05 # [m]
-        self.dtheta_z = 0.5 * math.pi / 180.0 # [rad]
+        self.dtheta_z = 1.0 * math.pi / 180.0 # [rad]
 
         self.cluster_size = -1
         self.n_contacts = -1

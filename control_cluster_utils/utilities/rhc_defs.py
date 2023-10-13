@@ -607,9 +607,10 @@ class RhcTaskRefs:
 
                 self.pose[:, :] = init
 
-        def get_q(self):
+        def get_q(self, 
+                use_remapping = False):
             
-            if self.q_remapping is not None:
+            if self.q_remapping is not None and use_remapping:
 
                 return self.q[:, self.q_remapping]
             
@@ -631,9 +632,20 @@ class RhcTaskRefs:
             
             self.p[:, :] = p
             
-        def get_pose(self):
+        def get_pose(self, 
+                use_remapping = False):
 
-            return self.pose[:, :]
+            if self.q_remapping is not None and use_remapping:
+                
+                pose = self.pose.clone()
+
+                pose[:, 3:] = self.q[:, self.q_remapping]
+
+                return pose
+            
+            else:
+
+                return self.pose[:, :]
         
         def get_base_xy(self):
 
