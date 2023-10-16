@@ -1,19 +1,19 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of ControlClusterUtils and distributed under the General Public License version 2 license.
+# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
 # 
-# ControlClusterUtils is free software: you can redistribute it and/or modify
+# CoClusterBridge is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# ControlClusterUtils is distributed in the hope that it will be useful,
+# CoClusterBridge is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with ControlClusterUtils.  If not, see <http://www.gnu.org/licenses/>.
+# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QSlider
@@ -21,17 +21,17 @@ from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
 from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
 from PyQt5.QtGui import QIcon, QPixmap
 
-from control_cluster_utils.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
-from control_cluster_utils.utilities.debugger_gui.plot_utils import WidgetUtils
-from control_cluster_utils.utilities.shared_mem import SharedMemClient, SharedMemSrvr, SharedStringArray
-from control_cluster_utils.utilities.defs import launch_controllers_flagname
-from control_cluster_utils.utilities.defs import launch_keybrd_cmds_flagname
-from control_cluster_utils.utilities.defs import cluster_size_name, n_contacts_name
-from control_cluster_utils.utilities.defs import jnt_names_client_name, jnt_number_client_name
-from control_cluster_utils.utilities.defs import additional_data_name
-from control_cluster_utils.utilities.defs import env_selector_name
-from control_cluster_utils.utilities.sysutils import PathsGetter
-from control_cluster_utils.utilities.defs import Journal
+from control_cluster_bridge.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
+from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr, SharedStringArray
+from control_cluster_bridge.utilities.defs import launch_controllers_flagname
+from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
+from control_cluster_bridge.utilities.defs import cluster_size_name, n_contacts_name
+from control_cluster_bridge.utilities.defs import jnt_names_client_name, jnt_number_client_name
+from control_cluster_bridge.utilities.defs import additional_data_name
+from control_cluster_bridge.utilities.defs import env_selector_name
+from control_cluster_bridge.utilities.sysutils import PathsGetter
+from control_cluster_bridge.utilities.defs import Journal
 
 import os
 

@@ -1,21 +1,21 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of ControlClusterUtils and distributed under the General Public License version 2 license.
+# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
 # 
-# ControlClusterUtils is free software: you can redistribute it and/or modify
+# CoClusterBridge is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# ControlClusterUtils is distributed in the hope that it will be useful,
+# CoClusterBridge is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with ControlClusterUtils.  If not, see <http://www.gnu.org/licenses/>.
+# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
-from control_cluster_utils.utilities.shared_mem import SharedMemClient
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient
 
 import torch
 
@@ -28,55 +28,40 @@ def profile_read_write_cmds_states():
     dtype = torch.float32
     dtype_np = np.float32
 
-    n_reads = 100
+    n_reads = 10000
 
     n_envs = 100
     n_jnts = 60
 
     clients_state = []
 
-    for i in range(0, n_envs):
-
-        print("Creating client n." + str(i))
-        clients_state.append(SharedMemClient('state', 
-                                i, 
-                                dtype))
-        clients_state[i].attach()
-        
-    clients_cmds = []
-
-    for i in range(0, n_envs):
-
-        print("Creating client n." + str(i))
-        clients_cmds.append(SharedMemClient('cmds', 
-                                i, 
-                                dtype))
-        clients_cmds[i].attach()
-    
-    a = np.zeros((clients_state[0].tensor_view.shape[0], \
-                clients_state[0].tensor_view.shape[1]), dtype=dtype_np)
+    client = SharedMemClient(name = 'state', 
+                            client_index=0, 
+                            dtype=dtype)
+    client.attach()
+            
+    # a = np.zeros((clients_state[0].tensor_view.shape[0], \
+    #             clients_state[0].tensor_view.shape[1]), dtype=dtype_np)
     
     for i in range(0, n_reads):
 
         print("state ###########################")
+        
+        t = time.perf_counter()
+        a = client.tensor_view.clone()
+        t_end = time.perf_counter() - t 
+        print("time to read state (with cloning): " + str(t_end))
+        print("tensor: " + str(a))
 
-        for i in range(n_envs):
+        # print("cmds ###########################")
+
+        # for i in range(n_envs):
             
-            t = time.perf_counter()
-            a = clients_state[i].tensor_view.numpy()
-            t_end = time.perf_counter() - t 
-            print("time 2 read state: " + str(t_end))
-            print("idx: " + str(i))
-
-        print("cmds ###########################")
-
-        for i in range(n_envs):
-            
-            t = time.perf_counter()
-            clients_cmds[i].tensor_view[:, :] = torch.from_numpy(a)
-            t_end = time.perf_counter() - t 
-            print("time 2 assign cmds: " + str(t_end))
-            print("idx: " + str(i))
+        #     t = time.perf_counter()
+        #     clients_cmds[i].tensor_view[:, :] = torch.from_numpy(a)
+        #     t_end = time.perf_counter() - t 
+        #     print("time 2 assign cmds: " + str(t_end))
+        #     print("idx: " + str(i))
 
         time.sleep(0.1)
 
@@ -152,9 +137,9 @@ def profile_reading_global_bool():
 
 if __name__ == "__main__":
     
-    profile_reading_global_bool()
+    # profile_reading_global_bool()
 
-    profile_writing_bool_array()
+    # profile_writing_bool_array()
 
     profile_read_write_cmds_states()
         

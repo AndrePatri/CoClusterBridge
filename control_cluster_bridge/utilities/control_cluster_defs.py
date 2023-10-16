@@ -1,19 +1,19 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of ControlClusterUtils and distributed under the General Public License version 2 license.
+# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
 # 
-# ControlClusterUtils is free software: you can redistribute it and/or modify
+# CoClusterBridge is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# ControlClusterUtils is distributed in the hope that it will be useful,
+# CoClusterBridge is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with ControlClusterUtils.  If not, see <http://www.gnu.org/licenses/>.
+# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
 import torch
 
@@ -21,14 +21,14 @@ import time
 
 from typing import List
 
-from control_cluster_utils.utilities.shared_mem import SharedMemSrvr, SharedMemClient, SharedStringArray
+from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedMemClient, SharedStringArray
 
-from control_cluster_utils.utilities.defs import aggregate_cmd_size, aggregate_state_size, aggregate_refs_size
-from control_cluster_utils.utilities.defs import states_name, cmds_name, task_refs_name
-from control_cluster_utils.utilities.defs import cluster_size_name, additional_data_name, n_contacts_name
-from control_cluster_utils.utilities.defs import jnt_number_client_name
-from control_cluster_utils.utilities.defs import jnt_names_client_name
-from control_cluster_utils.utilities.defs import Journal
+from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size, aggregate_refs_size
+from control_cluster_bridge.utilities.defs import states_name, cmds_name, task_refs_name
+from control_cluster_bridge.utilities.defs import cluster_size_name, additional_data_name, n_contacts_name
+from control_cluster_bridge.utilities.defs import jnt_number_client_name
+from control_cluster_bridge.utilities.defs import jnt_names_client_name
+from control_cluster_bridge.utilities.defs import Journal
 
 class RobotClusterState:
 

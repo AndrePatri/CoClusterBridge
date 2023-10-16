@@ -1,21 +1,21 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of ControlClusterUtils and distributed under the General Public License version 2 license.
+# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
 # 
-# ControlClusterUtils is free software: you can redistribute it and/or modify
+# CoClusterBridge is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# ControlClusterUtils is distributed in the hope that it will be useful,
+# CoClusterBridge is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with ControlClusterUtils.  If not, see <http://www.gnu.org/licenses/>.
+# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
-from control_cluster_utils.utilities.shared_mem import SharedMemSrvr, SharedStringArray
+from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedStringArray
 
 import torch
 
@@ -23,6 +23,36 @@ import time
 
 import random
 
+def profile_write_cmds_states():
+
+    dtype = torch.float32
+
+    n_writes = 10000
+
+    n_envs = 100
+    n_jnts = 60
+
+    server_state = SharedMemSrvr(n_envs, n_jnts, 
+                        "state", 
+                    dtype=dtype)
+    
+    server_state.start()
+
+    for i in range(0, n_writes):
+
+        fake_state = torch.full((n_envs, n_jnts), random.random(),
+                    dtype=server_state.dtype, device=torch.device("cuda"))
+        
+
+        t = time.perf_counter()
+        server_state.tensor_view[:, :] = fake_state
+        t_end = time.perf_counter() - t 
+        print("time 2 write state: " + str(t_end))
+
+        time.sleep(0.1)
+
+    server_state.tensor_view
+    
 def profile_copy_cuda_cpu():
     
     n_samples = 100
@@ -109,6 +139,8 @@ def profile_writing_global_bool():
     server = SharedMemSrvr(1, 1, "trigger", 
                     dtype=dtype)
 
+    server.start()
+
     for i in range(0, n_samples):
         
         print("###########################")
@@ -140,7 +172,9 @@ def test_writing_reading_string_array():
 
 if __name__ == "__main__":
 
-    test_writing_reading_string_array()
+    profile_write_cmds_states()
+
+    # test_writing_reading_string_array()
 
     # profile_writing_global_bool()
 
