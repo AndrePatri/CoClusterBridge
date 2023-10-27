@@ -38,7 +38,7 @@ The low-level implementation of the shared data mechanism is hosted in `utilitie
     - day/night mode
 
 Some notes: 
-- The package is also available through Anaconda at [control_cluster_bridge](https://anaconda.org/AndrePatri/control_cluster_bridge) (as of now, for Python 3.7 only since Isaac Sim 2022.2.1 only supports that). `CoClusterBridge` is under active development, so its Anaconda version might not be always updated with the tip of this repo. For cutting-edge features, always refer to the source code hosted here.
+- The package is also available through Anaconda at [control_cluster_bridge](https://anaconda.org/AndrePatri/control_cluster_bridge). `CoClusterBridge` is under active development, so its Anaconda version might not be always updated with the tip of this repo. For cutting-edge features, always refer to the source code hosted here.
 - The reasons for using the third party library `posix_ipc` instead of the newest [multiprocessing.shared_memory](https://docs.python.org/3/library/multiprocessing.shared_memory.html) are twofold. First, `posix_ipc` is more flexible since it allows potentially communication with non-python applications. Second, and more importantly, `multiprocessing.shared_memory` is available only from Python 3.8 onwards and this might cause issues if interfacing with a simulator supporting earlier versions of Python (like IsaacSim 2022.2.1, which is only compatible with Python 3.7). Choosing `posix_ipc` thus enables maximum compatibility.
 
 #### ToDo:
