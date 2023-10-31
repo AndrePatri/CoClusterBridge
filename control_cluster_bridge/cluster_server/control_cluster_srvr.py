@@ -47,17 +47,17 @@ class ControlClusterSrvr(ABC):
 
         self.processes_basename = processes_basename
 
-        self.cluster_size = -1
+        self.cluster_size = 5
 
         self._device = "cpu"
 
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
 
-        self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
-                                        namespace=self.namespace)
-        self.handshake_srvr.handshake()
-        self.cluster_size = self.handshake_srvr.cluster_size.tensor_view[0, 0].item()
+        # self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
+        #                                 namespace=self.namespace)
+        # self.handshake_srvr.handshake()
+        # self.cluster_size = self.handshake_srvr.cluster_size.tensor_view[0, 0].item()
 
         self._processes: List[mp.Process] = [] 
 
@@ -116,13 +116,13 @@ class ControlClusterSrvr(ABC):
         print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + \
             ": performing final initialization steps...")
         
-        self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
-                                    n_contacts=self._controllers[0].n_contacts)
+        # self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
+        #                             n_contacts=self._controllers[0].n_contacts)
         
         for i in range(0, self.cluster_size):
 
             # we assign the client-side joint names to each controller (used for mapping purposes)
-            self._controllers[i].assign_client_side_jnt_names(self.handshake_srvr.jnt_names_client.read())
+            self._controllers[i].assign_client_side_jnt_names(self._controllers[i]._server_side_jnt_names)
 
             self._controllers[i].create_jnt_maps()
 

@@ -19,7 +19,7 @@ import torch
 
 from typing import TypeVar, List
 
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient
+from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_bridge.utilities.defs import states_name, cmds_name
 from control_cluster_bridge.utilities.defs import aggregate_refs_size, task_refs_name
@@ -32,7 +32,7 @@ class RobotState:
     class RootState:
 
         def __init__(self, 
-                    mem_manager: SharedMemClient, 
+                    mem_manager: SharedMemSrvr, 
                     q_remapping: List[int] = None):
             
             self.p = None # floating base position
@@ -70,7 +70,7 @@ class RobotState:
                 self.omega = None
 
         def assign_views(self, 
-                    mem_manager: SharedMemClient,
+                    mem_manager: SharedMemSrvr,
                     varname: str):
             
             # we create views 
@@ -210,7 +210,7 @@ class RobotState:
         self.q_remapping = q_remapping
 
         # this creates the view of the shared data for the robot specificed by index
-        self.shared_memman = SharedMemClient(
+        self.shared_memman = SharedMemSrvr(
                         client_index=index, 
                         name=states_name(), 
                         namespace=self.namespace,
