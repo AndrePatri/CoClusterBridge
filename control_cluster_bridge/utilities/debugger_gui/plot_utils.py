@@ -734,7 +734,7 @@ class RtPlotWindow():
         self.settings_widget = SettingsWidget(rt_plotter=self.rt_plot_widget, 
                             parent=None)
         
-        self.splitter.setHandleWidth(0.1)
+        self.splitter.setHandleWidth(1)
         self.splitter.addWidget(self.rt_plot_widget)
         self.splitter.addWidget(self.settings_widget.frame)
 
@@ -762,7 +762,7 @@ class GridFrameWidget():
         self.base_frame.setLayout(row_layout)
         
         row_splitter = QSplitter(Qt.Vertical)
-        row_splitter.setHandleWidth(0.1)
+        row_splitter.setHandleWidth(1)
         row_layout.addWidget(row_splitter)
 
         self.frames = []
@@ -781,7 +781,7 @@ class GridFrameWidget():
             col_layout.setContentsMargins(0, 0, 0, 0)
             row_frame.setLayout(col_layout)
             col_splitter = QSplitter(Qt.Horizontal)
-            col_splitter.setHandleWidth(0.2)
+            col_splitter.setHandleWidth(2)
             col_layout.addWidget(col_splitter)
             row_layout.addWidget(row_frame)
             row_splitter.addWidget(row_frame)
