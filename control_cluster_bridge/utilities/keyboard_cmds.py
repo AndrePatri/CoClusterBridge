@@ -17,7 +17,7 @@
 # 
 import torch
 
-import keyboard  # Import the keyboard library
+from pynput import keyboard
 
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient
@@ -211,126 +211,123 @@ class RhcRefsFromKeyboard:
         self.rhc_task_refs[self.cluster_idx].base_pose.set_q(current_q_ref)
 
     def _on_press(self, key):
-        
-        print(key)
 
-        # if self.launch_keyboard_cmds.all():
+        if self.launch_keyboard_cmds.all():
             
-        #     self._update() # updates  data like
-        #     # current cluster index
+            self._update() # updates  data like
+            # current cluster index
 
-        #     if hasattr(key, 'char'):
+            if hasattr(key, 'char'):
                 
-        #         print('Key {0} pressed.'.format(key.char))
+                print('Key {0} pressed.'.format(key.char))
                 
-        #         # stepping ph
-        #         if key.char == "7":
+                # stepping ph
+                if key.char == "7":
                     
-        #             self.contacts[0, 0] = False
+                    self.contacts[0, 0] = False
 
-        #         if key.char == "9":
+                if key.char == "9":
                     
-        #             self.contacts[0, 1] = False
+                    self.contacts[0, 1] = False
 
-        #         if key.char == "1":
+                if key.char == "1":
                     
-        #             self.contacts[0, 2] = False
+                    self.contacts[0, 2] = False
 
-        #         if key.char == "3":
+                if key.char == "3":
                     
-        #             self.contacts[0, 3] = False
+                    self.contacts[0, 3] = False
                 
-        #         # height change
-        #         if key.char == "h" and not self.enable_heightchange:
+                # height change
+                if key.char == "h" and not self.enable_heightchange:
                     
-        #             self.enable_heightchange = True
+                    self.enable_heightchange = True
 
-        #         if key.char == "+" and self.enable_heightchange:
+                if key.char == "+" and self.enable_heightchange:
 
-        #             self._update_com_height(decrement=False)
+                    self._update_com_height(decrement=False)
                 
-        #         if key.char == "-" and self.enable_heightchange:
+                if key.char == "-" and self.enable_heightchange:
 
-        #             self._update_com_height(decrement=True)
+                    self._update_com_height(decrement=True)
 
-        #         # navigation
-        #         if key.char == "n" and not self.enable_navigation:
+                # navigation
+                if key.char == "n" and not self.enable_navigation:
                     
-        #             self.enable_navigation = True
+                    self.enable_navigation = True
 
-        #         if key.char == "6" and self.enable_navigation:
+                if key.char == "6" and self.enable_navigation:
                     
-        #             self._update_navigation(lateral = True, 
-        #                             increment = True)
+                    self._update_navigation(lateral = True, 
+                                    increment = True)
 
-        #         if key.char == "4" and self.enable_navigation:
+                if key.char == "4" and self.enable_navigation:
                     
-        #             self._update_navigation(lateral = True, 
-        #                             increment = False)
+                    self._update_navigation(lateral = True, 
+                                    increment = False)
                 
-        #         if key.char == "8" and self.enable_navigation:
+                if key.char == "8" and self.enable_navigation:
                     
-        #             self._update_navigation(lateral = False, 
-        #                             increment = True)
+                    self._update_navigation(lateral = False, 
+                                    increment = True)
                 
-        #         if key.char == "2" and self.enable_navigation:
+                if key.char == "2" and self.enable_navigation:
                     
-        #             self._update_navigation(lateral = False, 
-        #                             increment = False)
+                    self._update_navigation(lateral = False, 
+                                    increment = False)
             
-        #     if key == keyboard.Key.left and self.enable_navigation:
+            if key == keyboard.Key.left and self.enable_navigation:
                 
-        #         self._update_navigation(orientation=True,
-        #                             increment = True)
+                self._update_navigation(orientation=True,
+                                    increment = True)
 
-        #     if key == keyboard.Key.right and self.enable_navigation:
+            if key == keyboard.Key.right and self.enable_navigation:
                 
-        #         self._update_navigation(orientation=True,
-        #                             increment = False)
+                self._update_navigation(orientation=True,
+                                    increment = False)
 
-        #     self._set_cmds()
+            self._set_cmds()
 
     def _on_release(self, key):
-        
-        a = 1
-        # if self.launch_keyboard_cmds.all():
+
+        if self.launch_keyboard_cmds.all():
             
-        #     self._update() # updates  data like
-        #     # current cluster index
+            self._update() # updates  data like
+            # current cluster index
             
-        #     print(key)
-        #     if hasattr(key, 'char'):
+            print(key)
+            if hasattr(key, 'char'):
                 
-        #         # print('Key {0} released.'.format(key.char))
+                # print('Key {0} released.'.format(key.char))
 
-        #         if key.char == "7":
+                if key.char == "7":
                     
-        #             self.contacts[0, 0] = True
+                    self.contacts[0, 0] = True
 
-        #         if key.char == "9":
+                if key.char == "9":
                     
-        #             self.contacts[0, 1] = True
+                    self.contacts[0, 1] = True
 
-        #         if key.char == "1":
+                if key.char == "1":
                     
-        #             self.contacts[0, 2] = True
+                    self.contacts[0, 2] = True
 
-        #         if key.char == "3":
+                if key.char == "3":
                     
-        #             self.contacts[0, 3] = True
+                    self.contacts[0, 3] = True
 
-        #         if key == keyboard.Key.esc:
+                if key == keyboard.Key.esc:
 
-        #             self._terminate()  # Stop listener
+                    self._terminate()  # Stop listener
 
-        #     self._set_cmds()
+            self._set_cmds()
 
     def start(self):
 
-        keyboard.hook(self._on_press, suppress=False)  # Hook key presses
-        keyboard.hook(self._on_release, suppress=False, event_type=keyboard.KEY_UP)  # Hook key releases
-        keyboard.wait('esc')  # Wait until the 'esc' key is pressed
-        self._terminate()
+        with keyboard.Listener(on_press=self._on_press, 
+                               on_release=self._on_release) as listener:
+
+            listener.join()
 
 if __name__ == "__main__":  
 
