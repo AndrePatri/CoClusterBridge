@@ -239,7 +239,7 @@ class RtClusterDebugger(QMainWindow):
         
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.splitter.setHandleWidth(1.0)
+        self.splitter.setHandleWidth(1)
         self.layout.addWidget(self.splitter)
         
         self.tabs = self.widget_utils.ClosableTabWidget()
