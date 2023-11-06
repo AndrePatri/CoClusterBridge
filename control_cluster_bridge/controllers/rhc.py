@@ -24,6 +24,7 @@ from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient
 from control_cluster_bridge.utilities.defs import trigger_flagname
+from control_cluster_bridge.utilities.defs import reset_controllers_flagname, controllers_fail_flagname
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
 
@@ -75,6 +76,8 @@ class RHController(ABC):
         # shared mem
         self.robot_state = None 
         self.trigger_flag = None
+        self.reset_flag = None
+        self.controller_fail_flag = None
         self.robot_cmds = None
         self.rhc_task_refs:RhcTaskRefsChild = None
 
@@ -110,6 +113,14 @@ class RHController(ABC):
 
             self.trigger_flag.terminate()
         
+        if self.reset_flag is not None:
+
+            self.reset_flag.terminate()
+
+        if self.controller_fail_flag is not None:
+
+            self.controller_fail_flag.terminate()
+
         if self.robot_cmds is not None:
             
             self.robot_cmds.terminate()
@@ -128,6 +139,18 @@ class RHController(ABC):
                                     client_index=self.controller_index, 
                                     dtype=dtype)
         self.trigger_flag.attach()
+
+        self.reset_flag = SharedMemClient(name=reset_controllers_flagname(), 
+                                    namespace=self.namespace,
+                                    client_index=self.controller_index, 
+                                    dtype=dtype)
+        self.reset_flag.attach()
+
+        self.controller_fail_flag = SharedMemClient(name=controllers_fail_flagname(), 
+                                    namespace=self.namespace,
+                                    client_index=self.controller_index, 
+                                    dtype=dtype)
+        self.controller_fail_flag.attach()
 
         self._homer = RobotHomer(self.srdf_path, 
                             self._server_side_jnt_names)
@@ -171,18 +194,6 @@ class RHController(ABC):
         self.robot_cmds.slvr_state.set_info(torch.zeros((1, self.add_data_lenght), 
                         dtype=self.array_dtype))
         
-    def _fill_cmds_from_sol(self):
-
-        # gets data from the solution and updates the view on the shared data
-        
-        self.robot_cmds.jnt_cmd.set_q(self._get_cmd_jnt_q_from_sol())
-
-        self.robot_cmds.jnt_cmd.set_v(self._get_cmd_jnt_v_from_sol())
-
-        self.robot_cmds.jnt_cmd.set_eff(self._get_cmd_jnt_eff_from_sol())
-
-        self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
-        
     def solve(self):
         
         if not self._jnt_maps_created:
@@ -212,9 +223,18 @@ class RHController(ABC):
         while True:
             
             # we are always listening for a trigger signal from the client 
-
-            try:
+            # or a reset signal
             
+            try:
+                
+                if self.reset_flag.read_bool(): # reset request from client
+                    
+                    self.reset()
+
+                    self.fail_n = 0 # resets number of fails
+
+                    self.reset_flag.set_bool(False) # reset completed
+
                 if self.trigger_flag.read_bool():
                     
                     if self._debug:
@@ -223,10 +243,14 @@ class RHController(ABC):
 
                     # latest state is employed
 
-                    self._solve() # solve actual TO
+                    failed = self._solve() # solve actual TO
 
-                    self._fill_cmds_from_sol() # we upd update the views of the cmd
-                    # from the solution
+                    if (failed):
+
+                        self._on_failure()
+
+                    self._fill_cmds_from_sol() # we update update the views of the cmd
+                    # from the latest solution
 
                     # we signal the client this controller has finished its job
                     self.trigger_flag.set_bool(False) # this is also necessary to trigger again the solution
@@ -241,7 +265,8 @@ class RHController(ABC):
                         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                             f"[{self.journal.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                 
-                else:
+                if (not self.reset_flag.read_bool()) and \
+                    (not self.trigger_flag.read_bool()): # not triggered, not reset
                     
                     # we avoid busy waiting and sleep for a small amount of time
 
@@ -252,6 +277,17 @@ class RHController(ABC):
 
                 break
     
+    def _on_failure(self):
+        
+        self.controller_fail_flag.set_bool(True) # can be read by the cluster client
+
+        self.reset() # resets controller (this has to be defined by the user)
+
+    @abstractmethod
+    def reset(self):
+        
+        pass
+
     def assign_client_side_jnt_names(self, 
                         jnt_names: List[str]):
 
@@ -259,25 +295,6 @@ class RHController(ABC):
         
         self._got_jnt_names_client = True
 
-    def _assign_server_side_jnt_names(self, 
-                        jnt_names: List[str]):
-
-        self._server_side_jnt_names = jnt_names
-
-        self._got_jnt_names_server = True
-
-    def _check_jnt_names_compatibility(self):
-
-        set_srvr = set(self._server_side_jnt_names)
-        set_client  = set(self._client_side_jnt_names)
-
-        if not set_srvr == set_client:
-
-            exception = f"[{self.__class__.__name__}]" + f"{self.controller_index}" + f"{self.journal.exception}" + \
-                ": server-side and client-side joint names do not match!"
-
-            raise Exception(exception)
-        
     def create_jnt_maps(self):
 
         self._check_jnt_names_compatibility() # will raise exception
@@ -302,6 +319,37 @@ class RHController(ABC):
         
         self._jnt_maps_created = True
 
+    def _fill_cmds_from_sol(self):
+
+        # gets data from the solution and updates the view on the shared data
+        
+        self.robot_cmds.jnt_cmd.set_q(self._get_cmd_jnt_q_from_sol())
+
+        self.robot_cmds.jnt_cmd.set_v(self._get_cmd_jnt_v_from_sol())
+
+        self.robot_cmds.jnt_cmd.set_eff(self._get_cmd_jnt_eff_from_sol())
+
+        self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
+
+    def _assign_server_side_jnt_names(self, 
+                        jnt_names: List[str]):
+
+        self._server_side_jnt_names = jnt_names
+
+        self._got_jnt_names_server = True
+
+    def _check_jnt_names_compatibility(self):
+
+        set_srvr = set(self._server_side_jnt_names)
+        set_client  = set(self._client_side_jnt_names)
+
+        if not set_srvr == set_client:
+
+            exception = f"[{self.__class__.__name__}]" + f"{self.controller_index}" + f"{self.journal.exception}" + \
+                ": server-side and client-side joint names do not match!"
+
+            raise Exception(exception)
+        
     @abstractmethod
     def _init_rhc_task_cmds(self) -> RhcTaskRefsChild:
 
@@ -349,7 +397,7 @@ class RHController(ABC):
         pass
 
     @abstractmethod
-    def _solve(self):
+    def _solve(self) -> bool:
 
         pass
             

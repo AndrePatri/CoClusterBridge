@@ -25,6 +25,8 @@ from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTask
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import trigger_flagname, launch_controllers_flagname
+from control_cluster_bridge.utilities.defs import reset_controllers_flagname, controllers_fail_flagname
+
 from control_cluster_bridge.utilities.defs import Journal
 
 import time
@@ -94,6 +96,8 @@ class ControlClusterClient(ABC):
         self.robot_states = None
         self.controllers_cmds = None
         self.trigger_flags = None
+        self.cluster_reset_flags = None
+        self.controllers_fail_flags = None
         self.launch_controllers = None
         self.rhc_task_refs = None
 
@@ -126,6 +130,13 @@ class ControlClusterClient(ABC):
         self.robot_states.start()
 
         self.trigger_flags.start()
+        self.trigger_flags.reset_bool(False)
+
+        self.cluster_reset_flags.start()
+        self.cluster_reset_flags.reset_bool(False)
+
+        self.controllers_fail_flags.start()
+        self.controllers_fail_flags.reset_bool(False)
 
         self.launch_controllers.start()
         self.launch_controllers.reset_bool(False)
@@ -165,6 +176,18 @@ class ControlClusterClient(ABC):
         self.trigger_flags = SharedMemSrvr(n_rows=self.cluster_size, 
                                 n_cols=1, 
                                 name=trigger_flagname(), 
+                                namespace=self.namespace,
+                                dtype=dtype) 
+        
+        self.cluster_reset_flags = SharedMemSrvr(n_rows=self.cluster_size, 
+                                n_cols=1, 
+                                name=reset_controllers_flagname(), 
+                                namespace=self.namespace,
+                                dtype=dtype) 
+        
+        self.controllers_fail_flags = SharedMemSrvr(n_rows=self.cluster_size, 
+                                n_cols=1, 
+                                name=controllers_fail_flagname(), 
                                 namespace=self.namespace,
                                 dtype=dtype) 
         
@@ -349,6 +372,14 @@ class ControlClusterClient(ABC):
                 
                 self.trigger_flags.terminate()
             
+            if self.cluster_reset_flags is not None:
+                
+                self.cluster_reset_flags.terminate()
+
+            if self.controllers_fail_flags is not None:
+                
+                self.controllers_fail_flags.terminate()
+
             if self.launch_controllers is not None:
 
                 self.launch_controllers.terminate()

@@ -73,6 +73,18 @@ def trigger_flagname():
 
     return name
 
+def reset_controllers_flagname():
+
+    name = "ResetControllers"
+
+    return name
+
+def controllers_fail_flagname():
+
+    name = "ControllersFail"
+
+    return name
+
 def launch_controllers_flagname():
 
     name = "LaunchControllers"
