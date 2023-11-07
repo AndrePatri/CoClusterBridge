@@ -312,7 +312,7 @@ class WidgetUtils:
             self.val_slider = None
             self.current_val = None
             self.title = None
-        
+
     class IconedButtonData:
 
         def __init__(self):
@@ -327,11 +327,24 @@ class WidgetUtils:
             self.button_descr = None
             self.iconpath = None
     
-    class ScrollableListData:
+    class ScrollableListButtonData:
 
         def __init__(self):
 
             self.buttons = []
+
+    class ScrollableListLabelsData:
+
+        def __init__(self):
+
+            self.labels = []
+        
+        def update(self, 
+                data: List[float]):
+
+            for i in range(0, len(data)):
+                
+                self.labels[i].setText(str(round(data[i], 4)))
 
     def generate_complex_slider(self, 
                 parent: QWidget, 
@@ -470,7 +483,7 @@ class WidgetUtils:
 
         return button_data
     
-    def create_scrollable_list(self, 
+    def create_scrollable_list_button(self, 
                     parent: QWidget, 
                     parent_layout: Union[QHBoxLayout, QVBoxLayout],
                     list_names: List[str], 
@@ -479,7 +492,7 @@ class WidgetUtils:
                     default_checked = True
                     ):
         
-        list_data = self.ScrollableListData()
+        list_data = self.ScrollableListButtonData()
 
         plot_selector_scroll_area = QScrollArea(parent=parent)
         plot_selector_scroll_area.setWidgetResizable(True)
@@ -517,6 +530,98 @@ class WidgetUtils:
 
         return list_data
 
+    def create_scrollable_label_list(self, 
+                    parent: QWidget, 
+                    parent_layout: Union[QHBoxLayout, QVBoxLayout],
+                    list_names: List[str], 
+                    title: str = "", 
+                    init: List[float] = None
+                    ):
+        
+        data = self.ScrollableListLabelsData()
+
+        plot_selector_scroll_area = QScrollArea(parent=parent)
+        plot_selector_scroll_area.setWidgetResizable(True)
+        
+        list_frame = QFrame(plot_selector_scroll_area)
+        list_frame.setFrameShape(QFrame.StyledPanel)
+        list_layout = QVBoxLayout(list_frame)
+        list_layout.setContentsMargins(2, 2, 2, 2)
+
+        plot_selector_title = QLabel(title)
+        list_layout.addWidget(plot_selector_title, 
+                                alignment=Qt.AlignHCenter)
+
+        # Add legend buttons to the plot selector frame
+        i = 0
+
+        for label in list_names:
+
+            val_frame = QFrame(list_frame)
+            val_frame.setFrameShape(QFrame.StyledPanel)
+            val_layout = QHBoxLayout(val_frame)  # Use QVBoxLayout here
+            val_layout.setContentsMargins(2, 2, 2, 2)
+
+            val_title = QLabel(label)
+            current_val = QLabel(str(init[i]))
+            current_val.setAlignment(Qt.AlignRight)
+            current_val.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
+
+            val_layout.addWidget(val_title, 
+                                alignment=Qt.AlignLeft)
+            val_layout.addWidget(current_val)
+
+            data.labels.append(current_val)
+
+            list_layout.addWidget(val_frame)
+            
+            i = i + 1
+
+        plot_selector_scroll_area.setWidget(list_frame)
+        
+        list_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        parent_layout.addWidget(plot_selector_scroll_area)
+
+        return data
+
+    def generate_name_val_list(self, 
+                parent: QWidget, 
+                parent_layout: Union[QHBoxLayout, QVBoxLayout],
+                callback: Callable[[int], None],
+                title: List[str],
+                init: List[float] = None):
+
+        slider_data = self.NameValPairList()
+
+        val_frame = QFrame(parent)
+        val_frame.setFrameShape(QFrame.StyledPanel)
+        val_layout = QHBoxLayout(val_frame)  # Use QVBoxLayout here
+        val_layout.setContentsMargins(2, 2, 2, 2)
+
+        val_title = QLabel(title)
+        current_val = QLabel(str(init))
+        current_val.setAlignment(Qt.AlignRight)
+        current_val.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
+
+        val_layout.addWidget(val_title, 
+                            alignment=Qt.AlignLeft)
+        val_layout.addWidget(current_val)
+
+        val_slider = QSlider(Qt.Horizontal)
+        val_slider.setValue(init)
+        val_slider.valueChanged.connect(callback)
+        
+        parent_layout.addWidget(val_frame)
+
+        slider_data.val_frame = val_frame
+        slider_data.val_layout = val_layout
+        slider_data.val_slider = val_slider
+        slider_data.current_val = current_val
+        slider_data.title = title 
+
+        return slider_data
+    
     class ClosableTabWidget(QTabWidget):
 
         def __init__(self):
@@ -611,7 +716,7 @@ class SettingsWidget():
                                 init_val_shown =f'{self.rt_plot_widget.window_offset}', 
                                 init=self.rt_plot_widget.window_offset)
 
-        self.plot_selector = self.widget_utils.create_scrollable_list(parent=self.frame, 
+        self.plot_selector = self.widget_utils.create_scrollable_list_button(parent=self.frame, 
                                         parent_layout=self.settings_frame_layout,
                                         list_names=self.rt_plot_widget.labels, 
                                         callback=self.toggle_line_visibility, 

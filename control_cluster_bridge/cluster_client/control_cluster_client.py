@@ -27,6 +27,8 @@ from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import trigger_flagname, launch_controllers_flagname
 from control_cluster_bridge.utilities.defs import reset_controllers_flagname, controllers_fail_flagname
 
+from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
+
 from control_cluster_bridge.utilities.defs import Journal
 
 import time
@@ -100,6 +102,7 @@ class ControlClusterClient(ABC):
         self.controllers_fail_flags = None
         self.launch_controllers = None
         self.rhc_task_refs = None
+        self.shared_cluster_info = None
 
         # flags
         self._was_cluster_ready = False
@@ -140,6 +143,8 @@ class ControlClusterClient(ABC):
 
         self.launch_controllers.start()
         self.launch_controllers.reset_bool(False)
+
+        self.shared_cluster_info.start()
 
         self._spawn_handshake() # we launch all the child processes
 
@@ -196,6 +201,10 @@ class ControlClusterClient(ABC):
                                     name=launch_controllers_flagname(), 
                                     namespace=self.namespace,
                                     dtype=dtype) 
+
+        # debug info from the client
+
+        self.shared_cluster_info = SharedClusterInfo(name=self.namespace)
 
     def _trigger_solution(self):
 
@@ -358,6 +367,9 @@ class ControlClusterClient(ABC):
 
                 self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
             
+                self.shared_cluster_info.update(solve_time=self.solution_time, 
+                                            controllers_up = self.controllers_active) # we update the shared info
+
     def close(self):
         
         if not self._terminate:
@@ -391,6 +403,10 @@ class ControlClusterClient(ABC):
             if self.rhc_task_refs is not None:
 
                 self.rhc_task_refs.terminate()
+
+            if self.shared_cluster_info is not None:
+
+                self.shared_cluster_info.terminate()
 
         self._close_handshake()
 

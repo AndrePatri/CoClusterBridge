@@ -1298,7 +1298,6 @@ class SharedStringArray:
             name: str, 
             is_server: bool,
             namespace = "",
-            init: List[str] = None, 
             verbose: bool = False, 
             wait_amount: float = 0.01):
         
