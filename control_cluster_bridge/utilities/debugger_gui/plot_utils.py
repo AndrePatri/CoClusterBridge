@@ -947,7 +947,7 @@ class RhcTaskRefWindow():
 
         self.cluster_idx = 0
 
-        self.grid = GridFrameWidget(2, 2, 
+        self.grid = GridFrameWidget(2, 3, 
                 parent=parent)
         
         self.base_frame = self.grid.base_frame
@@ -997,10 +997,25 @@ class RhcTaskRefWindow():
                     legend_list=["p_x", "p_y", "p_z", 
                                 "q_w", "q_i", "q_j", "q_k"]))
         
+        self.rt_plotters.append(RtPlotWindow(n_data=10, 
+                    update_data_dt=update_data_dt, 
+                    update_plot_dt=update_plot_dt,
+                    window_duration=window_duration, 
+                    parent=None, 
+                    base_name="Phase params", 
+                    window_buffer_factor=window_buffer_factor, 
+                    legend_list=["duration", 
+                                "p0_x", "p0_y", "p0_z",
+                                "p1_x", "p1_y", "p1_z", 
+                                "c",
+                                "d0", "d1"]
+                    ))
+        
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+        self.grid.addFrame(self.rt_plotters[4].base_frame, 1, 2)
 
     def _init_shared_data(self):
 
@@ -1023,6 +1038,7 @@ class RhcTaskRefWindow():
             self.rt_plotters[1].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.phase_id.numpy())
             self.rt_plotters[2].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].base_pose.get_pose().numpy())
             self.rt_plotters[3].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].com_pose.get_com_pose().numpy())
+            self.rt_plotters[4].rt_plot_widget.update(self.rhc_task_refs[self.cluster_idx].phase_id.get_flight_param().numpy())
 
     def swith_pause(self):
 

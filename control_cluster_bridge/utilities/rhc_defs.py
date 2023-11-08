@@ -517,6 +517,12 @@ class RhcTaskRefs:
 
             self.phase_id = None # type of current phase (-1 custom, ...)
             self.is_contact = None # array of contact flags for each contact
+            self.duration = None # phase duration
+            self.p0 = None # start position
+            self.p1 = None # end position
+            self.clearance = None # flight clearance
+            self.d0 = None # initial derivative
+            self.d1 = None # end derivative
 
             self.dtype = dtype
 
@@ -529,6 +535,12 @@ class RhcTaskRefs:
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "phase_id")
             self.assign_views(mem_manager, "is_contact")
+            self.assign_views(mem_manager, "duration")
+            self.assign_views(mem_manager, "p0")
+            self.assign_views(mem_manager, "p1")
+            self.assign_views(mem_manager, "clearance")
+            self.assign_views(mem_manager, "d0")
+            self.assign_views(mem_manager, "d1")
 
             self.last_index = self.offset
 
@@ -570,6 +582,72 @@ class RhcTaskRefs:
                 
                 self.offset = self.offset + self.n_contacts
 
+            if varname == "duration":
+
+                self.duration = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=1)
+                
+                self.duration[:, :] = torch.full(size=(1, 1), 
+                                                fill_value=0.5, 
+                                                dtype=self.dtype) # by default contact
+                
+                self.offset = self.offset + 1
+
+            if varname == "p0":
+
+                self.p0 = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=3)
+                
+                self.p0[:, :] = torch.full(size=(1, 3), 
+                                                fill_value=0.0, 
+                                                dtype=self.dtype) # by default contact
+                
+                self.offset = self.offset + 3
+            
+            if varname == "p1":
+
+                self.p1 = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=3)
+                
+                self.p1[:, :] = torch.full(size=(1, 3), 
+                                                fill_value=0.0, 
+                                                dtype=self.dtype) # by default contact
+                
+                self.offset = self.offset + 3
+
+            if varname == "clearance":
+
+                self.clearance = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=1)
+                
+                self.clearance[:, :] = torch.full(size=(1, 1), 
+                                                fill_value=0.0, 
+                                                dtype=self.dtype) # by default contact
+                
+                self.offset = self.offset + 1
+
+            if varname == "d0":
+
+                self.d0 = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=1)
+                
+                self.d0[:, :] = torch.full(size=(1, 1), 
+                                                fill_value=0.0, 
+                                                dtype=self.dtype) # by default contact
+                
+                self.offset = self.offset + 1
+
+            if varname == "d1":
+
+                self.d1 = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=1)
+                
+                self.d1[:, :] = torch.full(size=(1, 1), 
+                                                fill_value=0.0, 
+                                                dtype=self.dtype) # by default contact
+                
+                self.offset = self.offset + 1
+
         def get_phase_id(self):
             
             return self.phase_id[:, :].item()
@@ -577,6 +655,35 @@ class RhcTaskRefs:
         def get_contacts(self):
             
             return self.is_contact[:, :]
+        
+        def get_duration(self):
+            
+            return self.duration[:, :]
+
+        def get_p0(self):
+
+            return self.p0
+        
+        def get_p1(self):
+
+            return self.p1
+        
+        def get_clearance(self):
+
+            return self.clearance
+        
+        def get_d0(self):
+
+            return self.d0
+        
+        def get_d1(self):
+
+            return self.d1
+
+        def get_flight_param(self):
+
+            return torch.cat((self.duration, self.p0, self.p1, \
+                            self.clearance, self.d0, self.d1), dim=1)
         
         def set_contacts(self, 
                 contacts: torch.Tensor):
@@ -587,6 +694,36 @@ class RhcTaskRefs:
                 phase_id: int):
                                             
             self.phase_id[:, :] = phase_id
+
+        def set_duration(self, 
+                duration: float):
+            
+            self.duration[:, :] = duration
+        
+        def set_p0(self, 
+                p0: torch.Tensor):
+                                            
+            self.p0[:, :] = p0
+        
+        def set_p1(self, 
+                p1: torch.Tensor):
+                                            
+            self.p1[:, :] = p1
+        
+        def set_clearance(self, 
+                clearance: float):
+                                            
+            self.clearance[:, :] = clearance
+        
+        def set_d0(self, 
+                d0: float):
+                                            
+            self.d0[:, :] = d0
+        
+        def set_d1(self, 
+                d1: float):
+                                            
+            self.d1[:, :] = d1
 
     class BasePose:
 

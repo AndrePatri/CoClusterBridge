@@ -47,11 +47,14 @@ def aggregate_refs_size(contact_n: int):
             # 2 + \
             # 1 + \
             # 2
-                
+    
+    phase_params = 1 + 3 * 2 + 1 + 1 * 2
+
     base_pose = 3 + 4
     com_pose = 3 + 4
     
     refs_size = phase_id + \
+            phase_params + \
             base_pose + \
             com_pose
 

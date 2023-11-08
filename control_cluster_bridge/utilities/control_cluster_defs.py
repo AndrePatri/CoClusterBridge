@@ -409,11 +409,23 @@ class RhcClusterTaskRefs:
 
             self.phase_id = None # type of current phase (-1 custom, ...)
             self.is_contact = None # array of contact flags for each contact
+            self.duration = None # phase duration
+            self.p0 = None # start position
+            self.p1 = None # end position
+            self.clearance = None # flight clearance
+            self.d0 = None # initial derivative
+            self.d1 = None # end derivative
 
             self.offset = self.prev_index
 
             self.assign_views(cluster_aggregate, "phase_id")
             self.assign_views(cluster_aggregate, "is_contact")
+            self.assign_views(cluster_aggregate, "duration")
+            self.assign_views(cluster_aggregate, "p0")
+            self.assign_views(cluster_aggregate, "p1")
+            self.assign_views(cluster_aggregate, "clearance")
+            self.assign_views(cluster_aggregate, "d0")
+            self.assign_views(cluster_aggregate, "d1")
 
             self.last_index = self.offset
 
@@ -436,7 +448,49 @@ class RhcClusterTaskRefs:
                                                             self.n_contacts)
 
                 self.offset =  self.offset + self.n_contacts
-        
+            
+            if varname == "duration":
+                
+                self.duration = cluster_aggregate[:, self.offset:(self.offset + 1)].view(self.cluster_size, 
+                                                            1)
+
+                self.offset =  self.offset + 1
+
+            if varname == "p0":
+                
+                self.p0 = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
+                                                            3)
+
+                self.offset =  self.offset + 3
+            
+            if varname == "p1":
+                
+                self.p1 = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
+                                                            3)
+
+                self.offset =  self.offset + 3
+            
+            if varname == "clearance":
+                
+                self.clearance = cluster_aggregate[:, self.offset:(self.offset + 1)].view(self.cluster_size, 
+                                                            1)
+
+                self.offset =  self.offset + 1
+            
+            if varname == "d0":
+                
+                self.d0 = cluster_aggregate[:, self.offset:(self.offset + 1)].view(self.cluster_size, 
+                                                            1)
+
+                self.offset =  self.offset + 1
+
+            if varname == "d1":
+                
+                self.d1 = cluster_aggregate[:, self.offset:(self.offset + 1)].view(self.cluster_size, 
+                                                            1)
+
+                self.offset =  self.offset + 1
+
     class BasePose:
 
         def __init__(self, 
