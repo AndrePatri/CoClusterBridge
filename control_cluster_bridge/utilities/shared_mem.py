@@ -146,9 +146,9 @@ class SharedMemSrvr:
 
     def start(self):
         
-        if not self._is_server_unique():
+        # if not self._is_server_unique():
             
-            raise Exception(self._mult_srvrs_error())
+        #     raise Exception(self._mult_srvrs_error())
         
         self._create_tensor_view()
                 
