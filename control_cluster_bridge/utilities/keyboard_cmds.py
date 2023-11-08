@@ -170,12 +170,12 @@ class RhcRefsFromKeyboard:
         if lateral is not None and lateral and increment:
             # lateral motion
             
-            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] + self.dxy
+            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] - self.dxy
 
         if lateral is not None and lateral and not increment:
             # lateral motion
             
-            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] - self.dxy
+            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] + self.dxy
 
         if lateral is not None and not lateral and not increment:
             # frontal motion

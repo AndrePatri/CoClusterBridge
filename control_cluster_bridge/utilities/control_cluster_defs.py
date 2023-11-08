@@ -35,8 +35,12 @@ class RobotClusterState:
     class RootStates:
 
         def __init__(self, 
-                cluster_aggregate: torch.Tensor):
+                cluster_aggregate: torch.Tensor,
+                prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1 
+
             self.p = None # floating base positions
             self.q = None # floating base orientation (quaternion)
             self.v = None # floating base linear vel
@@ -44,10 +48,14 @@ class RobotClusterState:
 
             self.cluster_size = cluster_aggregate.shape[0]
 
+            self.offset = self.prev_index
+
             self.assign_views(cluster_aggregate, "p")
             self.assign_views(cluster_aggregate, "q")
             self.assign_views(cluster_aggregate, "v")
             self.assign_views(cluster_aggregate, "omega")
+
+            self.last_index = self.offset
 
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
@@ -56,39 +64,43 @@ class RobotClusterState:
             if varname == "p":
 
                 # (can only make views of contigous memory)
-
-                offset = 0
                 
-                self.p = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                self.p = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
                                                                     3)
                 
+                self.offset = self.offset + 3
+
             if varname == "q":
-
-                offset = 3
                 
-                self.q = cluster_aggregate[:, offset:(offset + 4)].view(self.cluster_size, 
+                self.q = cluster_aggregate[:, self.offset:(self.offset + 4)].view(self.cluster_size, 
                                                                     4)
-            
+
+                self.offset = self.offset + 4
+
             if varname == "v":
-
-                offset = 7
                 
-                self.v = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                self.v = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
                                                                     3)
                 
+                self.offset = self.offset + 3
+
             if varname == "omega":
-
-                offset = 10
                 
-                self.omega = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                self.omega = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
                                                                     3)
                 
+                self.offset = self.offset + 3
+
     class JntStates:
 
         def __init__(self, 
                     cluster_aggregate: torch.Tensor,
-                    n_dofs: int):
-        
+                    n_dofs: int,
+                    prev_index: int = 0):
+            
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.n_dofs = n_dofs
 
             self.cluster_size = cluster_aggregate.shape[0]
@@ -96,8 +108,12 @@ class RobotClusterState:
             self.q = None # joint positions
             self.v = None # joint velocities
 
+            self.offset = self.prev_index
+
             self.assign_views(cluster_aggregate, "q")
             self.assign_views(cluster_aggregate, "v")
+
+            self.last_index = self.offset
 
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
@@ -109,16 +125,18 @@ class RobotClusterState:
 
                 offset = 13
                 
-                self.q = cluster_aggregate[:, offset:(offset + self.n_dofs)].view(self.cluster_size, 
+                self.q = cluster_aggregate[:, self.offset:(self.offset + self.n_dofs)].view(self.cluster_size, 
                                                 self.n_dofs)
                 
+                self.offset = self.offset + self.n_dofs
+
             if varname == "v":
                 
-                offset = 13 + self.n_dofs
-
-                self.v = cluster_aggregate[:, offset:(offset + self.n_dofs)].view(self.cluster_size, 
+                self.v = cluster_aggregate[:, self.offset:(self.offset + self.n_dofs)].view(self.cluster_size, 
                                                 self.n_dofs)
                 
+                self.offset = self.offset + self.n_dofs
+
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
@@ -153,9 +171,11 @@ class RobotClusterState:
                                     device=self.device)
 
         # views of cluster_aggregate
-        self.root_state = self.RootStates(self.cluster_aggregate) 
+        self.root_state = self.RootStates(self.cluster_aggregate, 
+                                        prev_index=0) 
         self.jnt_state = self.JntStates(self.cluster_aggregate, 
-                                    n_dofs)
+                                    n_dofs, 
+                                    prev_index=self.root_state.last_index)
         
         # this creates a shared memory block of the right size for the state
         # and a corresponding view of it
@@ -200,8 +220,12 @@ class RobotClusterCmd:
 
         def __init__(self,
                     cluster_aggregate: torch.Tensor, 
-                    n_dofs: int):
+                    n_dofs: int,
+                    prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self._cluster_size = cluster_aggregate.shape[0]
 
             self._n_dofs = n_dofs
@@ -215,10 +239,14 @@ class RobotClusterCmd:
             self._warning = "warning"
             self._exception = "exception"
 
+            self.offset = self.prev_index
+
             self.assign_views(cluster_aggregate, "q")
             self.assign_views(cluster_aggregate, "v")
             self.assign_views(cluster_aggregate, "eff")
 
+            self.last_index = self.offset
+            
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
             varname: str):
@@ -226,36 +254,46 @@ class RobotClusterCmd:
             if varname == "q":
                 
                 # can only make views of contigous memory
-                self.q = cluster_aggregate[:, 0:self._n_dofs].view(self._cluster_size, 
+                self.q = cluster_aggregate[:, self.offset:(self.offset + self._n_dofs)].view(self._cluster_size, 
                                                 self._n_dofs)
+                
+                self.offset = self.offset + self._n_dofs
                 
             if varname == "v":
                 
-                offset = self._n_dofs
-                self.v = cluster_aggregate[:, offset:(offset + self._n_dofs)].view(self._cluster_size, 
+                self.v = cluster_aggregate[:, self.offset:(self.offset + self._n_dofs)].view(self._cluster_size, 
                                                 self._n_dofs)
-            
+                
+                self.offset = self.offset + self._n_dofs
+
             if varname == "eff":
                 
-                offset = 2 * self._n_dofs
-                self.eff = cluster_aggregate[:, offset:(offset + self._n_dofs)].view(self._cluster_size, 
+                self.eff = cluster_aggregate[:, self.offset:(self.offset + self._n_dofs)].view(self._cluster_size, 
                                                 self._n_dofs)
                 
+                self.offset = self.offset + self._n_dofs
+
     class RhcInfo:
 
         def __init__(self,
                     cluster_aggregate: torch.Tensor, 
                     add_data_size: int, 
-                    n_dofs: int):
+                    prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.add_data_size = add_data_size
-            self.n_dofs = n_dofs
 
             self._cluster_size = cluster_aggregate.shape[0]
 
             self.info = None
 
+            self.offset = self.prev_index
+
             self.assign_views(cluster_aggregate, "info")
+
+            self.last_index = self.offset
 
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
@@ -263,11 +301,12 @@ class RobotClusterCmd:
             
             if varname == "info":
                 
-                offset = 3 * self.n_dofs
                 self.info = cluster_aggregate[:, 
-                                offset:(offset + self.add_data_size)].view(self._cluster_size, 
+                                self.offset:(self.offset + self.add_data_size)].view(self._cluster_size, 
                                 self.add_data_size)
                 
+                self.offset = self.offset + self.add_data_size
+
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int = 1, 
@@ -275,7 +314,7 @@ class RobotClusterCmd:
                 backend: str = "torch", 
                 device: torch.device = torch.device("cpu"),  
                 dtype: torch.dtype = torch.float32, 
-                add_data_size: int = None):
+                add_data_size: int = 0):
 
         self.namespace = namespace
 
@@ -296,35 +335,25 @@ class RobotClusterCmd:
 
         cluster_aggregate_columnsize = -1
 
-        if add_data_size is not None:
-            
-            cluster_aggregate_columnsize = aggregate_cmd_size(self.n_dofs, 
+        cluster_aggregate_columnsize = aggregate_cmd_size(self.n_dofs, 
                                                         add_data_size)
-            self.cluster_aggregate = torch.zeros(
+        
+        self.cluster_aggregate = torch.zeros(
                                         (self.cluster_size, 
                                            cluster_aggregate_columnsize 
                                         ), 
                                         dtype=self.dtype, 
                                         device=self.device)
-            
-            self.rhc_info = self.RhcInfo(self.cluster_aggregate,
-                                    add_data_size, 
-                                    self.n_dofs)
-            
-        else:
-            
-            cluster_aggregate_columnsize = aggregate_cmd_size(self.n_dofs, 
-                                                            0)
-                                                        
-            self.cluster_aggregate = torch.zeros(
-                                        (self.cluster_size,
-                                            cluster_aggregate_columnsize
-                                        ), 
-                                        dtype=self.dtype, 
-                                        device=self.device)
         
         self.jnt_cmd = self.JntCmd(self.cluster_aggregate,
-                                    n_dofs = self.n_dofs)
+                                    n_dofs = self.n_dofs, 
+                                    prev_index=0)
+        
+        if not add_data_size == 0:
+                                                        
+            self.rhc_info = self.RhcInfo(self.cluster_aggregate,
+                                    add_data_size, 
+                                    prev_index=self.jnt_cmd.last_index)
         
         # this creates a shared memory block of the right size for the cmds
         self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
@@ -412,13 +441,10 @@ class RhcClusterTaskRefs:
 
         def __init__(self, 
                     cluster_aggregate: torch.Tensor,
-                    n_contacts: int, 
                     prev_index: int = 0):
             
             self.prev_index = prev_index
             self.last_index = -1
-
-            self.n_contacts = n_contacts
 
             self.cluster_size = cluster_aggregate.shape[0]
         
@@ -463,14 +489,11 @@ class RhcClusterTaskRefs:
 
         def __init__(self, 
                     cluster_aggregate: torch.Tensor,
-                    n_contacts: int,
                     q_remapping: List[int] = None, 
                     prev_index: int = 0):
 
             self.prev_index = prev_index
             self.last_index = -1
-
-            self.n_contacts = n_contacts
 
             self.q_remapping = None
 
@@ -559,11 +582,9 @@ class RhcClusterTaskRefs:
                                     prev_index = 0)
         
         self.base_pose = self.BasePose(cluster_aggregate=self.cluster_aggregate, 
-                                    n_contacts=self.n_contacts, 
                                     prev_index = self.phase_id.last_index)
         
         self.com_pose = self.ComPos(cluster_aggregate=self.cluster_aggregate, 
-                                    n_contacts=self.n_contacts, 
                                     prev_index = self.base_pose.last_index)
         
         # this creates a shared memory block of the right size for the state

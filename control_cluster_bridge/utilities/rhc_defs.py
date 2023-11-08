@@ -32,9 +32,13 @@ class RobotState:
     class RootState:
 
         def __init__(self, 
-                    mem_manager: SharedMemClient, 
-                    q_remapping: List[int] = None):
+                mem_manager: SharedMemClient, 
+                q_remapping: List[int] = None,
+                prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1 
+
             self.p = None # floating base position
             self.q = None # floating base orientation (quaternion)
             self.v = None # floating base linear vel
@@ -45,12 +49,16 @@ class RobotState:
             self.q_remapping = None
             if q_remapping is not None:
                 self.q_remapping = torch.tensor(q_remapping)
-                
+            
+            self.offset = self.prev_index
+
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "p")
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
             self.assign_views(mem_manager, "omega")
+
+            self.last_index = self.offset
 
         def __del__(self):
 
@@ -77,23 +85,31 @@ class RobotState:
 
             if varname == "p":
                 
-                self.p = mem_manager.create_partial_tensor_view(index=0, 
+                self.p = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=3)
+
+                self.offset = self.offset + 3
 
             if varname == "q":
                 
-                self.q = mem_manager.create_partial_tensor_view(index=3, 
+                self.q = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=4)
+
+                self.offset = self.offset + 4
 
             if varname == "v":
                 
-                self.v = mem_manager.create_partial_tensor_view(index=7, 
+                self.v = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=3)
+
+                self.offset = self.offset + 3
 
             if varname == "omega":
                 
-                self.omega = mem_manager.create_partial_tensor_view(index=10, 
+                self.omega = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=3)
+                
+                self.offset = self.offset + 3
 
         def get_p(self):
             
@@ -120,9 +136,13 @@ class RobotState:
     class JntState:
 
         def __init__(self, 
-                    n_dofs: int, 
-                    mem_manager: SharedMemClient, 
-                    jnt_remapping: List[int]):
+                n_dofs: int, 
+                mem_manager: SharedMemClient, 
+                jnt_remapping: List[int],
+                prev_index: int = 0):
+
+            self.prev_index = prev_index
+            self.last_index = -1 
 
             self.q = None # joint positions
             self.v = None # joint velocities
@@ -131,8 +151,12 @@ class RobotState:
 
             self._terminated = False 
 
+            self.offset = self.prev_index
+
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
+            
+            self.last_index = self.offset
 
             self.jnt_remapping = None
             if self.jnt_remapping is not None: 
@@ -159,14 +183,18 @@ class RobotState:
             
             if varname == "q":
                 
-                self.q = mem_manager.create_partial_tensor_view(index=13, 
+                self.q = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=self.n_dofs)
                 
+                self.offset = self.offset + self.n_dofs
+
             if varname == "v":
                 
-                self.v = mem_manager.create_partial_tensor_view(index=13 + self.n_dofs, 
+                self.v = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=self.n_dofs)
-        
+
+                self.offset = self.offset + self.n_dofs
+
         def get_q(self):
             
             if self.jnt_remapping is not None:
@@ -219,12 +247,14 @@ class RobotState:
         self.shared_memman.attach() # this blocks untils the server creates the associated memory
 
         self.root_state = self.RootState(self.shared_memman, 
-                                    self.q_remapping) # created as a view of the
+                                    self.q_remapping, 
+                                    prev_index=0) # created as a view of the
         # shared memory pointed to by the manager
 
         self.jnt_state = self.JntState(n_dofs, 
                                 self.shared_memman, 
-                                self.jnt_remapping) # created as a view of the
+                                self.jnt_remapping, 
+                                prev_index=self.root_state.last_index) # created as a view of the
         # shared memory pointed to by the manager
         
         # we now make all the data in root_state and jnt_state a view of the memory viewed by the manager
@@ -255,7 +285,11 @@ class RobotCmds:
         def __init__(self, 
                     n_dofs: int, 
                     mem_manager: SharedMemClient, 
-                    jnt_remapping: List[int] = None):
+                    jnt_remapping: List[int] = None,
+                    prev_index: int = 0):
+
+            self.prev_index = prev_index
+            self.last_index = -1 
 
             self.n_dofs = n_dofs
 
@@ -267,10 +301,14 @@ class RobotCmds:
 
             self.jnt_remapping = None
 
+            self.offset = self.prev_index
+
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "q")
             self.assign_views(mem_manager, "v")
             self.assign_views(mem_manager, "eff")
+
+            self.last_index = self.offset
 
             if jnt_remapping is not None:
 
@@ -288,18 +326,24 @@ class RobotCmds:
 
             if varname == "q":
                 
-                self.q = mem_manager.create_partial_tensor_view(index=0, 
+                self.q = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=self.n_dofs)
                 
+                self.offset = self.offset + self.n_dofs
+
             if varname == "v":
                 
-                self.v = mem_manager.create_partial_tensor_view(index=self.n_dofs, 
+                self.v = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=self.n_dofs)
                 
+                self.offset = self.offset + self.n_dofs
+
             if varname == "eff":
                 
-                self.eff = mem_manager.create_partial_tensor_view(index=2 * self.n_dofs, 
+                self.eff = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=self.n_dofs)
+
+                self.offset = self.offset + self.n_dofs
 
         def set_q(self, 
                 q: torch.Tensor):
@@ -349,7 +393,11 @@ class RobotCmds:
         def __init__(self, 
                 add_info_size: int, 
                 n_dofs: int,
-                mem_manager: SharedMemClient):
+                mem_manager: SharedMemClient,
+                prev_index: int = 0):
+            
+            self.prev_index = prev_index
+            self.last_index = -1 
 
             self.info = None
 
@@ -359,7 +407,11 @@ class RobotCmds:
 
             self._terminated = False
 
+            self.offset = self.prev_index
+
             self.assign_views(mem_manager, "info")
+
+            self.last_index = self.offset
 
         def __del__(self):
 
@@ -422,13 +474,15 @@ class RobotCmds:
         
         self.jnt_cmd = self.JntCmd(n_dofs=self.n_dofs, 
                                         mem_manager=self.shared_memman, 
-                                        jnt_remapping=self.jnt_remapping)
+                                        jnt_remapping=self.jnt_remapping, 
+                                        prev_index=0)
         
         if add_info_size is not None:
 
             self.slvr_state = self.SolverState(self.add_info_size, 
                                             self.n_dofs, 
-                                            self.shared_memman)
+                                            self.shared_memman, 
+                                            prev_index=self.jnt_cmd.last_index)
     
     def __del__(self):
 
@@ -538,7 +592,6 @@ class RhcTaskRefs:
 
         def __init__(self, 
                     mem_manager: SharedMemClient, 
-                    n_contacts: int,
                     q_remapping: List[int] = None,
                     dtype = torch.float32,
                     prev_index: int = 0):
@@ -551,8 +604,6 @@ class RhcTaskRefs:
             self.p = None # base position
             self.q = None # base orientation (quaternion)
             self.pose = None # full pose [p, q]
-
-            self.n_contacts = n_contacts
 
             self._terminated = False
 
@@ -677,7 +728,6 @@ class RhcTaskRefs:
         
         def __init__(self, 
                     mem_manager: SharedMemClient, 
-                    n_contacts: int,
                     q_remapping: List[int] = None,
                     dtype = torch.float32,
                     prev_index: int = 0):
@@ -686,8 +736,6 @@ class RhcTaskRefs:
             self.last_index = -1
 
             self.dtype = dtype
-
-            self.n_contacts = n_contacts
             
             self.q_remapping = None
 
@@ -832,13 +880,11 @@ class RhcTaskRefs:
         # shared memory pointed to by the manager
 
         self.base_pose = self.BasePose(mem_manager=self.shared_memman, 
-                                    n_contacts=self.n_contacts,
                                     q_remapping=self.q_remapping, 
                                     dtype=self.dtype, 
                                     prev_index = self.phase_id.last_index)
 
         self.com_pose = self.CoMPose(mem_manager=self.shared_memman, 
-                                n_contacts=self.n_contacts,
                                 q_remapping=self.q_remapping,
                                 dtype=self.dtype, 
                                 prev_index = self.base_pose.last_index)
