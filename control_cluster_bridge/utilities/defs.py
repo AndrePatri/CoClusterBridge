@@ -39,7 +39,15 @@ def aggregate_cmd_size(internal_jnt_number: int,
 def aggregate_refs_size(contact_n: int):
 
     # hardcoded
-    phase_id = contact_n + 1
+    phase_id = 1 + \
+            contact_n 
+            # + \
+            # 1 + \
+            # 1 + \
+            # 2 + \
+            # 1 + \
+            # 2
+                
     base_pose = 3 + 4
     com_pose = 3 + 4
     

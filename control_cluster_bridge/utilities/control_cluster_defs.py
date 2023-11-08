@@ -364,12 +364,16 @@ class RobotClusterCmd:
 
 class RhcClusterTaskRefs:
 
-    class PhaseId:
+    class Phase:
 
         def __init__(self, 
                 cluster_aggregate: torch.Tensor, 
-                n_contacts: int):
+                n_contacts: int, 
+                prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.cluster_size = cluster_aggregate.shape[0]
 
             self.n_contacts = n_contacts
@@ -377,8 +381,12 @@ class RhcClusterTaskRefs:
             self.phase_id = None # type of current phase (-1 custom, ...)
             self.is_contact = None # array of contact flags for each contact
 
+            self.offset = self.prev_index
+
             self.assign_views(cluster_aggregate, "phase_id")
             self.assign_views(cluster_aggregate, "is_contact")
+
+            self.last_index = self.offset
 
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
@@ -387,25 +395,29 @@ class RhcClusterTaskRefs:
             if varname == "phase_id":
 
                 # (can only make views of contigous memory)
-
-                offset = 0
                 
-                self.phase_id = cluster_aggregate[:, 0].view(self.cluster_size, 
+                self.phase_id = cluster_aggregate[:, self.offset].view(self.cluster_size, 
                                                                 1)
                 
-            if varname == "is_contact":
+                self.offset = self.offset + 1
 
-                offset = 1
+            if varname == "is_contact":
                 
-                self.is_contact = cluster_aggregate[:, offset:(offset + self.n_contacts)].view(self.cluster_size, 
+                self.is_contact = cluster_aggregate[:, self.offset:(self.offset + self.n_contacts)].view(self.cluster_size, 
                                                             self.n_contacts)
-            
+
+                self.offset =  self.offset + self.n_contacts
+        
     class BasePose:
 
         def __init__(self, 
                     cluster_aggregate: torch.Tensor,
-                    n_contacts: int):
-        
+                    n_contacts: int, 
+                    prev_index: int = 0):
+            
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.n_contacts = n_contacts
 
             self.cluster_size = cluster_aggregate.shape[0]
@@ -414,42 +426,50 @@ class RhcClusterTaskRefs:
             self.q = None # base orientation (quaternion)
             self.pose = None # full pose [p, q]
 
+            self.offset = self.prev_index
+            
+            self.assign_views(cluster_aggregate, "pose")
             self.assign_views(cluster_aggregate, "p")
             self.assign_views(cluster_aggregate, "q")
-            self.assign_views(cluster_aggregate, "pose")
+
+            self.last_index = self.offset
 
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
             varname: str):
-            
-            if varname == "p":
-
-                offset = 1 + self.n_contacts
+                        
+            if varname == "pose":
                 
-                self.p = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                self.pose = cluster_aggregate[:, self.offset:(self.offset + 7)].view(self.cluster_size, 
+                                                                    7)
+                
+            if varname == "p":
+                
+                self.p = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
                                                                     3)
                 
+                self.offset = self.offset + 3
+                
             if varname == "q":
-
-                offset = 1 + self.n_contacts + 3
                 
-                self.q = cluster_aggregate[:, offset:(offset + 4)].view(self.cluster_size, 
+                self.q = cluster_aggregate[:, self.offset:(self.offset + 4)].view(self.cluster_size, 
                                                                     4)
-            
-            if varname == "pose":
+                    
+                self.offset = self.offset + 4
 
-                offset = 1 + self.n_contacts
-                
-                self.pose = cluster_aggregate[:, offset:(offset + 7)].view(self.cluster_size, 
-                                                                    7)
-        
+            self.last_index = self.offset
+
     class ComPos:
 
         def __init__(self, 
                     cluster_aggregate: torch.Tensor,
                     n_contacts: int,
-                    q_remapping: List[int] = None):
-        
+                    q_remapping: List[int] = None, 
+                    prev_index: int = 0):
+
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.n_contacts = n_contacts
 
             self.q_remapping = None
@@ -463,41 +483,43 @@ class RhcClusterTaskRefs:
             self.com_q = None # com orientation
             self.com_pose = None # com pose
             
+            self.offset = self.prev_index
+
             self.assign_views(cluster_aggregate, "com_pose")
             self.assign_views(cluster_aggregate, "com_pos")
             self.assign_views(cluster_aggregate, "com_q")
 
+            self.last_index = self.offset
+
         def assign_views(self, 
             cluster_aggregate: torch.Tensor,
             varname: str):
-            
+                            
             if varname == "com_pose":
 
                 # (can only make views of contigous memory)
-
-                offset = 1 + self.n_contacts + 7
                 
-                self.com_pose = cluster_aggregate[:, offset:(offset + 7)].view(self.cluster_size, 
+                self.com_pose = cluster_aggregate[:, self.offset:(self.offset + 7)].view(self.cluster_size, 
                                                 7)
             
             if varname == "com_pos":
 
                 # (can only make views of contigous memory)
-
-                offset = 1 + self.n_contacts + 7
                 
-                self.com_pos = cluster_aggregate[:, offset:(offset + 3)].view(self.cluster_size, 
+                self.com_pos = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
                                                 3)
 
+                self.offset = self.offset + 3
+                
             if varname == "com_q":
 
                 # (can only make views of contigous memory)
-
-                offset = 1 + self.n_contacts + 7 + 3
                 
-                self.com_pos = cluster_aggregate[:, offset:(offset + 4)].view(self.cluster_size, 
+                self.com_pos = cluster_aggregate[:, self.offset:(self.offset + 4)].view(self.cluster_size, 
                                                 4)
                 
+                self.offset = self.offset + 4
+            
     def __init__(self, 
                 n_contacts: int, 
                 cluster_size: int = 1, 
@@ -532,14 +554,17 @@ class RhcClusterTaskRefs:
                                     device=self.device)
 
         # views of cluster_aggregate
-        self.phase_id = self.PhaseId(cluster_aggregate=self.cluster_aggregate, 
-                                    n_contacts=self.n_contacts)
+        self.phase_id = self.Phase(cluster_aggregate=self.cluster_aggregate, 
+                                    n_contacts=self.n_contacts, 
+                                    prev_index = 0)
         
         self.base_pose = self.BasePose(cluster_aggregate=self.cluster_aggregate, 
-                                    n_contacts=self.n_contacts)
+                                    n_contacts=self.n_contacts, 
+                                    prev_index = self.phase_id.last_index)
         
         self.com_pose = self.ComPos(cluster_aggregate=self.cluster_aggregate, 
-                                    n_contacts=self.n_contacts)
+                                    n_contacts=self.n_contacts, 
+                                    prev_index = self.base_pose.last_index)
         
         # this creates a shared memory block of the right size for the state
         # and a corresponding view of it

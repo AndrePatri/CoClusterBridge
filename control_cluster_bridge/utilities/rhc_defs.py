@@ -450,13 +450,17 @@ class RobotCmds:
             
 class RhcTaskRefs:
 
-    class PhaseId:
+    class Phase:
 
         def __init__(self, 
                     mem_manager: SharedMemClient, 
                     n_contacts: int,
-                    dtype = torch.float32):
+                    dtype = torch.float32, 
+                    prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.phase_id = None # type of current phase (-1 custom, ...)
             self.is_contact = None # array of contact flags for each contact
 
@@ -466,9 +470,13 @@ class RhcTaskRefs:
 
             self._terminated = False
             
+            self.offset = self.prev_index
+
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "phase_id")
             self.assign_views(mem_manager, "is_contact")
+
+            self.last_index = self.offset
 
         def __del__(self):
 
@@ -488,24 +496,26 @@ class RhcTaskRefs:
                     mem_manager: SharedMemClient,
                     varname: str):
             
-            # we create views 
-
             if varname == "phase_id":
                 
-                self.phase_id = mem_manager.create_partial_tensor_view(index=0, 
+                self.phase_id = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=1)
 
                 self.phase_id[:, :] = -1.0 # by default we run in custom mode
                 
+                self.offset = self.offset + 1
+
             if varname == "is_contact":
                 
-                self.is_contact = mem_manager.create_partial_tensor_view(index=1, 
+                self.is_contact = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=self.n_contacts)
                 
                 self.is_contact[:, :] = torch.full(size=(1, self.n_contacts), 
                                                 fill_value=1.0, 
                                                 dtype=self.dtype) # by default contact
                 
+                self.offset = self.offset + self.n_contacts
+
         def get_phase_id(self):
             
             return self.phase_id[:, :].item()
@@ -530,8 +540,12 @@ class RhcTaskRefs:
                     mem_manager: SharedMemClient, 
                     n_contacts: int,
                     q_remapping: List[int] = None,
-                    dtype = torch.float32):
+                    dtype = torch.float32,
+                    prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.dtype = dtype
 
             self.p = None # base position
@@ -546,11 +560,15 @@ class RhcTaskRefs:
 
             if q_remapping is not None:
                 self.q_remapping = torch.tensor(q_remapping)
-                
+            
+            self.offset = self.prev_index
+
             # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "pose")
             self.assign_views(mem_manager, "p")
             self.assign_views(mem_manager, "q")
-            self.assign_views(mem_manager, "pose")
+
+            self.last_index = self.offset
 
         def __del__(self):
 
@@ -574,30 +592,9 @@ class RhcTaskRefs:
             
             # we create views 
 
-            if varname == "p":
-                
-                self.p = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts, 
-                                        length=3)
-
-                self.p[:, :] = torch.full(size=(1, 3), 
-                                        fill_value=0.0,
-                                        dtype=self.dtype)
-                
-            if varname == "q":
-                
-                self.q = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 3, 
-                                        length=4)
-
-                init = torch.full(size=(1, 4), 
-                                fill_value=0.0,
-                                dtype=self.dtype)
-                init[0, 0] = 1.0
-
-                self.q[:, :] = init
-
             if varname == "pose":
                 
-                self.pose = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts, 
+                self.pose = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=7)
 
                 init = torch.full(size=(1, 7), 
@@ -607,6 +604,31 @@ class RhcTaskRefs:
 
                 self.pose[:, :] = init
 
+            if varname == "p":
+                
+                self.p = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=3)
+
+                self.p[:, :] = torch.full(size=(1, 3), 
+                                        fill_value=0.0,
+                                        dtype=self.dtype)
+                
+                self.offset = self.offset + 3
+                
+            if varname == "q":
+                
+                self.q = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=4)
+
+                init = torch.full(size=(1, 4), 
+                                fill_value=0.0,
+                                dtype=self.dtype)
+                init[0, 0] = 1.0
+
+                self.q[:, :] = init
+
+                self.offset = self.offset + 4
+            
         def get_q(self, 
                 use_remapping = False):
             
@@ -657,8 +679,12 @@ class RhcTaskRefs:
                     mem_manager: SharedMemClient, 
                     n_contacts: int,
                     q_remapping: List[int] = None,
-                    dtype = torch.float32):
+                    dtype = torch.float32,
+                    prev_index: int = 0):
             
+            self.prev_index = prev_index
+            self.last_index = -1
+
             self.dtype = dtype
 
             self.n_contacts = n_contacts
@@ -674,11 +700,15 @@ class RhcTaskRefs:
 
             self._terminated = False
             
+            self.offset = self.prev_index
+
             # we assign the right view of the raw shared data
             self.assign_views(mem_manager, "com_pose")
             self.assign_views(mem_manager, "com_pos")
             self.assign_views(mem_manager, "com_q")
 
+            self.last_index = self.offset
+            
         def __del__(self):
 
             self.terminate()
@@ -699,26 +729,28 @@ class RhcTaskRefs:
                     mem_manager: SharedMemClient,
                     varname: str):
             
-            # we create views 
-
             if varname == "com_pose":
                 
-                self.com_pose = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
+                self.com_pose = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=7)
 
             if varname == "com_pos":
                 
-                self.com_pos = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7, 
+                self.com_pos = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=3)
 
                 self.com_pos[:, 2] = 0.4
 
+                self.offset = self.offset + 3
+
             if varname == "com_q":
                 
-                self.com_q = mem_manager.create_partial_tensor_view(index=1 + self.n_contacts + 7 + 3, 
+                self.com_q = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=4)
 
                 self.com_q[:, :] = torch.tensor([[1, 0, 0, 0]], dtype=self.dtype)
+
+                self.offset = self.offset + 4
 
         def get_com_height(self):
             
@@ -793,20 +825,23 @@ class RhcTaskRefs:
                         verbose=verbose) 
         self.shared_memman.attach() # this blocks untils the server creates the associated memory
 
-        self.phase_id = self.PhaseId(mem_manager=self.shared_memman, 
+        self.phase_id = self.Phase(mem_manager=self.shared_memman, 
                                     n_contacts=self.n_contacts,
-                                    dtype=self.dtype) # created as a view of the
+                                    dtype=self.dtype, 
+                                    prev_index = 0) # created as a view of the
         # shared memory pointed to by the manager
 
         self.base_pose = self.BasePose(mem_manager=self.shared_memman, 
                                     n_contacts=self.n_contacts,
                                     q_remapping=self.q_remapping, 
-                                    dtype=self.dtype)
+                                    dtype=self.dtype, 
+                                    prev_index = self.phase_id.last_index)
 
         self.com_pose = self.CoMPose(mem_manager=self.shared_memman, 
                                 n_contacts=self.n_contacts,
                                 q_remapping=self.q_remapping,
-                                dtype=self.dtype)
+                                dtype=self.dtype, 
+                                prev_index = self.base_pose.last_index)
 
     def __del__(self):
         
