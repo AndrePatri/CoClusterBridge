@@ -122,8 +122,6 @@ class RobotClusterState:
             if varname == "q":
 
                 # (can only make views of contigous memory)
-
-                offset = 13
                 
                 self.q = cluster_aggregate[:, self.offset:(self.offset + self.n_dofs)].view(self.cluster_size, 
                                                 self.n_dofs)
@@ -655,13 +653,13 @@ class RhcClusterTaskRefs:
 
     def synch(self):
 
-        # synchs RHC commands set by the Agent
-        # with the shared refs which live on CPU and are used by the RHC controllers
+        # synchs jnt_cmd and rhc_info (which will normally live on GPU)
+        # with the shared cmd data using the aggregate view (normally on CPU)
 
-        # this requires a COPY FROM GPU TO CPU
+        # this requires a COPY FROM CPU TO GPU
         # (better to use the aggregate to exploit parallelization)
 
-        self.shared_memman.tensor_view[:, :] = self.cluster_aggregate.cpu()
+        self.cluster_aggregate[:, :] = self.shared_memman.tensor_view.cuda()
 
         torch.cuda.synchronize() # this way we ensure that after this the state on GPU
         # is fully updated
