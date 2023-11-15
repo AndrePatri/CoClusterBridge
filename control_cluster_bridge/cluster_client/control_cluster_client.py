@@ -19,7 +19,7 @@ import torch
 
 from abc import ABC
 
-from control_cluster_bridge.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd
+from control_cluster_bridge.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd, RobotClusterContactState
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlClient
 from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
 
@@ -48,6 +48,8 @@ class ControlClusterClient(ABC):
             control_dt: float,
             cluster_dt: float,
             jnt_names: List[str],
+            n_contact_sensors: int = -1,
+            contact_linknames: List[str] = None,
             backend = "torch", 
             device = torch.device("cpu"), 
             np_array_dtype = np.float32, 
@@ -102,6 +104,7 @@ class ControlClusterClient(ABC):
         self.controllers_fail_flags = None
         self.launch_controllers = None
         self.rhc_task_refs = None
+        self.contact_states = None
         self.shared_cluster_info = None
 
         # flags
@@ -111,6 +114,8 @@ class ControlClusterClient(ABC):
         self.controllers_active = False
         # other data
         self.add_data_length = 0
+        self.n_contact_sensors = n_contact_sensors
+        self.contact_linknames = contact_linknames
 
         self.solution_time = -1.0
         self.solution_counter = 0
@@ -131,6 +136,8 @@ class ControlClusterClient(ABC):
     def _start_shared_mem(self):
 
         self.robot_states.start()
+
+        self.contact_states.start()
 
         self.trigger_flags.start()
         self.trigger_flags.reset_bool(False)
@@ -171,6 +178,18 @@ class ControlClusterClient(ABC):
                                             device=self._device, 
                                             dtype=self.torch_dtype) # from robot to controllers
 
+        # contact states
+
+        self.contact_states = RobotClusterContactState(n_dofs=self.n_dofs, 
+                                    cluster_size=self.cluster_size,
+                                    n_contacts=self.n_contact_sensors, 
+                                    contact_names=self.contact_linknames, 
+                                    namespace=self.namespace,
+                                    backend=self._backend, 
+                                    device=self._device, 
+                                    dtype=self.torch_dtype, 
+                                    verbose=self._verbose)
+                                            
         self.handshake_manager = HanshakeDataCntrlClient(n_jnts=self.n_dofs, 
                                                     namespace=self.namespace) # handles handshake process
         # between client and server
@@ -292,7 +311,7 @@ class ControlClusterClient(ABC):
                                     backend=self._backend, 
                                     dtype=self.torch_dtype)
         self.rhc_task_refs.start()
-        
+
         print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": connection achieved.")
         
@@ -403,6 +422,10 @@ class ControlClusterClient(ABC):
             if self.rhc_task_refs is not None:
 
                 self.rhc_task_refs.terminate()
+
+            if self.contact_states is not None:
+
+                self.contact_states.terminate()
 
             if self.shared_cluster_info is not None:
 

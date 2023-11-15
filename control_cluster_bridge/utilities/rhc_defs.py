@@ -22,10 +22,148 @@ from typing import TypeVar, List
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_bridge.utilities.defs import states_name, cmds_name
+from control_cluster_bridge.utilities.defs import contact_state_size, contacts_names
 from control_cluster_bridge.utilities.defs import aggregate_refs_size, task_refs_name
 from control_cluster_bridge.utilities.defs import Journal
 
 from abc import ABC, abstractmethod
+
+class ContactState:
+
+    class ContactState:
+
+        def __init__(self, 
+                n_contacts: int,
+                contact_names: List[str],
+                mem_manager: SharedMemClient, 
+                prev_index: int = 0):
+            
+            self.prev_index = prev_index
+            self.last_index = -1 
+
+            self.n_contacts = n_contacts
+            self.contact_names = contact_names
+
+            self.net_contact_forces = [None] * self.n_contacts 
+
+            self._terminated = False
+
+            self.q_remapping = None
+            if q_remapping is not None:
+                self.q_remapping = torch.tensor(q_remapping)
+            
+            self.offset = self.prev_index
+
+            # we assign the right view of the raw shared data
+            self.assign_views(mem_manager, "p")
+            
+            self.last_index = self.offset
+
+        def __del__(self):
+
+            self.terminate()
+
+        def terminate(self):
+            
+            if not self._terminated:
+                
+                self._terminated = True
+
+                # release any memory view
+
+                self.net_contact_forces = None
+
+        def assign_views(self, 
+                    mem_manager: SharedMemClient,
+                    varname: str):
+            
+            for i in range(0, self.n_contacts):
+
+                self.net_contact_forces[i] = mem_manager.create_partial_tensor_view(index=self.offset, 
+                                        length=3)
+
+                self.offset = self.offset + 3
+
+        def get(self, 
+                contact_name: str):
+
+            index = -1
+            try:
+            
+                index = self.contact_names.index(contact_name)
+        
+            except:
+                
+                exception = f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
+                    f"could not find contact link {contact_name} in contact list {' '.join(self.contact_names)}." 
+            
+                raise Exception(exception)
+            
+            return self.net_contact_forces[index]
+
+    def __init__(self, 
+                n_dofs: int, 
+                index: int,
+                dtype = torch.float32,
+                namespace = "", 
+                verbose=False):
+
+        self.namespace = namespace
+
+        self.journal = Journal()
+
+        self.dtype = dtype
+
+        self.device = torch.device('cpu') # born to live on CPU
+
+        self._terminated = False
+
+        self.n_contacts = n_contacts
+
+        # contact names
+        self.contact_names_shared = SharedStringArray(length=-1, 
+                                    name=contacts_names(), 
+                                    namespace=self.namespace,
+                                    is_server=False, 
+                                    wait_amount=0.1, 
+                                    verbose=verbose)
+        self.contact_names_shared.start()
+
+        self.contact_names  = self.contact_names_shared.read()
+
+        self.n_contacts = len(self.contact_names)
+
+        # this creates the view of the shared data for the robot specificed by index
+        self.shared_memman = SharedMemClient(
+                        client_index=index, 
+                        name=contacts_info_name(), 
+                        namespace=self.namespace,
+                        dtype=self.dtype, 
+                        verbose=verbose) 
+        self.shared_memman.attach() # this blocks untils the server creates the associated memory
+
+        self.contact_state = self.ContactState(self.n_contacts, 
+                                self.contact_names,
+                                self.shared_memman, 
+                                prev_index=0) 
+
+    def __del__(self):
+        
+        if not self._terminated:
+        
+            self.terminate()
+
+    def terminate(self):
+
+        if not self._terminated:
+
+            self.contact_names_shared.terminate()
+
+            self.shared_memman.terminate()
+
+            self.self.contact_names_shared.terminate()
+
+            self._terminated = True
 
 class RobotState:
 

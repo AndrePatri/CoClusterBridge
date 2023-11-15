@@ -24,11 +24,154 @@ from typing import List
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedMemClient, SharedStringArray
 
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size, aggregate_refs_size
-from control_cluster_bridge.utilities.defs import states_name, cmds_name, task_refs_name
+from control_cluster_bridge.utilities.defs import contact_state_size, contacts_info_name
+from control_cluster_bridge.utilities.defs import states_name, contacts_names, cmds_name, task_refs_name
 from control_cluster_bridge.utilities.defs import cluster_size_name, additional_data_name, n_contacts_name
 from control_cluster_bridge.utilities.defs import jnt_number_client_name
 from control_cluster_bridge.utilities.defs import jnt_names_client_name
 from control_cluster_bridge.utilities.defs import Journal
+
+class RobotClusterContactState:
+
+    class ContactStates:
+
+        def __init__(self, 
+            cluster_aggregate: torch.Tensor,
+            n_contacts: int,
+            prev_index: int = 0):
+            
+            self.prev_index = prev_index
+            self.last_index = -1
+
+            self.n_contacts = n_contacts
+
+            self.cluster_size = cluster_aggregate.shape[0]
+        
+            self.net_contact_forces = [None] * self.n_contacts # list of torch views
+
+            self.offset = self.prev_index
+
+            self.assign_views(cluster_aggregate, n_contacts)
+
+            self.last_index = self.offset
+
+        def assign_views(self, 
+            cluster_aggregate: torch.Tensor,
+            n_contacts: int):
+            
+            for i in range(0, self.n_contacts):
+
+                self.net_contact_forces[i] = cluster_aggregate[:, self.offset:(self.offset + 3)].view(self.cluster_size, 
+                                            3)
+            
+                self.offset = self.offset + 3
+
+    def __init__(self, 
+                n_dofs: int, 
+                cluster_size: int,
+                n_contacts: int, 
+                contact_names: List[str] = None,
+                namespace = "",
+                backend: str = "torch", 
+                device: torch.device = torch.device("cpu"), 
+                dtype: torch.dtype = torch.float32, 
+                verbose = True):
+        
+        self.namespace = namespace
+
+        self.journal = Journal()
+
+        self.dtype = dtype
+
+        self.backend = "torch" # forcing torch backend
+        self.device = device
+        if (self.backend != "torch"):
+
+            self.device = torch.device("cpu")
+
+        self.cluster_size = cluster_size
+        self.n_dofs = n_dofs
+        self.n_contacts = n_contacts
+        self.contact_names = contact_names
+
+        if self.contact_names is not None:
+
+            if len(self.contact_names) != self.n_contacts:
+                
+                exception = f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
+                    f": provided contact names length {len(self.contact_names)} "+ \
+                    "does not match {self.n_contacts}"
+
+                raise Exception(exception)
+        else:
+
+            self.contact_names = ["no_name"] * self.n_contacts
+
+        self.contact_names_shared = SharedStringArray(length=self.n_contacts, 
+                                    name=contacts_names(), 
+                                    namespace=self.namespace,
+                                    is_server=True, 
+                                    wait_amount=0.1, 
+                                    verbose=verbose)
+        
+        cluster_aggregate_columnsize = contact_state_size(self.n_contacts)
+
+        self._terminate = False
+
+        self.cluster_aggregate = torch.zeros(
+                                    (self.cluster_size, 
+                                        cluster_aggregate_columnsize 
+                                    ), 
+                                    dtype=self.dtype, 
+                                    device=self.device)
+
+        # views of cluster_aggregate
+        self.contact_state = self.ContactStates(self.cluster_aggregate, 
+                                    self.n_contacts, 
+                                    prev_index=0)
+
+        # this creates a shared memory block of the right size for the state
+        # and a corresponding view of it
+        self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
+                                    n_cols=cluster_aggregate_columnsize, 
+                                    name=contacts_info_name(),
+                                    namespace=self.namespace, 
+                                    dtype=self.dtype)
+    
+    def start(self):
+        
+        self.contact_names_shared.start()
+
+        self.shared_memman.start() # will actually initialize the server
+
+    def synch(self):
+
+        # copies contact state from GPU to CPU if necessary
+        
+        if self.cluster_aggregate.device.type == 'cuda':
+
+            self.shared_memman.tensor_view[:, :] = self.cluster_aggregate.cpu()
+
+            torch.cuda.synchronize() # this way we ensure that after this the state on GPU
+            # is fully updated
+
+        else:
+            
+            self.shared_memman.tensor_view[:, :] = self.cluster_aggregate
+
+    def terminate(self):
+        
+        if not self._terminate:
+
+            self._terminate = True
+
+            self.shared_memman.terminate()
+            
+            self.jnt_names_client.terminate()
+
+    def __del__(self):
+        
+        self.terminate()
 
 class RobotClusterState:
 
@@ -134,14 +277,15 @@ class RobotClusterState:
                                                 self.n_dofs)
                 
                 self.offset = self.offset + self.n_dofs
-
+    
     def __init__(self, 
                 n_dofs: int, 
-                cluster_size: int = 1, 
+                cluster_size: int,
                 namespace = "",
                 backend: str = "torch", 
                 device: torch.device = torch.device("cpu"), 
-                dtype: torch.dtype = torch.float32):
+                dtype: torch.dtype = torch.float32, 
+                verbose = True):
         
         self.namespace = namespace
 
@@ -157,6 +301,7 @@ class RobotClusterState:
 
         self.cluster_size = cluster_size
         self.n_dofs = n_dofs
+
         cluster_aggregate_columnsize = aggregate_state_size(self.n_dofs)
 
         self._terminate = False
@@ -172,9 +317,9 @@ class RobotClusterState:
         self.root_state = self.RootStates(self.cluster_aggregate, 
                                         prev_index=0) 
         self.jnt_state = self.JntStates(self.cluster_aggregate, 
-                                    n_dofs, 
+                                    self.n_dofs, 
                                     prev_index=self.root_state.last_index)
-        
+
         # this creates a shared memory block of the right size for the state
         # and a corresponding view of it
         self.shared_memman = SharedMemSrvr(n_rows=self.cluster_size, 
@@ -207,7 +352,7 @@ class RobotClusterState:
             self._terminate = True
 
             self.shared_memman.terminate()
-
+            
     def __del__(self):
         
         self.terminate()
@@ -873,6 +1018,7 @@ class HanshakeDataCntrlClient:
             raise Exception(exception)
         
         self.jnt_names_client.start(init=jnt_names) # start server
+        self.jnt_names_client.write(jnt_names)
 
         self.cluster_size.start() # start server and immediately write value to it
         self.cluster_size.tensor_view[0, 0] = cluster_size

@@ -18,11 +18,12 @@
 def aggregate_state_size(internal_jnt_number: int):
 
     # root p, q, v, omega + jnt q, v respectively
+    # contact state 
     aggregate_dim = 3 + \
             4 + \
             3 + \
             3 + \
-            2 * internal_jnt_number # hardcoded
+            2 * internal_jnt_number
 
     return aggregate_dim
 
@@ -60,9 +61,27 @@ def aggregate_refs_size(contact_n: int):
 
     return refs_size
 
+def contact_state_size(contact_n: int):
+    
+    contact_info_size = 3 # contact force/impulse
+
+    return contact_info_size * contact_n
+
 def states_name():
     
     name = "RobotState"
+
+    return name
+
+def contacts_info_name():
+    
+    name = "RobotContactInfo"
+
+    return name
+
+def contacts_names():
+    
+    name = "RobotContactsState"
 
     return name
 
