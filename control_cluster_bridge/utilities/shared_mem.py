@@ -1294,7 +1294,7 @@ class SharedStringArray:
     # (should be used sporadically or for initialization purposes)
 
     def __init__(self, 
-            length: int, 
+            length: int, # not used if client
             name: str, 
             is_server: bool,
             namespace = "",
@@ -1349,6 +1349,8 @@ class SharedStringArray:
         else:
 
             self.mem_manager.attach()
+
+            self.length = self.mem_manager.n_cols
 
         if init is not None:
 
