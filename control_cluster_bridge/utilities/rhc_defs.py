@@ -86,6 +86,14 @@ class ContactState:
                 contact_name: str):
 
             index = -1
+
+            if contact_name == "":
+
+                exception = f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
+                    f"An empty contact name was provided!" 
+            
+                raise Exception(exception)
+            
             try:
             
                 index = self.contact_names.index(contact_name)
@@ -156,7 +164,7 @@ class ContactState:
 
             self.shared_memman.terminate()
 
-            self.self.contact_names_shared.terminate()
+            self.contact_names_shared.terminate()
 
             self._terminated = True
 
