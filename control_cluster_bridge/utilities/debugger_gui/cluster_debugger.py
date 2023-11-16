@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
 from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
 from PyQt5.QtGui import QIcon, QPixmap
 
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow
+from control_cluster_bridge.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow, RhcContactStatesWindow
 from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 from omni_robo_gym.utils.shared_sim_info import SharedSimInfo
 
@@ -135,8 +135,6 @@ class RtClusterDebugger(QMainWindow):
         self.data_update_dt = data_update_dt
         self.plot_update_dt = plot_update_dt
 
-        self._tabs_terminated = [True] * 3
-
         self._terminated = False
 
         self._controllers_triggered = False
@@ -168,7 +166,8 @@ class RtClusterDebugger(QMainWindow):
         self.env_index = None
 
         # shared data
-        self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState"]
+        self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState", "RhcContactStates"]
+        self._tabs_terminated = [True] * len(self.shared_data_tabs_name)
         self.shared_data_window = [None] * len(self.shared_data_tabs_name)
         self.shared_data_tabs_map = {}
         for i in range(len(self.shared_data_tabs_name)):
@@ -584,6 +583,45 @@ class RtClusterDebugger(QMainWindow):
 
                     # self.data_spawner.buttons[2].setStyleSheet("color: darkgray")  # Change button style to dark gray
 
+        if label == self.shared_data_tabs_name[3]:
+                
+                checked = self.data_spawner.buttons[3].isChecked()  # Get the new state of the button
+
+                if checked and self._tabs_terminated[3]:
+                    
+                    self.shared_data_window[3] = RhcContactStatesWindow(update_data_dt=self.data_update_dt, 
+                                    update_plot_dt=self.plot_update_dt,
+                                    window_duration=self.window_length, 
+                                    cluster_size=self.cluster_size,
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    namespace=self.namespace,
+                                    parent=None, 
+                                    verbose = self.verbose)
+
+                    self.tab_contact_state = QWidget()
+                    self.tab_contact_state_layout = QVBoxLayout()
+                    self.tab_contact_state.setLayout(self.tab_contact_state_layout)
+
+                    self.shared_data_tabs_map[self.shared_data_tabs_name[3]] = self.tabs.count()
+                    self.tabs.addTab(self.tab_contact_state, 
+                                    "RhcContactStates")
+                    
+                    self.tab_contact_state_layout.addWidget(self.shared_data_window[3].base_frame)
+
+                    # self.data_spawner.buttons[3].setStyleSheet("")  # Reset button style
+
+                    self._tabs_terminated[3] = False
+                    
+                    self.data_spawner.buttons[3].setCheckable(False)
+
+                    self.data_spawner.buttons[3].setChecked(False)
+
+                    self._update_dark_mode()
+
+                # if not checked:
+
+                    # self.data_spawner.buttons[3].setStyleSheet("color: darkgray")  # Change button style to dark gray
+
     def _pause_all(self):
         
         for i in range(len(self.shared_data_tabs_name)):
@@ -608,8 +646,10 @@ class RtClusterDebugger(QMainWindow):
         dt_sec = float(millisec * 1e-3)
 
         for i in range(0, len(self.shared_data_tabs_name)):
+            
+            if self.shared_data_window[i] is not None:
 
-            self.shared_data_window[i].change_plot_update_dt(dt_sec)
+                self.shared_data_window[i].change_plot_update_dt(dt_sec)
        
         self.plot_update_dt_slider.current_val.setText(f'{dt_sec:.3f}')
 
@@ -623,8 +663,10 @@ class RtClusterDebugger(QMainWindow):
         self.samples_update_dt_slider.current_val.setText(f'{dt_sec:.4f}')
         
         for i in range(len(self.shared_data_tabs_name)):
+            
+            if self.shared_data_window[i] is not None:
 
-            self.shared_data_window[i].change_sample_update_dt(dt_sec)
+                self.shared_data_window[i].change_sample_update_dt(dt_sec)
         
     def _update_from_shared_data(self):
         

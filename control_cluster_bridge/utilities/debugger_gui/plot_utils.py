@@ -30,7 +30,7 @@ from typing import List, Callable, Union
 
 from control_cluster_bridge.utilities.sysutils import PathsGetter
 from control_cluster_bridge.utilities.defs import Journal
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState
+from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState, ContactState
 
 import os
 
@@ -1436,3 +1436,149 @@ class RhcStateWindow():
         
         self._terminated = True
 
+class RhcContactStatesWindow():
+
+    def __init__(self, 
+            update_data_dt: int,
+            update_plot_dt: int,
+            window_duration: int,
+            cluster_size: int, 
+            window_buffer_factor: int = 2,
+            namespace = "",
+            parent: QWidget = None, 
+            verbose = False):
+        
+        self.journal = Journal()
+
+        self.namespace = namespace
+
+        self.cluster_size = cluster_size
+
+        self.verbose = verbose
+
+        self._terminated = False
+
+        self.cluster_idx = 0
+
+        self.rt_plotters = []
+
+        self.contact_states = []
+
+        self._init_shared_data()
+
+        self.contact_names = self.contact_states[0].contact_names
+
+        self.n_sensors = self.contact_states[0].n_contacts
+
+        self.contact_info_size = round(self.contact_states[0].shared_memman.n_cols / self.n_sensors)
+
+        if self.n_sensors <= 0:
+
+            warning = "[{self.__class__.__name__}]" + f"[{self.journal.warning}]" \
+                + f": terminating since no contact sensor was found."
+            
+            print(warning)
+
+            self.terminate()
+
+        import math
+
+        grid_size = math.ceil(math.sqrt(self.n_sensors))
+        # distributing plots over a square grid
+        n_rows = n_cols = grid_size
+
+        self.grid = GridFrameWidget(n_rows, n_cols, 
+                parent=parent)
+        
+        self.base_frame = self.grid.base_frame
+
+        # distribute plots on each row
+        counter = 0
+        for i in range(0, n_rows):
+            
+            for j in range(0, n_cols):
+            
+                if (counter < self.n_sensors):
+                    
+                    self.rt_plotters.append(RtPlotWindow(n_data=self.contact_info_size, 
+                                update_data_dt=update_data_dt, 
+                                update_plot_dt=update_plot_dt,
+                                window_duration=window_duration, 
+                                parent=None, 
+                                base_name=f"Net contact force on link {self.contact_names[counter]}", 
+                                window_buffer_factor=window_buffer_factor, 
+                                legend_list=["f_x", "f_y", "f_z"], 
+                                ylabel="[N]")
+                                )
+
+                    self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
+
+                    counter = counter + 1
+
+    def _init_shared_data(self):
+
+        # view of rhc references
+        for i in range(0, self.cluster_size):
+
+            self.contact_states.append(ContactState(index=i, 
+                                    namespace=self.namespace,
+                                    dtype=torch.float32, 
+                                    verbose=self.verbose))
+
+    def update(self):
+
+        if not self._terminated:
+                        
+            for i in range(0, self.n_sensors):
+
+                self.rt_plotters[i].rt_plot_widget.update(self.contact_states[self.cluster_idx].contact_state.get(self.contact_names[i]).numpy())
+            
+    def swith_pause(self):
+
+        if not self._terminated:
+
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.paused = \
+                    not self.rt_plotters[i].rt_plot_widget.paused
+    
+    def change_sample_update_dt(self, 
+                dt: float):
+
+        if not self._terminated:
+            
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.update_data_sample_dt(dt)
+                self.rt_plotters[i].settings_widget.synch_max_window_size()
+                
+    def change_plot_update_dt(self, 
+                    dt: float):
+        
+        if not self._terminated:
+
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.set_timer_interval(dt)
+
+    def nightshift(self):
+
+        if not self._terminated:
+
+            for i in range(len(self.rt_plotters)):
+
+                self.rt_plotters[i].rt_plot_widget.nightshift()
+    
+    def dayshift(self):
+
+        for i in range(len(self.rt_plotters)):
+
+            self.rt_plotters[i].rt_plot_widget.dayshift()
+
+    def terminate(self):
+        
+        for i in range(0, self.cluster_size):
+
+            self.contact_states[i].terminate()
+        
+        self._terminated = True
