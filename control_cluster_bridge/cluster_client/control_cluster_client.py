@@ -137,7 +137,9 @@ class ControlClusterClient(ABC):
 
         self.robot_states.start()
 
-        self.contact_states.start()
+        if self.contact_states is not None:
+
+            self.contact_states.start()
 
         self.trigger_flags.start()
         self.trigger_flags.reset_bool(False)
@@ -178,17 +180,15 @@ class ControlClusterClient(ABC):
                                             device=self._device, 
                                             dtype=self.torch_dtype) # from robot to controllers
 
-        # contact states
-
-        self.contact_states = RobotClusterContactState(n_dofs=self.n_dofs, 
-                                    cluster_size=self.cluster_size,
-                                    n_contacts=self.n_contact_sensors, 
-                                    contact_names=self.contact_linknames, 
-                                    namespace=self.namespace,
-                                    backend=self._backend, 
-                                    device=self._device, 
-                                    dtype=self.torch_dtype, 
-                                    verbose=self._verbose)
+        if not self.n_contact_sensors < 0:
+            self.contact_states = RobotClusterContactState(cluster_size=self.cluster_size,
+                                        n_contacts=self.n_contact_sensors, 
+                                        contact_names=self.contact_linknames, 
+                                        namespace=self.namespace,
+                                        backend=self._backend, 
+                                        device=self._device, 
+                                        dtype=self.torch_dtype, 
+                                        verbose=self._verbose)
                                             
         self.handshake_manager = HanshakeDataCntrlClient(n_jnts=self.n_dofs, 
                                                     namespace=self.namespace) # handles handshake process
@@ -370,8 +370,11 @@ class ControlClusterClient(ABC):
                 start_time = time.perf_counter() # we profile the whole solution pipeline
             
             self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
-            self.contact_states.synch() # updates shared tensor on CPu with contact data from the simulator
-            # (possibly on GPU)
+
+            if self.contact_states is not None:
+
+                self.contact_states.synch() # updates shared tensor on CPu with contact data from the simulator
+                # (possibly on GPU)
 
             if self.controllers_active:
                 

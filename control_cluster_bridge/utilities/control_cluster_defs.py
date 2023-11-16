@@ -87,7 +87,6 @@ class RobotClusterContactState:
             return self.net_contact_forces[index]
         
     def __init__(self, 
-                n_dofs: int, 
                 cluster_size: int,
                 n_contacts: int, 
                 contact_names: List[str] = None,
@@ -110,7 +109,6 @@ class RobotClusterContactState:
             self.device = torch.device("cpu")
 
         self.cluster_size = cluster_size
-        self.n_dofs = n_dofs
         self.n_contacts = n_contacts
         self.contact_names = contact_names
 
