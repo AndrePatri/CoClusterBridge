@@ -361,6 +361,8 @@ class ControlClusterClient(ABC):
                 start_time = time.perf_counter() # we profile the whole solution pipeline
             
             self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
+            self.contact_states.synch() # updates shared tensor on CPu with contact data from the simulator
+            # (possibly on GPU)
 
             if self.controllers_active:
                 

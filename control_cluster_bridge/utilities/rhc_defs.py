@@ -19,10 +19,10 @@ import torch
 
 from typing import TypeVar, List
 
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedStringArray
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size
 from control_cluster_bridge.utilities.defs import states_name, cmds_name
-from control_cluster_bridge.utilities.defs import contact_state_size, contacts_names
+from control_cluster_bridge.utilities.defs import contacts_info_name,contacts_names
 from control_cluster_bridge.utilities.defs import aggregate_refs_size, task_refs_name
 from control_cluster_bridge.utilities.defs import Journal
 
@@ -38,6 +38,8 @@ class ContactState:
                 mem_manager: SharedMemClient, 
                 prev_index: int = 0):
             
+            self.journal = Journal()
+            
             self.prev_index = prev_index
             self.last_index = -1 
 
@@ -47,10 +49,6 @@ class ContactState:
             self.net_contact_forces = [None] * self.n_contacts 
 
             self._terminated = False
-
-            self.q_remapping = None
-            if q_remapping is not None:
-                self.q_remapping = torch.tensor(q_remapping)
             
             self.offset = self.prev_index
 
@@ -102,7 +100,6 @@ class ContactState:
             return self.net_contact_forces[index]
 
     def __init__(self, 
-                n_dofs: int, 
                 index: int,
                 dtype = torch.float32,
                 namespace = "", 
@@ -117,8 +114,6 @@ class ContactState:
         self.device = torch.device('cpu') # born to live on CPU
 
         self._terminated = False
-
-        self.n_contacts = n_contacts
 
         # contact names
         self.contact_names_shared = SharedStringArray(length=-1, 

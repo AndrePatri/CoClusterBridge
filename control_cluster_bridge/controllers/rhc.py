@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 
 import time 
 
-from control_cluster_bridge.utilities.rhc_defs import RobotCmds, RobotState
+from control_cluster_bridge.utilities.rhc_defs import RobotCmds, RobotState, ContactState
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient
@@ -75,6 +75,7 @@ class RHController(ABC):
         
         # shared mem
         self.robot_state = None 
+        self.contact_state = None 
         self.trigger_flag = None
         self.reset_flag = None
         self.controller_fail_flag = None
@@ -128,6 +129,10 @@ class RHController(ABC):
         if self.robot_state is not None:
             
             self.robot_state.terminate()
+        
+        if self.contact_state is not None:
+
+            self.contact_state.terminate()
 
     def _init(self):
 
@@ -169,7 +174,7 @@ class RHController(ABC):
                                     q_remapping=self._quat_remap, 
                                     namespace=self.namespace,
                                     verbose = self._verbose) 
-
+        
         self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
                                 index=self.controller_index,
                                 add_info_size=2, 
@@ -178,6 +183,11 @@ class RHController(ABC):
                                 jnt_remapping=self._to_client,
                                 verbose=self._verbose) 
 
+        self.contact_state = ContactState(index=self.controller_index,
+                                    dtype=self.array_dtype,
+                                    namespace=self.namespace, 
+                                    verbose=self._verbose) 
+        
         self._states_initialized = True
     
     def set_cmds_to_homing(self):

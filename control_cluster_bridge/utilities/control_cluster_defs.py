@@ -38,12 +38,16 @@ class RobotClusterContactState:
         def __init__(self, 
             cluster_aggregate: torch.Tensor,
             n_contacts: int,
+            contact_names: List[str],
             prev_index: int = 0):
+            
+            self.journal = Journal()
             
             self.prev_index = prev_index
             self.last_index = -1
 
             self.n_contacts = n_contacts
+            self.contact_names = contact_names
 
             self.cluster_size = cluster_aggregate.shape[0]
         
@@ -51,13 +55,12 @@ class RobotClusterContactState:
 
             self.offset = self.prev_index
 
-            self.assign_views(cluster_aggregate, n_contacts)
+            self.assign_views(cluster_aggregate)
 
             self.last_index = self.offset
 
         def assign_views(self, 
-            cluster_aggregate: torch.Tensor,
-            n_contacts: int):
+            cluster_aggregate: torch.Tensor):
             
             for i in range(0, self.n_contacts):
 
@@ -66,6 +69,23 @@ class RobotClusterContactState:
             
                 self.offset = self.offset + 3
 
+        def get(self, 
+                contact_name: str):
+            
+            index = -1
+            try:
+            
+                index = self.contact_names.index(contact_name)
+        
+            except:
+                
+                exception = f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
+                    f"could not find contact link {contact_name} in contact list {' '.join(self.contact_names)}." 
+            
+                raise Exception(exception)
+            
+            return self.net_contact_forces[index]
+        
     def __init__(self, 
                 n_dofs: int, 
                 cluster_size: int,
@@ -128,6 +148,7 @@ class RobotClusterContactState:
         # views of cluster_aggregate
         self.contact_state = self.ContactStates(self.cluster_aggregate, 
                                     self.n_contacts, 
+                                    self.contact_names,
                                     prev_index=0)
 
         # this creates a shared memory block of the right size for the state
@@ -167,7 +188,7 @@ class RobotClusterContactState:
 
             self.shared_memman.terminate()
             
-            self.jnt_names_client.terminate()
+            self.contact_names_shared.terminate()
 
     def __del__(self):
         
