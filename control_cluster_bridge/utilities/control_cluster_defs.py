@@ -161,7 +161,7 @@ class RobotClusterContactState:
     
     def start(self):
         
-        self.contact_names_shared.start()
+        self.contact_names_shared.start(init = self.contact_names)
 
         self.shared_memman.start() # will actually initialize the server
 
