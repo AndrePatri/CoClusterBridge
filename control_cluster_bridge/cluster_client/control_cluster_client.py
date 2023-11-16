@@ -232,9 +232,9 @@ class ControlClusterClient(ABC):
     def _wait_for_solution(self):
 
         solved = False
-            
+    
         while not self.trigger_flags.none(): 
-
+            
             if (not self._terminate) and \
                 (self.trigger_flags.get_clients_count() == self.cluster_size):
                 
@@ -332,12 +332,21 @@ class ControlClusterClient(ABC):
         self.controllers_active = self.launch_controllers.all()
 
         if not handshake_done or (self.trigger_flags.get_clients_count() != self.cluster_size):
-
+            
             if self._verbose: 
 
                 print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": waiting connection to ControlCluster server")
 
+        if self.trigger_flags.get_clients_count() > self.cluster_size:
+            
+            exception = f"[{self.__class__.__name__}]"  + f"[{self.journal.exception}]" + \
+                        ": more than cluster size ({self.cluster_size}) clients registered." + \
+                        ": it's very likely a memory leak on the shared memory layer occurred." + \
+                        " You might need to reboot the system."
+
+            raise Exception(exception)
+            
         if self._is_first_control_step:
                 
             self._is_first_control_step = False
@@ -387,7 +396,7 @@ class ControlClusterClient(ABC):
             if self._debug:
 
                 self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
-            
+                
                 self.shared_cluster_info.update(solve_time=self.solution_time, 
                                             controllers_up = self.controllers_active) # we update the shared info
 
