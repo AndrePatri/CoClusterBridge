@@ -341,9 +341,11 @@ class ControlClusterClient(ABC):
         if self.trigger_flags.get_clients_count() > self.cluster_size:
             
             exception = f"[{self.__class__.__name__}]"  + f"[{self.journal.exception}]" + \
-                        ": more than cluster size ({self.cluster_size}) clients registered." + \
-                        ": it's very likely a memory leak on the shared memory layer occurred." + \
+                        f": more than cluster size ({self.cluster_size}) clients registered." + \
+                        ". It's very likely a memory leak on the shared memory layer occurred." + \
                         " You might need to reboot the system."
+
+            self.close()
 
             raise Exception(exception)
             
@@ -373,7 +375,7 @@ class ControlClusterClient(ABC):
 
             if self.contact_states is not None:
 
-                self.contact_states.synch() # updates shared tensor on CPu with contact data from the simulator
+                self.contact_states.synch() # updates shared tensor on CPU with contact data from the simulator
                 # (possibly on GPU)
 
             if self.controllers_active:

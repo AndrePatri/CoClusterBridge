@@ -29,9 +29,7 @@ from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr, SharedStringArray
 from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
-from control_cluster_bridge.utilities.defs import cluster_size_name, n_contacts_name
-from control_cluster_bridge.utilities.defs import jnt_names_client_name, jnt_number_client_name
-from control_cluster_bridge.utilities.defs import additional_data_name
+from control_cluster_bridge.utilities.defs import cluster_size_name
 from control_cluster_bridge.utilities.defs import env_selector_name
 from control_cluster_bridge.utilities.sysutils import PathsGetter
 from control_cluster_bridge.utilities.defs import Journal
@@ -153,10 +151,7 @@ class RtClusterDebugger(QMainWindow):
 
         # shared mem
         self.cluster_size_clnt = None
-        self.n_contacts_clnt = None
-        self.jnt_number_clnt = None
-        self.jnt_names_clnt = None
-        self.add_data_length_clnt = None
+
         self.launch_controllers = None
         self.shared_sim_info = None
         self.add_sim_data = add_sim_data
@@ -198,18 +193,6 @@ class RtClusterDebugger(QMainWindow):
 
         if self.cluster_size_clnt is not None:
             self.cluster_size_clnt.terminate()
-
-        if self.n_contacts_clnt is not None:
-            self.n_contacts_clnt.terminate()
-
-        if self.jnt_number_clnt is not None:
-            self.jnt_number_clnt.terminate()
-        
-        if self.jnt_names_clnt is not None:
-            self.jnt_names_clnt.terminate()
-        
-        if self.add_data_length_clnt is not None:
-            self.add_data_length_clnt.terminate()
         
         if self.launch_controllers is not None:
             self.launch_controllers.terminate()
@@ -399,31 +382,6 @@ class RtClusterDebugger(QMainWindow):
                                     wait_amount=wait_amount, 
                                     verbose=self.verbose)
         self.cluster_size_clnt.attach()
-        self.n_contacts_clnt = SharedMemClient(name=n_contacts_name(), 
-                                    namespace=self.namespace, 
-                                    dtype=torch.int64, 
-                                    wait_amount=wait_amount, 
-                                    verbose=self.verbose)
-        self.n_contacts_clnt.attach()
-        self.jnt_number_clnt = SharedMemClient(name=jnt_number_client_name(), 
-                                        namespace=self.namespace, 
-                                        dtype=torch.int64, 
-                                        wait_amount=wait_amount, 
-                                        verbose=self.verbose)
-        self.jnt_number_clnt.attach()
-        self.jnt_names_clnt = SharedStringArray(length=self.jnt_number_clnt.tensor_view[0, 0].item(), 
-                                    name=jnt_names_client_name(), 
-                                    namespace=self.namespace, 
-                                    is_server=False, 
-                                    wait_amount=wait_amount, 
-                                    verbose=self.verbose)
-        self.jnt_names_clnt.start()
-        self.add_data_length_clnt = SharedMemClient(name=additional_data_name(), 
-                                    namespace=self.namespace, 
-                                    dtype=torch.int64, 
-                                    wait_amount=wait_amount, 
-                                    verbose=self.verbose)
-        self.add_data_length_clnt.attach()
 
         self.launch_controllers = SharedMemClient(name=launch_controllers_flagname(), 
                                 namespace=self.namespace, 
@@ -452,11 +410,7 @@ class RtClusterDebugger(QMainWindow):
             self.shared_sim_info.start()
 
         self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
-        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
-        self.jnt_names = self.jnt_names_clnt.read()
-        self.jnt_number = self.jnt_number_clnt.tensor_view[0, 0].item()
-        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
-    
+            
     def _spawn_shared_data_tabs(self, 
                     label: str):
         
@@ -469,8 +423,6 @@ class RtClusterDebugger(QMainWindow):
                     self.shared_data_window[0] = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
                                         update_plot_dt=self.plot_update_dt,
                                         window_duration=self.window_length, 
-                                        cluster_size=self.cluster_size,
-                                        n_contacts=self.n_contacts,
                                         window_buffer_factor=self.window_buffer_factor, 
                                         namespace=self.namespace,
                                         parent=None, 
@@ -509,10 +461,6 @@ class RtClusterDebugger(QMainWindow):
                     self.shared_data_window[1] = RhcCmdsWindow(update_data_dt=self.data_update_dt, 
                                     update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
-                                    cluster_size=self.cluster_size,
-                                    add_data_length=self.add_data_length,
-                                    jnt_names=self.jnt_names, 
-                                    jnt_number=self.jnt_number,
                                     window_buffer_factor=self.window_buffer_factor, 
                                     namespace=self.namespace,
                                     parent=None, 
@@ -551,9 +499,6 @@ class RtClusterDebugger(QMainWindow):
                     self.shared_data_window[2] = RhcStateWindow(update_data_dt=self.data_update_dt, 
                                     update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
-                                    cluster_size=self.cluster_size,
-                                    jnt_names=self.jnt_names, 
-                                    jnt_number=self.jnt_number,
                                     window_buffer_factor=self.window_buffer_factor, 
                                     namespace=self.namespace,
                                     parent=None, 
@@ -592,7 +537,6 @@ class RtClusterDebugger(QMainWindow):
                     self.shared_data_window[3] = RhcContactStatesWindow(update_data_dt=self.data_update_dt, 
                                     update_plot_dt=self.plot_update_dt,
                                     window_duration=self.window_length, 
-                                    cluster_size=self.cluster_size,
                                     window_buffer_factor=self.window_buffer_factor, 
                                     namespace=self.namespace,
                                     parent=None, 

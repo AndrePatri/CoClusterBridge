@@ -20,10 +20,12 @@ from abc import ABC
 from control_cluster_bridge.controllers.rhc import RHChild
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
 from control_cluster_bridge.utilities.defs import Journal
+from control_cluster_bridge.utilities.cpu_utils import get_isolated_cores
 
 from typing import List
 
 import multiprocess as mp
+import os
 
 from typing import TypeVar
 
@@ -34,10 +36,15 @@ class ControlClusterSrvr(ABC):
     def __init__(self, 
             namespace = "",
             processes_basename: str = "controller", 
+            use_isolated_cores = False,
             verbose: bool = False):
 
         # ciao :D
         #        CR 
+
+        self.use_isolated_cores = use_isolated_cores # will spawn each controller
+        # in a isolated core, if they fit
+        self.isolated_cores = []
 
         self.namespace = namespace
         
@@ -88,17 +95,47 @@ class ControlClusterSrvr(ABC):
 
         if self._controllers_count == self.cluster_size:
             
+            if self.use_isolated_cores:
+
+                self.isolated_cores = get_isolated_cores()[1] # available isolated
+                # cores -> if possible we spawn a controller for each isolated 
+                # core
+                
+            if len(self.isolated_cores) < self.cluster_size:
+
+                self.use_isolated_cores = False # if we can't fit the controllers in 
+                # the available cores, we don't set the affinity of the processes and
+                # notify the user
+
+                warning = f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + \
+                    ": Not enough isolated cores available to distribute the controllers " + \
+                    f"on them. N. available cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}."
+                
+                print(warning)
+
             for i in range(0, self.cluster_size):
 
                 process = mp.Process(target=self._controllers[i].solve, 
                                     name = self.processes_basename + str(i))
-
+                
                 self._processes.append(process)
-
+                
             # we start the processes
+            i = 0
             for process in self._processes:
 
                 process.start()
+
+                if self.use_isolated_cores:
+
+                    os.sched_setaffinity(process.pid, {self.isolated_cores[i]})
+
+                    info = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
+                        f": setting affinity ID {self.isolated_cores[i]} for controller n.{i}." 
+                    
+                    print(info)
+                
+                i = i + 1
 
             self._is_cluster_ready = True
 

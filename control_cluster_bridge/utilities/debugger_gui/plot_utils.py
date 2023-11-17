@@ -31,6 +31,8 @@ from typing import List, Callable, Union
 from control_cluster_bridge.utilities.sysutils import PathsGetter
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState, ContactState
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr, SharedStringArray
+from control_cluster_bridge.utilities.defs import jnt_names_client_name, additional_data_name, n_contacts_name
 
 import os
 
@@ -927,8 +929,6 @@ class RhcTaskRefWindow():
             update_data_dt: int,
             update_plot_dt: int,
             window_duration: int,
-            cluster_size: int, 
-            n_contacts: int,
             window_buffer_factor: int = 2,
             namespace = "",
             parent: QWidget = None, 
@@ -937,9 +937,6 @@ class RhcTaskRefWindow():
         self.namespace = namespace
 
         self.journal = Journal()
-
-        self.cluster_size = cluster_size
-        self.n_contacts = n_contacts
 
         self.verbose = verbose
 
@@ -956,6 +953,7 @@ class RhcTaskRefWindow():
 
         self.rhc_task_refs = []
 
+        self.cluster_size = 1
         self._init_shared_data()
 
         self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
@@ -1019,8 +1017,26 @@ class RhcTaskRefWindow():
 
     def _init_shared_data(self):
 
+        self.n_contacts_clnt = SharedMemClient(name=n_contacts_name(), 
+                                    namespace=self.namespace, 
+                                    dtype=torch.int64, 
+                                    verbose=self.verbose)
+        self.n_contacts_clnt.attach()
+        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
+
+        self.rhc_task_refs.append(RhcTaskRefs( 
+                n_contacts=self.n_contacts,
+                index=0,
+                q_remapping=None,
+                namespace=self.namespace,
+                dtype=torch.float32, 
+                verbose=self.verbose))
+        
+        self.cluster_size = \
+                    self.rhc_task_refs[0].shared_memman.n_rows
+        
         # view of rhc references
-        for i in range(0, self.cluster_size):
+        for i in range(1, self.cluster_size):
 
             self.rhc_task_refs.append(RhcTaskRefs( 
                 n_contacts=self.n_contacts,
@@ -1098,10 +1114,6 @@ class RhcCmdsWindow():
             update_data_dt: int,
             update_plot_dt: int,
             window_duration: int,
-            cluster_size: int, 
-            jnt_number: int, 
-            jnt_names: List[str], 
-            add_data_length: int,
             window_buffer_factor: int = 2,
             namespace = "",
             parent: QWidget = None, 
@@ -1110,11 +1122,6 @@ class RhcCmdsWindow():
         self.journal = Journal()
 
         self.namespace = namespace
-
-        self.cluster_size = cluster_size
-        self.jnt_names = jnt_names 
-        self.jnt_number = jnt_number
-        self.add_data_length = add_data_length
 
         self.verbose = verbose
 
@@ -1131,7 +1138,11 @@ class RhcCmdsWindow():
 
         self.rhc_cmds = []
 
+        self.cluster_size = 1
+
         self._init_shared_data()
+
+        self.jnt_number = self.rhc_cmds[0].n_dofs
 
         self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
                     update_data_dt=update_data_dt, 
@@ -1178,18 +1189,47 @@ class RhcCmdsWindow():
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
 
     def _init_shared_data(self):
+        
+        self.jnt_names_clnt = None
 
+        self.jnt_names_clnt = SharedStringArray(length=-1, 
+                                    name=jnt_names_client_name(), 
+                                    namespace=self.namespace, 
+                                    is_server=False, 
+                                    verbose=self.verbose)
+        self.jnt_names_clnt.start()
+
+        self.jnt_names = self.jnt_names_clnt.read()
+
+        self.add_data_length_clnt = SharedMemClient(name=additional_data_name(), 
+                                    namespace=self.namespace, 
+                                    dtype=torch.int64, 
+                                    verbose=self.verbose)
+        self.add_data_length_clnt.attach()
+        self.add_data_length = self.add_data_length_clnt.tensor_view[0, 0].item()
+
+        self.rhc_cmds.append(RobotCmds(n_dofs=len(self.jnt_names), 
+                                    index=0, 
+                                    jnt_remapping=None, # we see everything as seen on the simulator side 
+                                    add_info_size=self.add_data_length, 
+                                    dtype=torch.float32, 
+                                    namespace=self.namespace,
+                                    verbose=self.verbose))
+        
+        self.cluster_size = \
+                    self.rhc_cmds[0].shared_memman.n_rows
+        
         # view of rhc references
-        for i in range(0, self.cluster_size):
+        for i in range(1, self.cluster_size):
 
-            self.rhc_cmds.append(RobotCmds(n_dofs=self.jnt_number, 
+            self.rhc_cmds.append(RobotCmds(n_dofs=len(self.jnt_names), 
                                     index=i, 
                                     jnt_remapping=None, # we see everything as seen on the simulator side 
                                     add_info_size=self.add_data_length, 
                                     dtype=torch.float32, 
                                     namespace=self.namespace,
                                     verbose=self.verbose))
-
+                
     def update(self):
         
         if not self._terminated:
@@ -1245,6 +1285,10 @@ class RhcCmdsWindow():
 
     def terminate(self):
 
+        if self.jnt_names_clnt is not None:
+
+            self.jnt_names_clnt.terminate()
+
         for i in range(0, self.cluster_size):
 
             self.rhc_cmds[i].terminate()
@@ -1257,9 +1301,6 @@ class RhcStateWindow():
             update_data_dt: int,
             update_plot_dt: int,
             window_duration: int,
-            cluster_size: int, 
-            jnt_number: int, 
-            jnt_names: List[str], 
             window_buffer_factor: int = 2,
             namespace = "",
             parent: QWidget = None, 
@@ -1268,10 +1309,6 @@ class RhcStateWindow():
         self.journal = Journal()
 
         self.namespace = namespace
-
-        self.cluster_size = cluster_size
-        self.jnt_names = jnt_names 
-        self.jnt_number = jnt_number
 
         self.verbose = verbose
 
@@ -1288,7 +1325,11 @@ class RhcStateWindow():
 
         self.rhc_states = []
 
+        self.cluster_size = 1
+
         self._init_shared_data()
+
+        self.jnt_number = self.rhc_states[0].jnt_state.n_dofs
 
         self.rt_plotters.append(RtPlotWindow(n_data=self.rhc_states[0].root_state.p.shape[1], 
                     update_data_dt=update_data_dt, 
@@ -1360,11 +1401,31 @@ class RhcStateWindow():
         self.grid.addFrame(self.rt_plotters[5].base_frame, 1, 2)
 
     def _init_shared_data(self):
+        
+        self.jnt_names_clnt = None
+
+        self.jnt_names_clnt = SharedStringArray(length=-1, 
+                                    name=jnt_names_client_name(), 
+                                    namespace=self.namespace, 
+                                    is_server=False, 
+                                    verbose=self.verbose)
+        self.jnt_names_clnt.start()
+
+        self.jnt_names = self.jnt_names_clnt.read()
+
+        self.rhc_states.append(RobotState(n_dofs=len(self.jnt_names), 
+                                    index=0, 
+                                    jnt_remapping=None, 
+                                    q_remapping=None, 
+                                    namespace=self.namespace,
+                                    dtype=torch.float32, 
+                                    verbose=self.verbose))
+        self.cluster_size = self.rhc_states[0].shared_memman.n_rows
 
         # view of rhc references
-        for i in range(0, self.cluster_size):
+        for i in range(1, self.cluster_size):
 
-            self.rhc_states.append(RobotState(n_dofs=self.jnt_number, 
+            self.rhc_states.append(RobotState(n_dofs=len(self.jnt_names), 
                                     index=i, 
                                     jnt_remapping=None, 
                                     q_remapping=None, 
@@ -1442,7 +1503,6 @@ class RhcContactStatesWindow():
             update_data_dt: int,
             update_plot_dt: int,
             window_duration: int,
-            cluster_size: int, 
             window_buffer_factor: int = 2,
             namespace = "",
             parent: QWidget = None, 
@@ -1451,8 +1511,6 @@ class RhcContactStatesWindow():
         self.journal = Journal()
 
         self.namespace = namespace
-
-        self.cluster_size = cluster_size
 
         self.verbose = verbose
 
@@ -1463,6 +1521,8 @@ class RhcContactStatesWindow():
         self.rt_plotters = []
 
         self.contact_states = []
+
+        self.cluster_size = 1
 
         self._init_shared_data()
 
@@ -1516,15 +1576,21 @@ class RhcContactStatesWindow():
                     counter = counter + 1
 
     def _init_shared_data(self):
+        
+        self.contact_states.append(ContactState(index=0, 
+                                    namespace=self.namespace,
+                                    dtype=torch.float32, 
+                                    verbose=self.verbose))
+        self.cluster_size = self.contact_states[0].shared_memman.n_rows
 
         # view of rhc references
-        for i in range(0, self.cluster_size):
+        for i in range(1, self.cluster_size):
 
             self.contact_states.append(ContactState(index=i, 
                                     namespace=self.namespace,
                                     dtype=torch.float32, 
                                     verbose=self.verbose))
-
+                
     def update(self):
 
         if not self._terminated:

@@ -252,7 +252,6 @@ class RHController(ABC):
                         start = time.perf_counter()
 
                     # latest state is employed
-
                     failed = self._solve() # solve actual TO
 
                     if (failed):
@@ -280,7 +279,7 @@ class RHController(ABC):
                     
                     # we avoid busy waiting and sleep for a small amount of time
 
-                    self.perf_timer.clock_sleep(1000) # nanoseconds (actually resolution is much
+                    self.perf_timer.clock_sleep(1000000) # nanoseconds (actually resolution is much
                     # poorer)
 
             except KeyboardInterrupt:
