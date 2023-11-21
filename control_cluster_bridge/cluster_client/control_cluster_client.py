@@ -118,6 +118,7 @@ class ControlClusterClient(ABC):
         self.contact_linknames = contact_linknames
 
         self.solution_time = -1.0
+        self.start_time = -1.0
         self.solution_counter = 0
         self.n_sim_step_per_cntrl = -1
 
@@ -325,7 +326,7 @@ class ControlClusterClient(ABC):
     
     def solve(self):
 
-        # solve all the TO problems in the control cluster
+        # various checks do detect invalid states and cluster state transitions
 
         handshake_done = self.handshake_manager.handshake_done
 
@@ -365,22 +366,35 @@ class ControlClusterClient(ABC):
 
             self.is_cluster_ready = True
 
+        # solve all the TO problems in the control cluster
+
+        if self._debug and self.is_cluster_ready:
+            
+            # we profile the whole solution pipeline
+            # [
+            # robot and contact state update/synchronization, 
+            # solution triggering, 
+            # commands reading/synchronization, 
+            # ]
+            self.start_time = time.perf_counter() 
+
+        if self.robot_states is not None:
+            
+            # updates shared tensor on CPU with data from states on GPU
+            self.robot_states.synch() 
+
+        if self.contact_states is not None:
+            
+            # updates shared tensor on CPU with contact data from the simulator
+            # (possibly on GPU)
+            self.contact_states.synch() 
+
         if self.is_cluster_ready:
             
-            if self._debug:
-
-                start_time = time.perf_counter() # we profile the whole solution pipeline
-            
-            self.robot_states.synch() # updates shared tensor on CPU with data from states on GPU
-
-            if self.contact_states is not None:
-
-                self.contact_states.synch() # updates shared tensor on CPU with contact data from the simulator
-                # (possibly on GPU)
-
             if self.controllers_active:
                 
                 self._trigger_solution() # triggers solution of all controllers in the cluster 
+                # using latest state
 
                 # we wait for all controllers to finish      
                 solved = self._wait_for_solution() # this is blocking
@@ -398,12 +412,12 @@ class ControlClusterClient(ABC):
 
             self.solution_counter += 1
 
-            if self._debug:
+        if self._debug and self.cluster_ready:
 
-                self.solution_time = time.perf_counter() - start_time # we profile the whole solution pipeline
-                
-                self.shared_cluster_info.update(solve_time=self.solution_time, 
-                                            controllers_up = self.controllers_active) # we update the shared info
+            self.solution_time = time.perf_counter() - self.start_time # we profile the whole solution pipeline
+            
+            self.shared_cluster_info.update(solve_time=self.solution_time, 
+                                        controllers_up = self.controllers_active) # we update the shared info
 
     def close(self):
         
