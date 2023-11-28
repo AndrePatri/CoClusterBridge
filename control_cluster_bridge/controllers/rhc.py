@@ -340,6 +340,10 @@ class RHController(ABC):
 
         self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
 
+    def get_server_side_jnt_names(self):
+
+        return self._server_side_jnt_names
+        
     def _assign_server_side_jnt_names(self, 
                         jnt_names: List[str]):
 

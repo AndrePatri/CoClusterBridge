@@ -157,6 +157,12 @@ def jnt_names_client_name():
 
     return name 
 
+def jnt_names_rhc_name():
+
+    name = "JntNamesRHC"
+
+    return name 
+
 def jnt_number_client_name():
 
     name = "JntNumberClient"

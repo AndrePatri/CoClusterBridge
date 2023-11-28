@@ -22,6 +22,9 @@ from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCn
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.cpu_utils import get_isolated_cores
 
+from control_cluster_bridge.utilities.defs import jnt_names_rhc_name
+from control_cluster_bridge.utilities.shared_mem import SharedStringArray
+
 from typing import List
 
 import multiprocess as mp
@@ -73,6 +76,8 @@ class ControlClusterSrvr(ABC):
         self._controllers_count = 0
 
         self.solution_time = -1.0
+        
+        self.jnt_names_rhc = None # publishes joint names from controller to shared mem
     
     def _close_processes(self):
     
@@ -168,7 +173,15 @@ class ControlClusterSrvr(ABC):
             self._controllers[i].set_cmds_to_homing() # safe cmds
 
             self._controllers[i].init_rhc_task_cmds() # initializes rhc commands
-    
+
+        # publishing joint names on shared memory for external use
+        self.jnt_names_rhc = SharedStringArray(length=len(self._controllers[0].get_server_side_jnt_names()), 
+                                name=jnt_names_rhc_name(), 
+                                namespace=self.namespace,
+                                is_server=True)
+
+        self.jnt_names_rhc.start(init = self._controllers[0].get_server_side_jnt_names())
+
         print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": final initialization steps completed.")
 
     def add_controller(self, controller: RHChild):
@@ -198,5 +211,9 @@ class ControlClusterSrvr(ABC):
     def terminate(self):
         
         print(f"[{self.__class__.__name__}]" + f"[{self.journal.info}]" + ": terminating cluster")
+
+        if self.jnt_names_rhc is not None:
+
+            self.jnt_names_rhc.terminate()
 
         self._close_processes() # we also terminate all the child processes
