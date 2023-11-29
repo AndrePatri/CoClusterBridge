@@ -165,15 +165,15 @@ class RHController(ABC):
         self.rhc_task_refs = self._init_rhc_task_cmds()
         
     def init_states(self):
-        
+
         # to be called after n_dofs is known
         self.robot_state = RobotState(n_dofs=self.n_dofs, 
-                                    index=self.controller_index,
-                                    dtype=self.array_dtype,
-                                    jnt_remapping=self._to_server, 
-                                    q_remapping=self._quat_remap, 
-                                    namespace=self.namespace,
-                                    verbose = self._verbose) 
+                                index=self.controller_index,
+                                dtype=self.array_dtype,
+                                jnt_remapping=self._to_server, # remapping from client (i.e. simulator ) jnt ordering to server (i.e. control cluster)
+                                q_remapping=self._quat_remap, 
+                                namespace=self.namespace,
+                                verbose = self._verbose) 
         
         self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
                                 index=self.controller_index,

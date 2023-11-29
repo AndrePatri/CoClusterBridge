@@ -259,7 +259,7 @@ class RobotState:
         def get_q(self):
             
             if self.q_remapping is not None:
-
+                
                 return self.q[:, self.q_remapping]
             
             else:
@@ -300,7 +300,7 @@ class RobotState:
             self.last_index = self.offset
 
             self.jnt_remapping = None
-            if self.jnt_remapping is not None: 
+            if jnt_remapping is not None: 
                 self.jnt_remapping = torch.tensor(jnt_remapping)
 
         def __del__(self):
@@ -339,7 +339,7 @@ class RobotState:
         def get_q(self):
             
             if self.jnt_remapping is not None:
-
+            
                 return self.q[:, self.jnt_remapping]
             
             else:
