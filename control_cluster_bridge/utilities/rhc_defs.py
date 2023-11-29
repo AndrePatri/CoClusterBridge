@@ -1065,7 +1065,7 @@ class RhcTaskRefs:
                 self.com_pos = mem_manager.create_partial_tensor_view(index=self.offset, 
                                         length=3)
 
-                self.com_pos[:, 2] = 0.4
+                self.com_pos[:, 2] = 0.5
 
                 self.offset = self.offset + 3
 
