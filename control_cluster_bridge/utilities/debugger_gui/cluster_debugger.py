@@ -193,7 +193,7 @@ class RtClusterDebugger(QMainWindow):
 
         if self.cluster_size_clnt is not None:
             self.cluster_size_clnt.terminate()
-        
+
         if self.launch_controllers is not None:
             self.launch_controllers.terminate()
                 
