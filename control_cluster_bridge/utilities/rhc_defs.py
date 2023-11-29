@@ -350,7 +350,7 @@ class RobotState:
             
             if self.jnt_remapping is not None:
 
-                return self.v[self.jnt_remapping]
+                return self.v[:, self.jnt_remapping]
 
             else:
 
