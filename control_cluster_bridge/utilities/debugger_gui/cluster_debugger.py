@@ -17,7 +17,7 @@
 # 
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QSlider
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame
+from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame, QScrollArea
 from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
 from PyQt5.QtGui import QIcon, QPixmap
 
@@ -252,7 +252,7 @@ class RtClusterDebugger(QMainWindow):
         self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
         # self.splitter_layout.addWidget(self.settings_frame)
 
-        self.settings_label = QLabel("SETTINGS")
+        self.settings_label = QLabel("CONTROL PANEL")
         self.settings_frame_layout.addWidget(self.settings_label, 
                                     alignment=Qt.AlignCenter)
 
@@ -360,7 +360,13 @@ class RtClusterDebugger(QMainWindow):
 
         self.splitter.addWidget(self.tabs)
 
-        self.splitter.addWidget(self.settings_frame)
+        # Create a scroll area and set its widget to be the settings frame
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)  # Make the scroll area resizable
+        self.scroll_area.setWidget(self.settings_frame)  # Set the frame as the scroll area's widget
+        self.scroll_area.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
+
+        self.splitter.addWidget(self.scroll_area)
 
     def _init_data_thread(self):
 
