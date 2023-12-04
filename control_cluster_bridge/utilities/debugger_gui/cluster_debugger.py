@@ -16,17 +16,20 @@
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QSlider
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
 from PyQt5.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QSplitter, QFrame, QScrollArea
-from PyQt5.QtWidgets import QPushButton, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtWidgets import QSpacerItem, QSizePolicy
 
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import RhcTaskRefWindow, RhcCmdsWindow, RhcStateWindow, RhcContactStatesWindow
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcTaskRefWindow
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcCmdsWindow
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcStateWindow
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
+
 from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 from omni_robo_gym.utils.shared_sim_info import SharedSimInfo
 
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr, SharedStringArray
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr
 from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
 from control_cluster_bridge.utilities.defs import cluster_size_name
@@ -160,14 +163,10 @@ class RtClusterDebugger(QMainWindow):
         self.launch_keyboard_cmds = None
         self.env_index = None
 
-        # shared data
+        # base shared data (more can be added at runtime)
         self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState", "RhcContactStates"]
-        self._tabs_terminated = [True] * len(self.shared_data_tabs_name)
-        self.shared_data_window = [None] * len(self.shared_data_tabs_name)
-        self.shared_data_tabs_map = {}
-        for i in range(len(self.shared_data_tabs_name)):
-            self.shared_data_tabs_map[self.shared_data_tabs_name[i]] = \
-                None
+        self.shared_data_tabs_changeable = True # False after run() is called
+        self._update_data_tabs_stuff()
 
         super().__init__()
 
@@ -219,9 +218,21 @@ class RtClusterDebugger(QMainWindow):
         self._terminated = True
 
     def run(self):
+        
+        self.shared_data_tabs_changeable = False
 
         self.app.exec_()
 
+    def _update_data_tabs_stuff(self):
+
+        # to be called when shared_data_tabs_name changes (e.g. upon )
+        self._tabs_terminated = [True] * len(self.shared_data_tabs_name)
+        self.shared_data_window = [None] * len(self.shared_data_tabs_name)
+        self.shared_data_tabs_map = {}
+        for i in range(len(self.shared_data_tabs_name)):
+            self.shared_data_tabs_map[self.shared_data_tabs_name[i]] = \
+                None
+            
     def _init_ui(self):
 
         self.setGeometry(100, 100, 1000, 800)
