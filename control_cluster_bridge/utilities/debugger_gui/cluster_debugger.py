@@ -25,6 +25,9 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcStateWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
 
+from typing import List
+from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
+
 from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 from omni_robo_gym.utils.shared_sim_info import SharedSimInfo
 
@@ -127,6 +130,10 @@ class RtClusterDebugger(QMainWindow):
                 add_sim_data: bool = True, 
                 add_cluster_data: bool = True):
 
+        self.app = QApplication(sys.argv)
+
+        super().__init__()
+        
         self.journal = Journal()
 
         self.namespace = namespace
@@ -146,8 +153,6 @@ class RtClusterDebugger(QMainWindow):
 
         self.verbose = verbose
 
-        self.app = QApplication(sys.argv)
-    
         self.dark_mode_enabled = False
 
         self._paused = False
@@ -163,21 +168,41 @@ class RtClusterDebugger(QMainWindow):
         self.launch_keyboard_cmds = None
         self.env_index = None
 
-        # base shared data (more can be added at runtime)
-        self.shared_data_tabs_name = ["RhcTaskRefs", "RhcCmdRef", "RhcState", "RhcContactStates"]
-        self.shared_data_tabs_changeable = True # False after run() is called
-        self._update_data_tabs_stuff()
+        # base shared data (more can be added before calling the run())
+        self.shared_data_tabs_name = [] # init to empty list
+        self.shared_data_window = []
 
-        super().__init__()
+        rhc_task_ref = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
+                            update_plot_dt=self.plot_update_dt,
+                            window_duration=self.window_length, 
+                            window_buffer_factor=self.window_buffer_factor, 
+                            namespace=self.namespace,
+                            parent=None, 
+                            verbose = self.verbose)
+        rhc_cms = RhcCmdsWindow(update_data_dt=self.data_update_dt, 
+                            update_plot_dt=self.plot_update_dt,
+                            window_duration=self.window_length, 
+                            window_buffer_factor=self.window_buffer_factor, 
+                            namespace=self.namespace,
+                            parent=None, 
+                            verbose = self.verbose)
+        rhc_state = RhcStateWindow(update_data_dt=self.data_update_dt, 
+                            update_plot_dt=self.plot_update_dt,
+                            window_duration=self.window_length, 
+                            window_buffer_factor=self.window_buffer_factor, 
+                            namespace=self.namespace,
+                            parent=None, 
+                            verbose = self.verbose)
+        rhc_contact_state = RhcContactStatesWindow(update_data_dt=self.data_update_dt, 
+                                update_plot_dt=self.plot_update_dt,
+                                window_duration=self.window_length, 
+                                window_buffer_factor=self.window_buffer_factor, 
+                                namespace=self.namespace,
+                                parent=None, 
+                                verbose = self.verbose)
+        
+        self.base_spawnable_tabs = [rhc_task_ref, rhc_cms, rhc_state, rhc_contact_state]
 
-        self._init_add_shared_data()
-
-        self._init_ui()     
-
-        self._init_data_thread()
-
-        self.show()
-    
     def __del__(self):
         
         if not self._terminated:
@@ -219,20 +244,41 @@ class RtClusterDebugger(QMainWindow):
 
     def run(self):
         
-        self.shared_data_tabs_changeable = False
+        self._init_add_shared_data()
+
+        self._init_data_tab()
+        
+        self._init_ui()     
+
+        self._init_data_thread()
+
+        self.show()
 
         self.app.exec_()
 
-    def _update_data_tabs_stuff(self):
+    def add_spawnable_tab(self, 
+                tab_list: List[SharedDataWindowChild]):
+
+        for i in range(len(tab_list)):
+
+            self.shared_data_tabs_name.append(tab_list[i].name)
+
+            self.shared_data_window.append(tab_list[i])
+
+    def _init_data_tab(self):
+        
+        self.add_spawnable_tab(self.base_spawnable_tabs)
 
         # to be called when shared_data_tabs_name changes (e.g. upon )
         self._tabs_terminated = [True] * len(self.shared_data_tabs_name)
-        self.shared_data_window = [None] * len(self.shared_data_tabs_name)
         self.shared_data_tabs_map = {}
+        self.tabs_widgets = [None] * len(self.shared_data_tabs_name)
+        self.tabs_widgets_layout = [None] * len(self.shared_data_tabs_name)
+
         for i in range(len(self.shared_data_tabs_name)):
             self.shared_data_tabs_map[self.shared_data_tabs_name[i]] = \
                 None
-            
+
     def _init_ui(self):
 
         self.setGeometry(100, 100, 1000, 800)
@@ -431,157 +477,39 @@ class RtClusterDebugger(QMainWindow):
     def _spawn_shared_data_tabs(self, 
                     label: str):
         
-        if label == self.shared_data_tabs_name[0]:
+        for i in range(len(self.shared_data_tabs_name)):
+
+            if label == self.shared_data_tabs_name[i]:
                 
-                checked = self.data_spawner.buttons[0].isChecked()  # Get the new state of the button
+                checked = self.data_spawner.buttons[i].isChecked()  # Get the new state of the button
 
-                if checked and self._tabs_terminated[0]:
+                if checked and self._tabs_terminated[i]:
                     
-                    self.shared_data_window[0] = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
-                                        update_plot_dt=self.plot_update_dt,
-                                        window_duration=self.window_length, 
-                                        window_buffer_factor=self.window_buffer_factor, 
-                                        namespace=self.namespace,
-                                        parent=None, 
-                                        verbose = self.verbose)
+                    self.shared_data_window[i].run()
 
-                    self.tab_rhc_task_refs = QWidget()
-                    self.tab_rhc_task_refs_layout = QVBoxLayout()
-                    self.tab_rhc_task_refs.setLayout(self.tab_rhc_task_refs_layout)
+                    self.tabs_widgets[i] = QWidget()
+                    self.tabs_widgets_layout[i] = QVBoxLayout()
+                    self.tabs_widgets[i].setLayout(self.tabs_widgets_layout[i])
 
-                    self.shared_data_tabs_map[self.shared_data_tabs_name[0]] = self.tabs.count()
-                    self.tabs.addTab(self.tab_rhc_task_refs, 
-                        "RhcTaskRef")
+                    self.shared_data_tabs_map[self.shared_data_tabs_name[i]] = self.tabs.count()
+                    self.tabs.addTab(self.tabs_widgets[i], 
+                        self.shared_data_tabs_name[i])
                     
-                    self.tab_rhc_task_refs_layout.addWidget(self.shared_data_window[0].base_frame)
+                    self.tabs_widgets_layout[i].addWidget(self.shared_data_window[i].base_frame)
 
-                    # self.data_spawner.buttons[0].setStyleSheet("")  # Reset button style
+                    # self.data_spawner.buttons[i].setStyleSheet("")  # Reset button style
 
-                    self._tabs_terminated[0] = False
+                    self._tabs_terminated[i] = False
 
-                    self.data_spawner.buttons[0].setCheckable(False)
+                    self.data_spawner.buttons[i].setCheckable(False)
 
-                    self.data_spawner.buttons[0].setChecked(False)
+                    self.data_spawner.buttons[i].setChecked(False)
                     
                     self._update_dark_mode()
 
                 # if not checked:
 
-                #     self.data_spawner.buttons[0].setStyleSheet("color: darkgray")  # Change button style to dark gray
-        
-        if label == self.shared_data_tabs_name[1]:
-                
-                checked = self.data_spawner.buttons[1].isChecked()  # Get the new state of the button
-
-                if checked and self._tabs_terminated[1]:
-                    
-                    self.shared_data_window[1] = RhcCmdsWindow(update_data_dt=self.data_update_dt, 
-                                    update_plot_dt=self.plot_update_dt,
-                                    window_duration=self.window_length, 
-                                    window_buffer_factor=self.window_buffer_factor, 
-                                    namespace=self.namespace,
-                                    parent=None, 
-                                    verbose = self.verbose)
-                    
-                    self.tab_rhc_cmds = QWidget()
-                    self.tab_rhc_cmds_layout = QVBoxLayout()
-                    self.tab_rhc_cmds.setLayout(self.tab_rhc_cmds_layout)
-
-                    self.shared_data_tabs_map[self.shared_data_tabs_name[1]] = self.tabs.count()
-                    self.tabs.addTab(self.tab_rhc_cmds, 
-                        "RhcCmds")
-
-                    self.tab_rhc_cmds_layout.addWidget(self.shared_data_window[1].base_frame)
-
-                    # self.data_spawner.buttons[1].setStyleSheet("")  # Reset button style
-
-                    self._tabs_terminated[1] = False
-
-                    self.data_spawner.buttons[1].setCheckable(False)
-
-                    self.data_spawner.buttons[1].setChecked(False)
-
-                    self._update_dark_mode()
-
-                # if not checked:
-
-                #     self.data_spawner.buttons[1].setStyleSheet("color: darkgray")  # Change button style to dark gray
-        
-        if label == self.shared_data_tabs_name[2]:
-                
-                checked = self.data_spawner.buttons[2].isChecked()  # Get the new state of the button
-
-                if checked and self._tabs_terminated[2]:
-                    
-                    self.shared_data_window[2] = RhcStateWindow(update_data_dt=self.data_update_dt, 
-                                    update_plot_dt=self.plot_update_dt,
-                                    window_duration=self.window_length, 
-                                    window_buffer_factor=self.window_buffer_factor, 
-                                    namespace=self.namespace,
-                                    parent=None, 
-                                    verbose = self.verbose)
-
-                    self.tab_rhc_state = QWidget()
-                    self.tab_rhc_state_layout = QVBoxLayout()
-                    self.tab_rhc_state.setLayout(self.tab_rhc_state_layout)
-
-                    self.shared_data_tabs_map[self.shared_data_tabs_name[2]] = self.tabs.count()
-                    self.tabs.addTab(self.tab_rhc_state, 
-                                    "RhcState")
-                    
-                    self.tab_rhc_state_layout.addWidget(self.shared_data_window[2].base_frame)
-
-                    # self.data_spawner.buttons[2].setStyleSheet("")  # Reset button style
-
-                    self._tabs_terminated[2] = False
-                    
-                    self.data_spawner.buttons[2].setCheckable(False)
-
-                    self.data_spawner.buttons[2].setChecked(False)
-
-                    self._update_dark_mode()
-
-                # if not checked:
-
-                    # self.data_spawner.buttons[2].setStyleSheet("color: darkgray")  # Change button style to dark gray
-
-        if label == self.shared_data_tabs_name[3]:
-                
-                checked = self.data_spawner.buttons[3].isChecked()  # Get the new state of the button
-
-                if checked and self._tabs_terminated[3]:
-                    
-                    self.shared_data_window[3] = RhcContactStatesWindow(update_data_dt=self.data_update_dt, 
-                                    update_plot_dt=self.plot_update_dt,
-                                    window_duration=self.window_length, 
-                                    window_buffer_factor=self.window_buffer_factor, 
-                                    namespace=self.namespace,
-                                    parent=None, 
-                                    verbose = self.verbose)
-
-                    self.tab_contact_state = QWidget()
-                    self.tab_contact_state_layout = QVBoxLayout()
-                    self.tab_contact_state.setLayout(self.tab_contact_state_layout)
-
-                    self.shared_data_tabs_map[self.shared_data_tabs_name[3]] = self.tabs.count()
-                    self.tabs.addTab(self.tab_contact_state, 
-                                    "RhcContactStates")
-                    
-                    self.tab_contact_state_layout.addWidget(self.shared_data_window[3].base_frame)
-
-                    # self.data_spawner.buttons[3].setStyleSheet("")  # Reset button style
-
-                    self._tabs_terminated[3] = False
-                    
-                    self.data_spawner.buttons[3].setCheckable(False)
-
-                    self.data_spawner.buttons[3].setChecked(False)
-
-                    self._update_dark_mode()
-
-                # if not checked:
-
-                    # self.data_spawner.buttons[3].setStyleSheet("color: darkgray")  # Change button style to dark gray
+                #     self.data_spawner.buttons[i].setStyleSheet("color: darkgray")  # Change button style to dark gray
 
     def _pause_all(self):
         

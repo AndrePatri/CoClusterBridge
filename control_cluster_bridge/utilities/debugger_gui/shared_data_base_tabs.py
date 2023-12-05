@@ -1,6 +1,5 @@
 from PyQt5.QtWidgets import QWidget
 
-from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
@@ -12,8 +11,6 @@ import torch
 from control_cluster_bridge.utilities.defs import jnt_names_client_name
 from control_cluster_bridge.utilities.defs import additional_data_name
 from control_cluster_bridge.utilities.defs import n_contacts_name
-
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import GridFrameWidget
 
 class RhcTaskRefWindow(SharedDataWindow):
 
@@ -36,6 +33,7 @@ class RhcTaskRefWindow(SharedDataWindow):
             grid_n_rows = 2,
             grid_n_cols = 3,
             namespace = namespace,
+            name = "RhcTaskRefWindow",
             parent = parent, 
             verbose = verbose)
     
@@ -171,6 +169,7 @@ class RhcCmdsWindow(SharedDataWindow):
             grid_n_rows = 2,
             grid_n_cols = 3,
             namespace = namespace,
+            name = "RhcCmdsWindow",
             parent = parent, 
             verbose = verbose)
 
@@ -297,6 +296,7 @@ class RhcStateWindow(SharedDataWindow):
             grid_n_cols = 3,
             window_buffer_factor = window_buffer_factor,
             namespace = namespace,
+            name = "RhcStateWindow",
             parent = parent, 
             verbose = verbose)
 
@@ -444,6 +444,7 @@ class RhcContactStatesWindow(SharedDataWindow):
             grid_n_rows = 2,
             grid_n_cols = 3,
             namespace = namespace,
+            name = "RhcContactStatesWindow",
             parent = parent, 
             verbose = verbose)
 

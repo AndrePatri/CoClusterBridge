@@ -5,6 +5,8 @@ from control_cluster_bridge.utilities.debugger_gui.plot_utils import GridFrameWi
 
 from abc import abstractmethod
 
+from typing import TypeVar
+
 class SharedDataWindow():
 
     def __init__(self, 
@@ -15,6 +17,7 @@ class SharedDataWindow():
             grid_n_cols: int = -1,
             window_buffer_factor: int = 2,
             namespace = "",
+            name = "SharedDataWindow",
             parent: QWidget = None, 
             verbose = False):
 
@@ -22,6 +25,8 @@ class SharedDataWindow():
         self.grid_n_cols = grid_n_cols
 
         self.namespace = namespace
+
+        self.name = name
 
         self.parent = parent
 
@@ -39,12 +44,8 @@ class SharedDataWindow():
         self.cluster_idx = 0
 
         self.shared_data_clients = []
-
-        self._init_shared_data()
         
-        self._post_shared_init()
-
-        self._init_ui()
+        self.rt_plotters = []
         
     @abstractmethod
     def _initialize(self):
@@ -71,6 +72,14 @@ class SharedDataWindow():
 
         pass 
     
+    def run(self):
+
+        self._init_shared_data()
+        
+        self._post_shared_init()
+
+        self._init_ui()
+
     def _init_ui(self):
 
         self.grid = GridFrameWidget(self.grid_n_rows, self.grid_n_cols, 
@@ -129,8 +138,10 @@ class SharedDataWindow():
 
     def terminate(self):
 
-        for i in range(0, self.cluster_size):
+        for i in range(0, len(self.shared_data_clients)):
 
             self.shared_data_clients[i].terminate()
         
         self._terminated = True
+
+SharedDataWindowChild = TypeVar('SharedDataWindowChild', bound='SharedDataWindow')
