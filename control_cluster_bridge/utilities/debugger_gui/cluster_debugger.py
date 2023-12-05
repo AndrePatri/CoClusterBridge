@@ -773,7 +773,6 @@ class RtClusterDebugger(QMainWindow):
     def _terminate_tab(self, 
                     tab_idx: int):
         
-        print(self.shared_data_tabs_map)
         index = self.shared_data_tabs_name.index(
                             self._get_key_by_value(self.shared_data_tabs_map, \
                                         tab_idx))

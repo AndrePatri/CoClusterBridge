@@ -39,13 +39,7 @@ class SharedDataWindow():
 
         self.verbose = verbose
 
-        self._terminated = False
-
-        self.cluster_idx = 0
-
-        self.shared_data_clients = []
-        
-        self.rt_plotters = []
+        self._reset()
         
     @abstractmethod
     def _initialize(self):
@@ -73,6 +67,8 @@ class SharedDataWindow():
         pass 
     
     def run(self):
+        
+        self._reset()
 
         self._init_shared_data()
         
@@ -80,6 +76,16 @@ class SharedDataWindow():
 
         self._init_ui()
 
+    def _reset(self):
+
+        self._terminated = False
+
+        self.cluster_idx = 0
+
+        self.shared_data_clients = []
+        
+        self.rt_plotters = []
+        
     def _init_ui(self):
 
         self.grid = GridFrameWidget(self.grid_n_rows, self.grid_n_cols, 

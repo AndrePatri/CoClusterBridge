@@ -282,7 +282,7 @@ class ControlClusterClient(ABC):
                         control_index: int):
         
         # control_index the current simulation loop number (0-based)
-
+        
         return (control_index + 1) % self.n_sim_step_per_cntrl == 0
     
     def _finalize_init(self):

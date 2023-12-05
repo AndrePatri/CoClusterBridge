@@ -99,13 +99,14 @@ class RhcTaskRefWindow(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[4].base_frame, 1, 2)
 
     def _init_shared_data(self):
-
+        
         self.shared_data_clients.append(SharedMemClient(name=n_contacts_name(), 
                                     namespace=self.namespace, 
                                     dtype=torch.int64, 
                                     verbose=self.verbose))
         
         self.shared_data_clients[0].attach()
+
         self.n_contacts = self.shared_data_clients[0].tensor_view[0, 0].item()
 
         self.shared_data_clients.append(RhcTaskRefs( 
@@ -413,14 +414,14 @@ class RhcStateWindow(SharedDataWindow):
         if not self._terminated:
             
             # root state
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].root_state.p.numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].root_state.q.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].root_state.v.numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].root_state.omega.numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.p.numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.q.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.v.numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.omega.numpy())
 
             # joint state
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].jnt_state.q.numpy())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].jnt_state.v.numpy())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].jnt_state.q.numpy())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].jnt_state.v.numpy())
 
 class RhcContactStatesWindow(SharedDataWindow):
 
@@ -520,4 +521,4 @@ class RhcContactStatesWindow(SharedDataWindow):
                         
             for i in range(0, self.n_sensors):
 
-                self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].contact_state.get(self.contact_names[i]).numpy())
+                self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx].contact_state.get(self.contact_names[i]).numpy())
