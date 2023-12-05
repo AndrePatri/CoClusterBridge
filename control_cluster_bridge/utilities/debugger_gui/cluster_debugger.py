@@ -633,23 +633,25 @@ class RtClusterDebugger(QMainWindow):
         
         # here we can updated all the shared memory data with fresh one
 
-        # data tabs
-        for i in range(len(self.shared_data_tabs_name)):
+        if not self._terminated:
 
-            if not self._tabs_terminated[i] and \
-                self.shared_data_window[i] is not None:
+            # data tabs
+            for i in range(len(self.shared_data_tabs_name)):
 
-                self.shared_data_window[i].update()
+                if not self._tabs_terminated[i] and \
+                    self.shared_data_window[i] is not None:
 
-        # other data
+                    self.shared_data_window[i].update()
 
-        if self.add_sim_data:
-            
-            self.sim_info_widget.update(self.shared_sim_info.shared_sim_data.tensor_view.flatten().tolist())
+            # other data
 
-        if self.add_shared_cluster_info:
-            
-            self.cluster_info_widget.update(self.shared_cluster_info.shared_cluster_data.tensor_view.flatten().tolist())
+            if self.add_sim_data and (self.shared_sim_info is not None):
+                
+                self.sim_info_widget.update(self.shared_sim_info.shared_sim_data.tensor_view.flatten().tolist())
+
+            if self.add_shared_cluster_info and (self.shared_cluster_info is not None):
+                
+                self.cluster_info_widget.update(self.shared_cluster_info.shared_cluster_data.tensor_view.flatten().tolist())
 
     def _update_cluster_idx(self, 
                         idx: int):

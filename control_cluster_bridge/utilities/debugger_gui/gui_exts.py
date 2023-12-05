@@ -11,12 +11,19 @@ class SharedDataWindow():
             update_data_dt: int,
             update_plot_dt: int,
             window_duration: int,
+            grid_n_rows: int = -1,
+            grid_n_cols: int = -1,
             window_buffer_factor: int = 2,
             namespace = "",
             parent: QWidget = None, 
             verbose = False):
 
+        self.grid_n_rows = grid_n_rows
+        self.grid_n_cols = grid_n_cols
+
         self.namespace = namespace
+
+        self.parent = parent
 
         self.update_data_dt = update_data_dt
         self.update_plot_dt = update_plot_dt
@@ -31,22 +38,24 @@ class SharedDataWindow():
 
         self.cluster_idx = 0
 
-        self.grid = GridFrameWidget(2, 3, 
-            parent=parent)
-        
-        self.base_frame = self.grid.base_frame
-
-        self.rt_plotters = []
-
         self.shared_data_clients = []
 
         self._init_shared_data()
         
-        self._initialize()
+        self._post_shared_init()
 
+        self._init_ui()
+        
     @abstractmethod
     def _initialize(self):
         
+        pass
+
+    @abstractmethod
+    def _post_shared_init(self):
+        
+        # things to be done between shared data init and before ui initialization
+
         pass
     
     @abstractmethod
@@ -61,6 +70,17 @@ class SharedDataWindow():
         # using data from shared memory
 
         pass 
+    
+    def _init_ui(self):
+
+        self.grid = GridFrameWidget(self.grid_n_rows, self.grid_n_cols, 
+            parent=self.parent)
+        
+        self.base_frame = self.grid.base_frame
+
+        self.rt_plotters = []
+
+        self._initialize()
 
     def swith_pause(self):
 
@@ -111,6 +131,6 @@ class SharedDataWindow():
 
         for i in range(0, self.cluster_size):
 
-            self.rhc_task_refs[i].terminate()
+            self.shared_data_clients[i].terminate()
         
         self._terminated = True
