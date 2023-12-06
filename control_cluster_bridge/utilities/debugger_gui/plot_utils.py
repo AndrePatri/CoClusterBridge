@@ -480,49 +480,52 @@ class WidgetUtils:
 
         return button_data
     
-    def create_scrollable_list_button(self, 
-                    parent: QWidget, 
-                    parent_layout: Union[QHBoxLayout, QVBoxLayout],
-                    list_names: List[str], 
-                    callback: Callable[[str], None], 
-                    title: str = "", 
-                    default_checked = True
-                    ):
-        
+    def create_scrollable_list_button(self, parent: QWidget,
+                                parent_layout: Union[QHBoxLayout, QVBoxLayout], 
+                                list_names: List[str], 
+                                callback: Callable[[str], None], 
+                                toggle_all_callback: Callable[[], None] = None, 
+                                title: str = "", default_checked=True):
+
         list_data = self.ScrollableListButtonData()
 
+        # Create the main scroll area
         plot_selector_scroll_area = QScrollArea(parent=parent)
         plot_selector_scroll_area.setWidgetResizable(True)
         
+        # Create the frame and layout for the list
         list_frame = QFrame(plot_selector_scroll_area)
         list_frame.setFrameShape(QFrame.StyledPanel)
         list_layout = QVBoxLayout(list_frame)
         list_layout.setContentsMargins(2, 2, 2, 2)
 
+        # Create a horizontal layout for the title and the show/hide all button
+        title_layout = QHBoxLayout()
         plot_selector_title = QLabel(title)
-        list_layout.addWidget(plot_selector_title, 
-                                alignment=Qt.AlignHCenter)
+        title_layout.addWidget(plot_selector_title)
 
-        # Add legend buttons to the plot selector frame
+        # Create the show/hide all button
+        if toggle_all_callback is not None:
+
+            show_hide_all_button = QPushButton("Show/hide all", list_frame)
+            show_hide_all_button.clicked.connect(toggle_all_callback)
+            title_layout.addWidget(show_hide_all_button)
+
+        # Add the title layout to the list layout
+        list_layout.addLayout(title_layout)
+
+        # Add legend buttons to the list
         for label in list_names:
-
             button = QPushButton(label)
-
             button.setCheckable(True)
-
             button.setChecked(default_checked)
-
-            button.clicked.connect(lambda checked, 
-                                l=label: callback(l))
-
+            button.clicked.connect(lambda checked, l=label: callback(l))
             list_data.buttons.append(button)
-
             list_layout.addWidget(button)
         
+        # Finalize the scroll area setup
         plot_selector_scroll_area.setWidget(list_frame)
-        
         list_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
-
         parent_layout.addWidget(plot_selector_scroll_area)
 
         return list_data
@@ -675,6 +678,8 @@ class SettingsWidget():
 
         self.plot_selector = None
 
+        self.all_lines_visible = False
+
         self.paused = False
 
         self._init_ui()
@@ -717,6 +722,7 @@ class SettingsWidget():
                                         parent_layout=self.settings_frame_layout,
                                         list_names=self.rt_plot_widget.labels, 
                                         callback=self.toggle_line_visibility, 
+                                        toggle_all_callback=self.toggle_all_visibility,
                                         title="line selector")
 
         self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
@@ -760,6 +766,21 @@ class SettingsWidget():
         self.rt_plot_widget.update_window_offset(offset)
 
         self.window_offset_slider.current_val.setText(f'{self.rt_plot_widget.window_offset}')
+
+    def toggle_all_visibility(self):
+        # Toggle the state of all lines based on the remembered state
+        for i, button in enumerate(self.plot_selector.buttons):
+            button.setChecked(self.all_lines_visible)
+
+            if self.all_lines_visible:
+                self.rt_plot_widget.show_line(i)
+                button.setStyleSheet("")  # Reset button style
+            else:
+                self.rt_plot_widget.hide_line(i)
+                button.setStyleSheet("color: darkgray")  # Change button style to dark gray
+
+        # After toggling, remember the new state for the next time
+        self.all_lines_visible = not self.all_lines_visible
 
     def toggle_line_visibility(self, 
                         label):

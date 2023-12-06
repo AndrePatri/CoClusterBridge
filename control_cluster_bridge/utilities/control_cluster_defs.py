@@ -16,12 +16,20 @@
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
 import torch
+import numpy as np
 
 import time 
 
-from typing import List
+from typing import List, Union
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedMemClient, SharedStringArray
+
+from SharsorIPCpp.PySharsorIPC import ServerFactory, ClientFactory, StringTensorServer, StringTensorClient
+from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import RowMajor, ColMajor
+from SharsorIPCpp.PySharsorIPC import toNumpyDType
+from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype 
+from SharsorIPCpp.PySharsorIPC import Journal , LogType
 
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size, aggregate_refs_size
 from control_cluster_bridge.utilities.defs import contact_state_size, contacts_info_name
@@ -30,6 +38,172 @@ from control_cluster_bridge.utilities.defs import cluster_size_name, additional_
 from control_cluster_bridge.utilities.defs import jnt_number_client_name
 from control_cluster_bridge.utilities.defs import jnt_names_client_name
 from control_cluster_bridge.utilities.defs import Journal
+
+class SharedDataView:
+
+    def __init__(self, 
+            namespace = "",
+            basename = "",
+            is_server = False, 
+            n_envs: int = -1, 
+            n_jnts: int = -1, 
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0):
+
+        self.basename = basename
+        self.namespace = namespace
+
+        self.verbose = verbose
+        self.vlevel = vlevel
+
+        self.is_server = is_server 
+
+        self.shared_mem = None
+
+        self.dtype = sharsor_dtype.Float
+
+        self.layout = RowMajor
+        if self.layout == RowMajor:
+
+            self.order = 'C' # 'C'
+
+        if self.layout == ColMajor:
+
+            self.order = 'F' # 'F'
+
+        if self.is_server:
+            
+            self.shared_mem = ServerFactory(n_rows = n_envs, 
+                    n_cols = n_jnts,
+                    basename = self.basename,
+                    namespace = namespace, 
+                    verbose = self.verbose, 
+                    vlevel = self.vlevel, 
+                    force_reconnection = True, 
+                    dtype = self.dtype,
+                    layout = self.layout)
+
+        else:
+            
+            self.shared_mem = ClientFactory(
+                    basename = self.basename,
+                    namespace = self.namespace, 
+                    verbose = self.verbose, 
+                    vlevel = VLevel.V3)
+        
+    def run(self):
+        
+        if self.is_server:
+
+            self.shared_mem.run()
+        
+        else:
+            
+            self.shared_mem.attach()
+
+        self.n_envs = self.shared_mem.getNRows()
+        self.n_jnts = self.shared_mem.getNCols()
+
+        self.numpy_view = np.zeros((self.n_envs, self.n_jnts),
+                            dtype=toNumpyDType(self.shared_mem.getScalarType()),
+                            order=self.order 
+                            )
+        self.torch_view = torch.from_numpy(self.numpy_view) # changes in either the 
+        # numpy or torch view will be reflected into the other one
+
+    def write(self, 
+            data: Union[np.ndarray, torch.Tensor]):
+
+        # first copy data to internal data buffer 
+        # then from buffer to shared memory
+        if isinstance(data, np.ndarray):
+
+            if data.shape == self.numpy_view.shape:
+
+                np.copyto(self.numpy_view, data)
+
+            else:
+
+                raise ValueError("Input array shape does not match self.numpy_view shape")
+
+        elif torch.is_tensor(data):
+
+            if data.shape == self.torch_view.shape and \
+                data.dtype == self.torch_view.dtype:
+
+                self.torch_view[:, :] = data
+
+            else:
+
+                raise ValueError("Input tensor shape or dtype does not match self.torch_view")
+
+        else:
+
+            raise ValueError("Input must be a NumPy array or a PyTorch tensor")
+
+        # internal data buffers are updated -> we can write them to shared memory 
+
+        return self.synch(read=False) 
+
+    def synch(self, 
+            read: bool = True):
+
+        # to be called if working with available views is enough
+
+        if read:
+            
+            # update view with data from shared memory
+
+            return self.shared_mem.read(self.numpy_view[:, :], 0, 0)
+
+        else:
+            
+            # updates shared memory with data from view
+
+            return self.shared_mem.write(self.numpy_view[:, :], 0, 0)
+
+    def read(self, 
+        data: Union[np.ndarray, torch.Tensor]):
+
+        # first copy data from shared memory to internal
+        # data buffers and then data buffer into output data
+        
+        if not self.synch(read=True):
+
+            return False
+
+        # Check if the input is a NumPy array
+        if isinstance(data, np.ndarray):
+
+            if data.shape == self.numpy_view.shape:
+
+                np.copyto(data, self.numpy_view)
+
+            else:
+
+                raise ValueError("Input array shape does not match self.numpy_view shape")
+
+        # Check if the input is a PyTorch tensor
+
+        elif torch.is_tensor(data):
+
+            if data.shape == self.torch_view.shape and data.dtype == self.torch_view.dtype:
+
+                data[:, :] = self.torch_view
+
+            else:
+
+                raise ValueError("Input tensor shape or dtype does not match self.torch_view")
+
+        else:
+
+            raise ValueError("Input must be a NumPy array or a PyTorch tensor")
+
+        return True
+
+    def close(self):
+
+        self.shared_mem.close()
 
 class RobotClusterContactState:
 
@@ -552,6 +726,400 @@ class RobotClusterCmd:
     def __del__(self):
 
         self.terminate()
+
+class JntImpCntrlData:
+
+    class PosErrView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "PosErr" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class VelErrView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "VelErr" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class PosGainsView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "PosGain" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class VelGainsView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "VelGain" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class PosView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "Pos" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class VelView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "Vel" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class EffView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "Eff" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class PosRefView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "PosRef" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class VelRefView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "VelRef" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class EffFFView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "EffFF" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class ImpEffView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_envs: int = -1, 
+                n_jnts: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "ImpEff" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = n_envs, 
+                n_jnts = n_jnts, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    def __init__(self, 
+            is_server = False, 
+            n_envs: int = -1, 
+            n_jnts: int = -1,
+            jnt_names: List[str] = [""],
+            namespace = "", 
+            verbose = False, 
+            vlevel: VLevel = VLevel.V0):
+
+        self.is_server = is_server
+
+        self.n_envs = n_envs
+        self.n_jnts = n_jnts
+
+        self.jnt_names = jnt_names
+
+        self.verbose = verbose
+        self.vlevel = vlevel
+
+        if self.is_server:
+
+            self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
+                                        basename = "SharedJntNames", 
+                                        name_space = namespace,
+                                        verbose = self.verbose, 
+                                        vlevel = self.vlevel, 
+                                        force_reconnection = True)
+
+        else:
+
+            self.shared_jnt_names = StringTensorClient(
+                                        basename = "SharedJntNames", 
+                                        name_space = namespace,
+                                        verbose = self.verbose, 
+                                        vlevel = self.vlevel)
+
+        self.pos_err_view = self.PosErrView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+        
+        self.vel_err_view = self.VelErrView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+        
+        self.pos_gains_view = self.PosGainsView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.vel_gains_view = self.VelGainsView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.eff_ff_view = self.EffFFView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.pos_view = self.PosView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+        
+        self.pos_ref_view = self.PosRefView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.vel_view = self.VelView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.vel_ref_view = self.VelRefView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.eff_view = self.EffView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+        self.imp_eff_view = self.ImpEffView(is_server = self.is_server, 
+                                    n_envs = self.n_envs, 
+                                    n_jnts = self.n_jnts,
+                                    namespace = namespace, 
+                                    verbose = self.verbose, 
+                                    vlevel = self.vlevel)
+
+    def __del__(self):
+
+        self.terminate()
+
+    def run(self):
+        
+        self.pos_err_view.run()
+        self.vel_err_view.run()
+        self.pos_gains_view.run()
+        self.vel_gains_view.run()
+        self.eff_ff_view.run()
+        self.pos_view.run()
+        self.pos_ref_view.run()
+        self.vel_view.run()
+        self.vel_ref_view.run()
+        self.eff_view.run()
+        self.imp_eff_view.run()
+
+        # in case we are clients
+        self.n_envs = self.pos_err_view.n_envs
+        self.n_jnts = self.pos_err_view.n_jnts
+
+        # retrieving joint names
+        self.shared_jnt_names.run()
+
+        if self.is_server:
+
+            jnt_names_written = self.shared_jnt_names.write_vec(self.jnt_names, 0)
+
+            if not jnt_names_written:
+
+                raise Exception("Could not write joint names on shared memory!")
+        
+        else:
+            
+            self.jnt_names = [""] * self.n_jnts
+
+            jnt_names_read = self.shared_jnt_names.read_vec(self.jnt_names, 0)
+
+            if not jnt_names_read:
+
+                raise Exception("Could not read joint names on shared memory!")
+
+    def terminate(self):
+        
+        self.pos_err_view.close()
+        self.vel_err_view.close()
+        self.pos_gains_view.close()
+        self.vel_gains_view.close()
+        self.eff_ff_view.close()
+        self.pos_view.close()
+        self.pos_ref_view.close()
+        self.vel_view.close()
+        self.vel_ref_view.close()
+        self.eff_view.close()
+        self.imp_eff_view.close()
+
+        self.shared_jnt_names.close()
 
 class RhcClusterTaskRefs:
 
