@@ -46,9 +46,10 @@ class SharedDataView:
             basename = "",
             is_server = False, 
             n_envs: int = -1, 
-            n_jnts: int = -1, 
+            n_dims: int = -1, 
             verbose: bool = False, 
-            vlevel: VLevel = VLevel.V0):
+            vlevel: VLevel = VLevel.V0,
+            dtype: sharsor_dtype = sharsor_dtype.Float):
 
         self.basename = basename
         self.namespace = namespace
@@ -60,7 +61,7 @@ class SharedDataView:
 
         self.shared_mem = None
 
-        self.dtype = sharsor_dtype.Float
+        self.dtype = dtype
 
         self.layout = RowMajor
         if self.layout == RowMajor:
@@ -74,9 +75,9 @@ class SharedDataView:
         if self.is_server:
             
             self.shared_mem = ServerFactory(n_rows = n_envs, 
-                    n_cols = n_jnts,
+                    n_cols = n_dims,
                     basename = self.basename,
-                    namespace = namespace, 
+                    namespace = self.namespace, 
                     verbose = self.verbose, 
                     vlevel = self.vlevel, 
                     force_reconnection = True, 
@@ -89,7 +90,7 @@ class SharedDataView:
                     basename = self.basename,
                     namespace = self.namespace, 
                     verbose = self.verbose, 
-                    vlevel = VLevel.V3)
+                    vlevel = self.vlevel)
         
     def run(self):
         
@@ -745,7 +746,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
     
@@ -765,7 +766,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
     
@@ -785,7 +786,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
     
@@ -805,7 +806,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -825,7 +826,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -845,7 +846,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -865,7 +866,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -885,7 +886,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -905,7 +906,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -925,7 +926,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -945,7 +946,7 @@ class JntImpCntrlData:
                 basename = basename,
                 is_server = is_server, 
                 n_envs = n_envs, 
-                n_jnts = n_jnts, 
+                n_dims = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -1641,3 +1642,180 @@ class HanshakeDataCntrlClient:
     def __del__(self):
 
         self.terminate()
+
+class ControllersStatus():
+
+    class ActivationStateView():
+        
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                n_dims: int = -1,
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            self.basename = "ControllersActivationState" # hardcoded
+            self.namespace = namespace
+            
+            self.verbose = verbose
+            self.vlevel = vlevel
+
+            self.shared_mem = None
+
+            self.dtype = sharsor_dtype.Bool
+
+            self.is_server = is_server
+
+            self.layout = RowMajor
+            if self.layout == RowMajor:
+
+                self.order = 'C' # 'C'
+
+            if self.layout == ColMajor:
+
+                self.order = 'F' # 'F'
+
+            if self.is_server:
+                
+                self.shared_mem = ServerFactory(n_rows = cluster_size, 
+                        n_cols = n_dims,
+                        basename = self.basename,
+                        namespace = self.namespace, 
+                        verbose = self.verbose, 
+                        vlevel = self.vlevel, 
+                        force_reconnection = True, 
+                        dtype = self.dtype,
+                        layout = self.layout)
+
+            else:
+                
+                self.shared_mem = ClientFactory(
+                        basename = self.basename,
+                        namespace = self.namespace, 
+                        verbose = self.verbose, 
+                        vlevel = self.vlevel,
+                        dtype = self.dtype,
+                        layout = self.layout)
+
+        def run(self):
+        
+            if self.is_server:
+
+                self.shared_mem.run()
+            
+            else:
+                
+                self.shared_mem.attach()
+
+            self.n_envs = self.shared_mem.getNRows()
+            self.n_dims = self.shared_mem.getNCols()
+
+            self.numpy_view = np.zeros((self.n_envs, self.n_dims),
+                                dtype=toNumpyDType(self.shared_mem.getScalarType()),
+                                order=self.order 
+                                )
+
+            self.torch_view = torch.from_numpy(self.numpy_view) # changes in either the 
+            # numpy or torch view will be reflected into the other one
+
+        def write(self, data, 
+                row_index, col_index):
+            if len(data.shape) == 1:
+                data = np.expand_dims(data, 0)
+            
+            input_rows, input_cols = data.shape
+
+            # Insert the input_array into the class's ndarray
+            self.numpy_view[row_index:row_index + input_rows, 
+                        col_index:col_index + input_cols] = data
+
+            return self.shared_mem.write(np.expand_dims(self.numpy_view[row_index:row_index + input_rows, 
+                        col_index:col_index + input_cols], 0), row_index, col_index)
+
+        def read(self, data, 
+                row_index, col_index):
+
+            input_rows, input_cols = data.shape
+
+            success = self.shared_mem.read(self.numpy_view[row_index:row_index + input_rows, 
+                        col_index:col_index + input_cols], row_index, col_index)
+
+            if not success:
+
+                return True
+
+            # Insert the input_array into the class's ndarray
+            self.data[:, :] = self.numpy_view[row_index:row_index + input_rows, 
+                        col_index:col_index + input_cols]
+
+            return False
+
+        def close(self):
+
+            self.shared_mem.close()
+
+    def __init__(self, 
+            is_server = False, 
+            cluster_size: int = -1, 
+            n_dims: int = -1,
+            namespace = "", 
+            verbose = False, 
+            vlevel: VLevel = VLevel.V0):
+
+        self.is_server = is_server
+
+        self.cluster_size = cluster_size
+
+        self.namespace = namespace
+
+        self.verbose = verbose
+
+        self.vlevel = vlevel
+
+        self.active = self.ActivationStateView(namespace=self.namespace, 
+                                            is_server=self.is_server, 
+                                            cluster_size=self.cluster_size, 
+                                            n_dims = n_dims,
+                                            verbose=self.verbose, 
+                                            vlevel=vlevel)
+
+    def __del__(self):
+
+        self.terminate()
+
+    def run(self):
+        
+        self.active.run()
+
+    def terminate(self):
+        
+        self.active.close()
+
+if __name__ == '__main__':
+
+    server = ControllersStatus(True, 
+            5, 
+            1,
+            namespace = "AAAAA", 
+            verbose = False, 
+            vlevel = VLevel.V3)
+    
+    server.run()
+    
+    data = np.zeros((2, 1), dtype = bool)
+    
+    data[0, 0] = True
+
+    print(server.active.write(data, 0, 0))
+
+    client = ControllersStatus(False, 
+            namespace = "AAAAA", 
+            verbose = False, 
+            vlevel = VLevel.V2)
+
+    client.run()
+
+
+
+

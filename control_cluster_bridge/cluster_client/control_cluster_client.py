@@ -331,7 +331,7 @@ class ControlClusterClient(ABC):
         handshake_done = self.handshake_manager.handshake_done
 
         self.controllers_active = self.launch_controllers.all()
-
+    
         if not handshake_done or (self.trigger_flags.get_clients_count() != self.cluster_size):
             
             if self._verbose: 
