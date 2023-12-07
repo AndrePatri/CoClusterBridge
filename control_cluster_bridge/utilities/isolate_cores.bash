@@ -2,6 +2,9 @@
 
 # Script Name: isolate_core.bash
 
+# Generate a unique identifier based on the current date and time
+backup_suffix=$(date +"%Y%m%d-%H%M%S")
+
 # Get the total number of CPU cores
 total_cores=$(nproc)
 echo "Total available cores: $total_cores"
@@ -43,7 +46,7 @@ echo "Isolated cores: $isolated_cores_string"
 # Backup and Update GRUB configuration (requires superuser privileges)
 echo "Backing up and updating GRUB configuration to isolate cores. You might need to enter your password."
 
-sudo cp /etc/default/grub /etc/default/grub.bak
+sudo cp /etc/default/grub /etc/default/grub.$backup_suffix.bak
 if sudo grep -q "GRUB_CMDLINE_LINUX_DEFAULT=" /etc/default/grub; then
     sudo sed -i "/^GRUB_CMDLINE_LINUX_DEFAULT=/ s/\"$/ isolcpus=$isolated_cores_string\"/" /etc/default/grub
     if sudo update-grub; then
