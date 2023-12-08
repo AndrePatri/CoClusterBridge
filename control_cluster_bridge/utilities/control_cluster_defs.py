@@ -24,12 +24,7 @@ from typing import List, Union
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedMemClient, SharedStringArray
 
-from SharsorIPCpp.PySharsorIPC import ServerFactory, ClientFactory, StringTensorServer, StringTensorClient
-from SharsorIPCpp.PySharsorIPC import VLevel
-from SharsorIPCpp.PySharsorIPC import RowMajor, ColMajor
-from SharsorIPCpp.PySharsorIPC import toNumpyDType
-from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype 
-from SharsorIPCpp.PySharsorIPC import Journal , LogType
+from control_cluster_bridge.utilities.shared_mem import SharedDataView
 
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size, aggregate_refs_size
 from control_cluster_bridge.utilities.defs import contact_state_size, contacts_info_name
@@ -38,173 +33,6 @@ from control_cluster_bridge.utilities.defs import cluster_size_name, additional_
 from control_cluster_bridge.utilities.defs import jnt_number_client_name
 from control_cluster_bridge.utilities.defs import jnt_names_client_name
 from control_cluster_bridge.utilities.defs import Journal
-
-class SharedDataView:
-
-    def __init__(self, 
-            namespace = "",
-            basename = "",
-            is_server = False, 
-            n_envs: int = -1, 
-            n_dims: int = -1, 
-            verbose: bool = False, 
-            vlevel: VLevel = VLevel.V0,
-            dtype: sharsor_dtype = sharsor_dtype.Float):
-
-        self.basename = basename
-        self.namespace = namespace
-
-        self.verbose = verbose
-        self.vlevel = vlevel
-
-        self.is_server = is_server 
-
-        self.shared_mem = None
-
-        self.dtype = dtype
-
-        self.layout = RowMajor
-        if self.layout == RowMajor:
-
-            self.order = 'C' # 'C'
-
-        if self.layout == ColMajor:
-
-            self.order = 'F' # 'F'
-
-        if self.is_server:
-            
-            self.shared_mem = ServerFactory(n_rows = n_envs, 
-                    n_cols = n_dims,
-                    basename = self.basename,
-                    namespace = self.namespace, 
-                    verbose = self.verbose, 
-                    vlevel = self.vlevel, 
-                    force_reconnection = True, 
-                    dtype = self.dtype,
-                    layout = self.layout)
-
-        else:
-            
-            self.shared_mem = ClientFactory(
-                    basename = self.basename,
-                    namespace = self.namespace, 
-                    verbose = self.verbose, 
-                    vlevel = self.vlevel)
-        
-    def run(self):
-        
-        if self.is_server:
-
-            self.shared_mem.run()
-        
-        else:
-            
-            self.shared_mem.attach()
-
-        self.n_envs = self.shared_mem.getNRows()
-        self.n_jnts = self.shared_mem.getNCols()
-
-        self.numpy_view = np.zeros((self.n_envs, self.n_jnts),
-                            dtype=toNumpyDType(self.shared_mem.getScalarType()),
-                            order=self.order 
-                            )
-        self.torch_view = torch.from_numpy(self.numpy_view) # changes in either the 
-        # numpy or torch view will be reflected into the other one
-
-    def write(self, 
-            data: Union[np.ndarray, torch.Tensor]):
-
-        # first copy data to internal data buffer 
-        # then from buffer to shared memory
-        if isinstance(data, np.ndarray):
-
-            if data.shape == self.numpy_view.shape:
-
-                np.copyto(self.numpy_view, data)
-
-            else:
-
-                raise ValueError("Input array shape does not match self.numpy_view shape")
-
-        elif torch.is_tensor(data):
-
-            if data.shape == self.torch_view.shape and \
-                data.dtype == self.torch_view.dtype:
-
-                self.torch_view[:, :] = data
-
-            else:
-
-                raise ValueError("Input tensor shape or dtype does not match self.torch_view")
-
-        else:
-
-            raise ValueError("Input must be a NumPy array or a PyTorch tensor")
-
-        # internal data buffers are updated -> we can write them to shared memory 
-
-        return self.synch(read=False) 
-
-    def synch(self, 
-            read: bool = True):
-
-        # to be called if working with available views is enough
-
-        if read:
-            
-            # update view with data from shared memory
-
-            return self.shared_mem.read(self.numpy_view[:, :], 0, 0)
-
-        else:
-            
-            # updates shared memory with data from view
-
-            return self.shared_mem.write(self.numpy_view[:, :], 0, 0)
-
-    def read(self, 
-        data: Union[np.ndarray, torch.Tensor]):
-
-        # first copy data from shared memory to internal
-        # data buffers and then data buffer into output data
-        
-        if not self.synch(read=True):
-
-            return False
-
-        # Check if the input is a NumPy array
-        if isinstance(data, np.ndarray):
-
-            if data.shape == self.numpy_view.shape:
-
-                np.copyto(data, self.numpy_view)
-
-            else:
-
-                raise ValueError("Input array shape does not match self.numpy_view shape")
-
-        # Check if the input is a PyTorch tensor
-
-        elif torch.is_tensor(data):
-
-            if data.shape == self.torch_view.shape and data.dtype == self.torch_view.dtype:
-
-                data[:, :] = self.torch_view
-
-            else:
-
-                raise ValueError("Input tensor shape or dtype does not match self.torch_view")
-
-        else:
-
-            raise ValueError("Input must be a NumPy array or a PyTorch tensor")
-
-        return True
-
-    def close(self):
-
-        self.shared_mem.close()
 
 class RobotClusterContactState:
 
@@ -745,8 +573,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
     
@@ -765,8 +593,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
     
@@ -785,8 +613,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
     
@@ -805,8 +633,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -825,8 +653,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -845,8 +673,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -865,8 +693,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -885,8 +713,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -905,8 +733,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -925,8 +753,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -945,8 +773,8 @@ class JntImpCntrlData:
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
-                n_envs = n_envs, 
-                n_dims = n_jnts, 
+                n_rows = n_envs, 
+                n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel)
 
@@ -1082,8 +910,8 @@ class JntImpCntrlData:
         self.imp_eff_view.run()
 
         # in case we are clients
-        self.n_envs = self.pos_err_view.n_envs
-        self.n_jnts = self.pos_err_view.n_jnts
+        self.n_envs = self.pos_err_view.n_rows
+        self.n_jnts = self.pos_err_view.n_cols
 
         # retrieving joint names
         self.shared_jnt_names.run()
@@ -1645,7 +1473,7 @@ class HanshakeDataCntrlClient:
 
 class ControllersStatus():
 
-    class ActivationStateView():
+    class ActivationStateView(SharedDataView):
         
         def __init__(self,
                 namespace = "",
@@ -1655,106 +1483,16 @@ class ControllersStatus():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            self.basename = "ControllersActivationState" # hardcoded
-            self.namespace = namespace
+            basename = "ControllersActivationState" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_envs = cluster_size, 
+                n_dims = n_dims, 
+                verbose = verbose, 
+                vlevel = vlevel)
             
-            self.verbose = verbose
-            self.vlevel = vlevel
-
-            self.shared_mem = None
-
-            self.dtype = sharsor_dtype.Bool
-
-            self.is_server = is_server
-
-            self.layout = RowMajor
-            if self.layout == RowMajor:
-
-                self.order = 'C' # 'C'
-
-            if self.layout == ColMajor:
-
-                self.order = 'F' # 'F'
-
-            if self.is_server:
-                
-                self.shared_mem = ServerFactory(n_rows = cluster_size, 
-                        n_cols = n_dims,
-                        basename = self.basename,
-                        namespace = self.namespace, 
-                        verbose = self.verbose, 
-                        vlevel = self.vlevel, 
-                        force_reconnection = True, 
-                        dtype = self.dtype,
-                        layout = self.layout)
-
-            else:
-                
-                self.shared_mem = ClientFactory(
-                        basename = self.basename,
-                        namespace = self.namespace, 
-                        verbose = self.verbose, 
-                        vlevel = self.vlevel,
-                        dtype = self.dtype,
-                        layout = self.layout)
-
-        def run(self):
-        
-            if self.is_server:
-
-                self.shared_mem.run()
-            
-            else:
-                
-                self.shared_mem.attach()
-
-            self.n_envs = self.shared_mem.getNRows()
-            self.n_dims = self.shared_mem.getNCols()
-
-            self.numpy_view = np.zeros((self.n_envs, self.n_dims),
-                                dtype=toNumpyDType(self.shared_mem.getScalarType()),
-                                order=self.order 
-                                )
-
-            self.torch_view = torch.from_numpy(self.numpy_view) # changes in either the 
-            # numpy or torch view will be reflected into the other one
-
-        def write(self, data, 
-                row_index, col_index):
-            if len(data.shape) == 1:
-                data = np.expand_dims(data, 0)
-            
-            input_rows, input_cols = data.shape
-
-            # Insert the input_array into the class's ndarray
-            self.numpy_view[row_index:row_index + input_rows, 
-                        col_index:col_index + input_cols] = data
-
-            return self.shared_mem.write(np.expand_dims(self.numpy_view[row_index:row_index + input_rows, 
-                        col_index:col_index + input_cols], 0), row_index, col_index)
-
-        def read(self, data, 
-                row_index, col_index):
-
-            input_rows, input_cols = data.shape
-
-            success = self.shared_mem.read(self.numpy_view[row_index:row_index + input_rows, 
-                        col_index:col_index + input_cols], row_index, col_index)
-
-            if not success:
-
-                return True
-
-            # Insert the input_array into the class's ndarray
-            self.data[:, :] = self.numpy_view[row_index:row_index + input_rows, 
-                        col_index:col_index + input_cols]
-
-            return False
-
-        def close(self):
-
-            self.shared_mem.close()
-
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
@@ -1791,30 +1529,6 @@ class ControllersStatus():
     def terminate(self):
         
         self.active.close()
-
-if __name__ == '__main__':
-
-    server = ControllersStatus(True, 
-            5, 
-            1,
-            namespace = "AAAAA", 
-            verbose = False, 
-            vlevel = VLevel.V3)
-    
-    server.run()
-    
-    data = np.zeros((2, 1), dtype = bool)
-    
-    data[0, 0] = True
-
-    print(server.active.write(data, 0, 0))
-
-    client = ControllersStatus(False, 
-            namespace = "AAAAA", 
-            verbose = False, 
-            vlevel = VLevel.V2)
-
-    client.run()
 
 
 
