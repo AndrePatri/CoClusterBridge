@@ -25,11 +25,13 @@ from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTask
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import trigger_flagname, launch_controllers_flagname
-from control_cluster_bridge.utilities.defs import reset_controllers_flagname, controllers_fail_flagname
 
 from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 
 from control_cluster_bridge.utilities.defs import Journal
+
+from control_cluster_bridge.utilities.control_cluster_defs import ControllersStatus
+from SharsorIPCpp.PySharsorIPC import VLevel
 
 import time
 
@@ -97,15 +99,17 @@ class ControlClusterClient(ABC):
         # shared mem objects
         self.handshake_manager = None
         self._handshake_thread = None
+        
         self.robot_states = None
         self.controllers_cmds = None
+
         self.trigger_flags = None
-        self.cluster_reset_flags = None
-        self.controllers_fail_flags = None
         self.launch_controllers = None
         self.rhc_task_refs = None
         self.contact_states = None
         self.shared_cluster_info = None
+
+        self.controller_status = None
 
         # flags
         self._was_cluster_ready = False
@@ -145,16 +149,12 @@ class ControlClusterClient(ABC):
         self.trigger_flags.start()
         self.trigger_flags.reset_bool(False)
 
-        self.cluster_reset_flags.start()
-        self.cluster_reset_flags.reset_bool(False)
-
-        self.controllers_fail_flags.start()
-        self.controllers_fail_flags.reset_bool(False)
-
         self.launch_controllers.start()
         self.launch_controllers.reset_bool(False)
 
         self.shared_cluster_info.start()
+
+        self.controller_status.run()
 
         self._spawn_handshake() # we launch all the child processes
 
@@ -204,24 +204,18 @@ class ControlClusterClient(ABC):
                                 namespace=self.namespace,
                                 dtype=dtype) 
         
-        self.cluster_reset_flags = SharedMemSrvr(n_rows=self.cluster_size, 
-                                n_cols=1, 
-                                name=reset_controllers_flagname(), 
-                                namespace=self.namespace,
-                                dtype=dtype) 
-        
-        self.controllers_fail_flags = SharedMemSrvr(n_rows=self.cluster_size, 
-                                n_cols=1, 
-                                name=controllers_fail_flagname(), 
-                                namespace=self.namespace,
-                                dtype=dtype) 
-        
         self.launch_controllers = SharedMemSrvr(n_rows=1, 
                                     n_cols=1, 
                                     name=launch_controllers_flagname(), 
                                     namespace=self.namespace,
                                     dtype=dtype) 
 
+        self.controller_status = ControllersStatus(is_server=True,
+                                        cluster_size=self.cluster_size,
+                                        namespace=self.namespace, 
+                                        verbose=self._verbose, 
+                                        vlevel=VLevel.V2)
+        
         # debug info from the client
 
         self.shared_cluster_info = SharedClusterInfo(name=self.namespace)
@@ -432,14 +426,6 @@ class ControlClusterClient(ABC):
             if self.trigger_flags is not None:
                 
                 self.trigger_flags.terminate()
-            
-            if self.cluster_reset_flags is not None:
-                
-                self.cluster_reset_flags.terminate()
-
-            if self.controllers_fail_flags is not None:
-                
-                self.controllers_fail_flags.terminate()
 
             if self.launch_controllers is not None:
 
@@ -460,6 +446,10 @@ class ControlClusterClient(ABC):
             if self.shared_cluster_info is not None:
 
                 self.shared_cluster_info.terminate()
+
+            if self.controller_status is not None:
+
+                self.controller_status.terminate()
 
         self._close_handshake()
 

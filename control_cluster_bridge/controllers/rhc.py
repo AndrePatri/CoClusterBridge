@@ -28,6 +28,9 @@ from control_cluster_bridge.utilities.defs import reset_controllers_flagname, co
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
 
+from control_cluster_bridge.utilities.control_cluster_defs import ControllersStatus
+from SharsorIPCpp.PySharsorIPC import VLevel
+
 from typing import List, TypeVar
 
 import torch
@@ -77,8 +80,9 @@ class RHController(ABC):
         self.robot_state = None 
         self.contact_state = None 
         self.trigger_flag = None
-        self.reset_flag = None
-        self.controller_fail_flag = None
+
+        self.controller_status = None
+
         self.robot_cmds = None
         self.rhc_task_refs:RhcTaskRefsChild = None
 
@@ -113,14 +117,6 @@ class RHController(ABC):
         if self.trigger_flag is not None:
 
             self.trigger_flag.terminate()
-        
-        if self.reset_flag is not None:
-
-            self.reset_flag.terminate()
-
-        if self.controller_fail_flag is not None:
-
-            self.controller_fail_flag.terminate()
 
         if self.robot_cmds is not None:
             
@@ -133,6 +129,10 @@ class RHController(ABC):
         if self.contact_state is not None:
 
             self.contact_state.terminate()
+        
+        if self.controller_status is not None:
+
+            self.controller_status.terminate()
 
     def _init(self):
 
@@ -145,18 +145,14 @@ class RHController(ABC):
                                     dtype=dtype)
         self.trigger_flag.attach()
 
-        self.reset_flag = SharedMemClient(name=reset_controllers_flagname(), 
-                                    namespace=self.namespace,
-                                    client_index=self.controller_index, 
-                                    dtype=dtype)
-        self.reset_flag.attach()
+        self.controller_status = ControllersStatus(is_server=False,
+                                            namespace=self.namespace, 
+                                            verbose=True, 
+                                            vlevel=VLevel.V3)
 
-        self.controller_fail_flag = SharedMemClient(name=controllers_fail_flagname(), 
-                                    namespace=self.namespace,
-                                    client_index=self.controller_index, 
-                                    dtype=dtype)
-        self.controller_fail_flag.attach()
-
+        print("\nAAAAAAAAAAAAAAAAAAA\n")
+        self.controller_status.run()
+        
         self._homer = RobotHomer(self.srdf_path, 
                             self._server_side_jnt_names)
         
@@ -237,13 +233,13 @@ class RHController(ABC):
             
             try:
                 
-                if self.reset_flag.read_bool(): # reset request from client
+                # if self.reset_flag.read_bool(): # reset request from client
                     
-                    self.reset()
+                #     self.reset()
 
-                    self.fail_n = 0 # resets number of fails
+                #     self.fail_n = 0 # resets number of fails
 
-                    self.reset_flag.set_bool(False) # reset completed
+                #     self.reset_flag.set_bool(False) # reset completed
 
                 if self.trigger_flag.read_bool():
                     
@@ -274,8 +270,8 @@ class RHController(ABC):
                         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                             f"[{self.journal.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                 
-                if (not self.reset_flag.read_bool()) and \
-                    (not self.trigger_flag.read_bool()): # not triggered, not reset
+                if (not self.trigger_flag.read_bool()):
+                    # and not self.reset_flag.read_bool()): # not triggered, not reset
                     
                     # we avoid busy waiting and sleep for a small amount of time
 
@@ -288,7 +284,7 @@ class RHController(ABC):
     
     def _on_failure(self):
         
-        self.controller_fail_flag.set_bool(True) # can be read by the cluster client
+        # self.controller_fail_flag.set_bool(True) # can be read by the cluster client
 
         self.reset() # resets controller (this has to be defined by the user)
 

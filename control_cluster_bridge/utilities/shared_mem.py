@@ -39,7 +39,8 @@ from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import RowMajor, ColMajor
 from SharsorIPCpp.PySharsorIPC import toNumpyDType
 from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype 
-from SharsorIPCpp.PySharsorIPC import Journal , LogType
+from SharsorIPCpp.PySharsorIPC import Journal as Logger
+from SharsorIPCpp.PySharsorIPC import LogType
 
 from typing import List, Union
 
@@ -1664,7 +1665,7 @@ class SharedDataView:
                 
                 message = "Provided data should be 2D!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1677,7 +1678,7 @@ class SharedDataView:
 
                 message = "Provided data does not fit in torch view!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1701,7 +1702,7 @@ class SharedDataView:
                 
                 message = "Provided data should be 2D!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1714,7 +1715,7 @@ class SharedDataView:
 
                 message = "Provided data does not fit in numpy view!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1738,7 +1739,7 @@ class SharedDataView:
                 "Supported types are: bool, int, float, double, " + \
                 "torch.Tensor, numpy.ndarray"
 
-            Journal.log(self.__class__.__name__,
+            Logger.log(self.__class__.__name__,
                 "write",
                 message,
                 LogType.EXCEP,
@@ -1758,7 +1759,7 @@ class SharedDataView:
                 
                 message = "Provided data should be 2D!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1771,7 +1772,7 @@ class SharedDataView:
 
                 message = "Provided data does not fit in torch view!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1801,7 +1802,7 @@ class SharedDataView:
                 
                 message = "Provided data should be 2D!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1814,7 +1815,7 @@ class SharedDataView:
 
                 message = "Provided data does not fit in torch view!!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
@@ -1856,7 +1857,7 @@ class SharedDataView:
                 message = "Provided data has to be either " + \
                 "torch.Tensor, numpy.ndarray or None!"
 
-                Journal.log(self.__class__.__name__,
+                Logger.log(self.__class__.__name__,
                     "write",
                     message,
                     LogType.EXCEP,
