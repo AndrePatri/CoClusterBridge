@@ -103,7 +103,6 @@ class ControlClusterClient(ABC):
         self.robot_states = None
         self.controllers_cmds = None
 
-        self.trigger_flags = None
         self.launch_controllers = None
         self.rhc_task_refs = None
         self.contact_states = None
@@ -145,9 +144,6 @@ class ControlClusterClient(ABC):
         if self.contact_states is not None:
 
             self.contact_states.start()
-
-        self.trigger_flags.start()
-        self.trigger_flags.reset_bool(False)
 
         self.launch_controllers.start()
         self.launch_controllers.reset_bool(False)
@@ -197,12 +193,6 @@ class ControlClusterClient(ABC):
 
         dtype = torch.bool # using a boolean type shared data, 
         # exposes low-latency boolean writing and reading methods
-
-        self.trigger_flags = SharedMemSrvr(n_rows=self.cluster_size, 
-                                n_cols=1, 
-                                name=trigger_flagname(), 
-                                namespace=self.namespace,
-                                dtype=dtype) 
         
         self.launch_controllers = SharedMemSrvr(n_rows=1, 
                                     n_cols=1, 
@@ -221,17 +211,30 @@ class ControlClusterClient(ABC):
         self.shared_cluster_info = SharedClusterInfo(name=self.namespace)
 
     def _trigger_solution(self):
+        
+        # fills view to trigger controllers
+        self.controller_status.trigger.fill_with(True)
 
-        self.trigger_flags.reset_bool(True) # sets all flags
+        # writes whole internal view to shared memory
+        self.controller_status.trigger.synch_all(read=False, 
+                                        wait=True) # wait for synch to succeed
+        
+        # self.trigger_flags.reset_bool(True) # sets all flags
 
     def _wait_for_solution(self):
 
         solved = False
-    
-        while not self.trigger_flags.none(): 
+        
+        while not solved: 
             
+            # fills views reading from shared memory
+            self.controller_status.trigger.synch_all(read=True, 
+                                        wait=True) # wait for synch to succeed
+            
+            solved = (~self.controller_status.trigger.torch_view).all()
+
             if (not self._terminate) and \
-                (self.trigger_flags.get_clients_count() == self.cluster_size):
+                (self.controller_status.trigger.get_n_clients() == self.cluster_size):
                 
                 self.perf_timer.clock_sleep(1000) # nanoseconds (but this
                 # accuracy cannot be reached on a non-rt system)
@@ -246,8 +249,6 @@ class ControlClusterClient(ABC):
 
                 break
         
-        solved = True
-
         return solved
         
     def _compute_n_control_actions(self):
@@ -326,14 +327,15 @@ class ControlClusterClient(ABC):
 
         self.controllers_active = self.launch_controllers.all()
     
-        if not handshake_done or (self.trigger_flags.get_clients_count() != self.cluster_size):
+        if not handshake_done or \
+            (self.controller_status.trigger.get_n_clients() != self.cluster_size):
             
             if self._verbose: 
 
                 print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": waiting connection to ControlCluster server")
 
-        if self.trigger_flags.get_clients_count() > self.cluster_size:
+        if self.controller_status.trigger.get_n_clients() > self.cluster_size:
             
             exception = f"[{self.__class__.__name__}]"  + f"[{self.journal.exception}]" + \
                         f": more than cluster size ({self.cluster_size}) clients registered." + \
@@ -422,10 +424,6 @@ class ControlClusterClient(ABC):
             if self.robot_states is not None:
                 
                 self.robot_states.terminate()
-
-            if self.trigger_flags is not None:
-                
-                self.trigger_flags.terminate()
 
             if self.launch_controllers is not None:
 

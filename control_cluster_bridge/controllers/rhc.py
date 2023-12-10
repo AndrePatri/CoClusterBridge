@@ -79,7 +79,6 @@ class RHController(ABC):
         # shared mem
         self.robot_state = None 
         self.contact_state = None 
-        self.trigger_flag = None
 
         self.controller_status = None
 
@@ -100,6 +99,8 @@ class RHController(ABC):
         
         self._states_initialized = False
 
+        self._trigger_flag = False
+
         self.array_dtype = array_dtype
 
         self.add_data_lenght = 0
@@ -113,10 +114,6 @@ class RHController(ABC):
         self._terminate()
 
     def _terminate(self):
-        
-        if self.trigger_flag is not None:
-
-            self.trigger_flag.terminate()
 
         if self.robot_cmds is not None:
             
@@ -138,19 +135,11 @@ class RHController(ABC):
 
         self._init_problem() # we call the child's initialization method
 
-        dtype = torch.bool
-        self.trigger_flag = SharedMemClient(name=trigger_flagname(), 
-                                    namespace=self.namespace,
-                                    client_index=self.controller_index, 
-                                    dtype=dtype)
-        self.trigger_flag.attach()
-
         self.controller_status = ControllersStatus(is_server=False,
                                             namespace=self.namespace, 
                                             verbose=True, 
-                                            vlevel=VLevel.V3)
+                                            vlevel=VLevel.V2)
 
-        print("\nAAAAAAAAAAAAAAAAAAA\n")
         self.controller_status.run()
         
         self._homer = RobotHomer(self.srdf_path, 
@@ -241,7 +230,8 @@ class RHController(ABC):
 
                 #     self.reset_flag.set_bool(False) # reset completed
 
-                if self.trigger_flag.read_bool():
+                if self.controller_status.trigger.read_wait(row_index=self.controller_index,
+                                                    col_index=0)[0]:
                     
                     if self._debug:
                         
@@ -257,9 +247,11 @@ class RHController(ABC):
                     self._fill_cmds_from_sol() # we update update the views of the cmd
                     # from the latest solution
 
-                    # we signal the client this controller has finished its job
-                    self.trigger_flag.set_bool(False) # this is also necessary to trigger again the solution
-                    # on next loop, unless the client requires it
+                    # we signal the client this controller has finished its job by
+                    # resetting the flag
+                    self.controller_status.trigger.write_wait(False, 
+                                                    row_index=self.controller_index,
+                                                    col_index=0)
 
                     if self._debug:
                         
@@ -270,7 +262,8 @@ class RHController(ABC):
                         print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
                             f"[{self.journal.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                 
-                if (not self.trigger_flag.read_bool()):
+                else:
+
                     # and not self.reset_flag.read_bool()): # not triggered, not reset
                     
                     # we avoid busy waiting and sleep for a small amount of time
