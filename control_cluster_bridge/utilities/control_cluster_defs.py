@@ -27,6 +27,8 @@ from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedMem
 from control_cluster_bridge.utilities.shared_mem import SharedDataView
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal
+from SharsorIPCpp.PySharsorIPC import dtype
+
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 
 from control_cluster_bridge.utilities.defs import aggregate_cmd_size, aggregate_state_size, aggregate_refs_size
@@ -1485,7 +1487,7 @@ class ControllersStatus():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            basename = "ControllersActivationState" # hardcoded
+            basename = "ClusterActivationState" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -1493,7 +1495,8 @@ class ControllersStatus():
                 n_rows = cluster_size, 
                 n_cols = 1, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                dtype=dtype.Bool)
             
     class FailFlagView(SharedDataView):
         
@@ -1504,7 +1507,7 @@ class ControllersStatus():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            basename = "FailFlag" # hardcoded
+            basename = "ClusterFailFlag" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -1512,7 +1515,8 @@ class ControllersStatus():
                 n_rows = cluster_size, 
                 n_cols = 1, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                dtype=dtype.Bool)
     
     class ResetFlagView(SharedDataView):
         
@@ -1523,7 +1527,7 @@ class ControllersStatus():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            basename = "ResetFlag" # hardcoded
+            basename = "ClusterResetFlag" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -1531,7 +1535,8 @@ class ControllersStatus():
                 n_rows = cluster_size, 
                 n_cols = 1, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                dtype=dtype.Bool)
     
     class TriggerFlagView(SharedDataView):
 
@@ -1542,7 +1547,7 @@ class ControllersStatus():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            basename = "TriggerFlag" # hardcoded
+            basename = "ClusterTriggerFlag" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -1550,7 +1555,8 @@ class ControllersStatus():
                 n_rows = cluster_size, 
                 n_cols = 1, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                dtype=dtype.Bool)
             
     def __init__(self, 
             is_server = False, 
@@ -1598,16 +1604,19 @@ class ControllersStatus():
         self.terminate()
 
     def run(self):
-        
-        self.active.run()
-        self.fails.run()
-        self.resets.run()
+    
+        # self.fails.run()
+        # self.resets.run()
+        self.trigger.run()
+        # self.active.run()
 
     def terminate(self):
         
-        self.active.close()
-        self.fails.close()
-        self.resets.close()
+        self.trigger.run()
+
+        # self.active.close()
+        # self.fails.close()
+        # self.resets.close()
 
 
 

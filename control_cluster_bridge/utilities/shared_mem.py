@@ -1579,7 +1579,8 @@ class SharedDataView:
                     basename = self.basename,
                     namespace = self.namespace, 
                     verbose = self.verbose, 
-                    vlevel = self.vlevel)
+                    vlevel = self.vlevel,
+                    dtype = self.dtype)
         
     def _ensure2D(self, 
                 data: Union[np.ndarray, 
@@ -1617,6 +1618,24 @@ class SharedDataView:
         # Check if data1 fits within the bounds of data2
         return end_row_index <= data2.shape[0] and end_col_index <= data2.shape[1]
 
+    def get_n_clients(self):
+
+        if self.is_server:
+
+            return self.shared_mem.getNClients()
+        
+        else:
+
+            message = "Number of clients can be retrieved only if is_server = True!!"
+
+            Logger.log(self.__class__.__name__,
+                "get_n_clients",
+                message,
+                LogType.EXCEP,
+                throw_when_excep = False)
+            
+            return -1
+            
     def run(self):
     
         if self.is_server:
@@ -1643,13 +1662,15 @@ class SharedDataView:
         # numpy or torch view will be reflected into the other one
 
     def write(self, 
-            data: Union[int, float, bool, 
+            data: Union[bool, int, float, 
+                        np.float32, np.float64,
                         np.ndarray, 
                         torch.Tensor], 
             row_index: int, 
             col_index: int):
         
-        if isinstance(data, (int, float, bool)):  
+        if isinstance(data, (int, float, bool,
+                            np.float32, np.float64)):  
 
             # write scalar into numpy view
             self.numpy_view[row_index, col_index] = data
@@ -1747,6 +1768,22 @@ class SharedDataView:
 
             return False
 
+    def write_wait(self,
+            data: Union[bool, int, float, 
+                        np.float32, np.float64,
+                        np.ndarray, 
+                        torch.Tensor], 
+            row_index: int, 
+            col_index: int):
+
+        # tries writing until success
+
+        while not self.write(data=data,
+                    row_index=row_index,
+                    col_index=col_index):
+            
+            continue
+
     def read(self, 
             row_index: int, 
             col_index: int, 
@@ -1796,7 +1833,7 @@ class SharedDataView:
             
             return None, True
         
-        if isinstance(data, np.ndarray):  
+        elif isinstance(data, np.ndarray):  
             
             if not self._ensure2D(data):
                 
@@ -1865,6 +1902,31 @@ class SharedDataView:
 
                 return None, False
 
+    def read_wait(self, 
+            row_index: int, 
+            col_index: int, 
+            data: Union[np.ndarray, 
+                        torch.Tensor] = None):
+        
+        # tries reading until success
+
+        read_done = False
+
+        while not read_done: 
+            
+            data, read_done = self.read(
+                                row_index=row_index,
+                                col_index=col_index,
+                                data=data)
+            
+            if read_done:
+
+                return data, read_done
+            
+            else:
+
+                continue
+
     def synch(self, 
         row_index: int, 
         col_index: int, 
@@ -1897,7 +1959,49 @@ class SharedDataView:
 
             return self.shared_mem.write(self.numpy_view[row_index:row_index + n_rows, 
                     col_index:col_index + n_cols], row_index, col_index)
-                     
+    
+    def synch_wait(self, 
+        row_index: int, 
+        col_index: int, 
+        n_rows: int,
+        n_cols: int,
+        read: bool = True):
+
+        while not self.synch(row_index=row_index,
+                        col_index=col_index,
+                        n_rows=n_rows,
+                        n_cols=n_cols,
+                        read=read):
+            
+            continue
+        
+    def synch_all(self, 
+            read: bool = True, 
+            wait = False):
+        
+        # synch whole view from shared memory
+
+        if wait:
+            
+            self.synch_wait(row_index=0, col_index=0, 
+                        n_rows=self.n_rows, n_cols=self.n_cols, 
+                        read=read)
+            
+            return True
+
+        else:
+
+            return self.synch(row_index=0, col_index=0, 
+                        n_rows=self.n_rows, n_cols=self.n_cols, 
+                        read=read)
+
+    def fill_with(self, 
+            value: Union[bool, int, float, 
+                        np.float32, np.float64]):
+
+        # fill in place with unique value
+        self.torch_view.fill_(value)
+
     def close(self):
 
         self.shared_mem.close()
