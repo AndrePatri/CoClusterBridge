@@ -1612,7 +1612,7 @@ class ControllersStatus():
 
     def terminate(self):
         
-        self.trigger.run()
+        self.trigger.close()
 
         # self.active.close()
         # self.fails.close()

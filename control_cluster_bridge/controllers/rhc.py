@@ -22,9 +22,6 @@ import time
 from control_cluster_bridge.utilities.rhc_defs import RobotCmds, RobotState, ContactState
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
 
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient
-from control_cluster_bridge.utilities.defs import trigger_flagname
-from control_cluster_bridge.utilities.defs import reset_controllers_flagname, controllers_fail_flagname
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
 
