@@ -115,6 +115,7 @@ class ControlClusterClient(ABC):
         self.is_cluster_ready = False
         self._is_first_control_step = False
         self.controllers_active = False
+        self.controllers_were_active = False
         # other data
         self.add_data_length = 0
         self.n_contact_sensors = n_contact_sensors
@@ -127,7 +128,225 @@ class ControlClusterClient(ABC):
 
         # performs some initialization steps
         self._setup()
+    
+    def is_cluster_instant(self, 
+                        control_index: int):
         
+        # control_index is the current simulation loop number (0-based)
+        
+        # returns true if this is a control "instant"
+        
+        return (control_index + 1) % self.n_sim_step_per_cntrl == 0
+    
+    def cluster_ready(self):
+
+        return self.is_cluster_ready
+    
+    def is_first_control_step(self):
+
+        return self._is_first_control_step
+    
+    def trigger_solution(self):
+
+        # performs checks and triggers cluster solution
+
+        handshake_done = self.handshake_manager.handshake_done
+
+        self.controllers_active = self.launch_controllers.all()
+    
+        if not handshake_done or \
+            (self.controller_status.trigger.get_n_clients() != self.cluster_size):
+            
+            if self._verbose: 
+
+                print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
+                    ": waiting connection to ControlCluster server")
+
+        if self.controller_status.trigger.get_n_clients() > self.cluster_size:
+            
+            exception = f"[{self.__class__.__name__}]"  + f"[{self.journal.exception}]" + \
+                        f": more than cluster size ({self.cluster_size}) clients registered." + \
+                        ". It's very likely a memory leak on the shared memory layer occurred." + \
+                        " You might need to reboot the system."
+
+            self.close()
+
+            raise Exception(exception)
+            
+        if self._is_first_control_step:
+                
+            self._is_first_control_step = False
+                
+        if (not self._was_cluster_ready) and handshake_done:
+            
+            # first time the cluster is ready 
+
+            self._finalize_init() # we perform the final initializations
+
+            self._was_cluster_ready = True
+
+            self._is_first_control_step = True
+
+            self.is_cluster_ready = True
+
+        # solve all the TO problems in the control cluster
+
+        if self._debug and self.is_cluster_ready:
+            
+            # we profile the whole solution pipeline
+            # [
+            # robot and contact state update/synchronization, 
+            # solution triggering, 
+            # commands reading/synchronization, 
+            # ]
+            # note that this profiling can be influenced by other operations
+            # done between the call to trigger_solution() and wait_for_solution()
+            # for example if simulation stepping is carried out in between and is slower
+            # than the cluster solution, this will increase the profiled time as if the 
+            # cluster was slower
+
+            self.start_time = time.perf_counter() 
+
+        if self.robot_states is not None:
+            
+            # updates shared tensor on CPU with latest data from states on GPU
+            self.robot_states.synch() 
+
+        if self.contact_states is not None:
+            
+            # updates shared tensor on CPU with latest contact data from the simulator
+            # (possibly on GPU)
+            self.contact_states.synch() 
+
+        if self.is_cluster_ready:
+            
+            if self.controllers_active:
+                
+                self._trigger_solution() # actually triggers solution of all controllers in the cluster 
+                # using latest state
+            
+            else:
+            
+                if self._verbose: 
+
+                    # if not self.controllers_active and \
+                    #     self.controllers_were_active:
+
+                    #     # upon controller deactivation we reset the commands so that they're safe
+                    #     self._set_cmds_to_safe_vals()
+
+                    print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
+                        ": controllers waiting to be activated...")
+
+    def wait_for_solution(self):
+
+        # will only return True after the solution signal from the cluster is received
+        # or, if the cluster is inactive, will simply return False
+
+        if self.is_cluster_ready:
+            
+            if self.controllers_active:
+
+                # we wait for all controllers to finish      
+                self._wait_for_solution() # this is blocking (but no busy wait)
+                
+                # at this point all controllers are done -> we synchronize the control commands on GPU
+                # with the ones written by each controller on CPU
+                self.controllers_cmds.synch()
+            
+            else:
+            
+                if self._verbose: 
+
+                    # if not self.controllers_active and \
+                    #     self.controllers_were_active:
+
+                    #     # upon controller deactivation we reset the commands so that they're safe
+                    #     self._set_cmds_to_safe_vals()
+
+                    print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
+                        ": controllers waiting to be activated...")
+
+            self.solution_counter += 1
+
+        if self._debug and self.is_cluster_ready:
+            
+            # this is updated even if the cluster is not active (values do not make sense
+            # in that case)
+
+            self.solution_time = time.perf_counter() - self.start_time # we profile the whole solution pipeline
+            
+            self.shared_cluster_info.update(solve_time=self.solution_time, 
+                                        controllers_up = self.controllers_active) # we update the shared info
+
+        self.controllers_were_active = self.controllers_active
+
+    def close(self):
+        
+        if not self._terminate:
+            
+            self._terminate = True
+            
+            if self.robot_states is not None:
+                
+                self.robot_states.terminate()
+
+            if self.launch_controllers is not None:
+
+                self.launch_controllers.terminate()
+
+            if self.controllers_cmds is not None:
+                
+                self.controllers_cmds.terminate()
+
+            if self.rhc_task_refs is not None:
+
+                self.rhc_task_refs.terminate()
+
+            if self.contact_states is not None:
+
+                self.contact_states.terminate()
+
+            if self.shared_cluster_info is not None:
+
+                self.shared_cluster_info.terminate()
+
+            if self.controller_status is not None:
+
+                self.controller_status.terminate()
+
+        self._close_handshake()
+    
+    def _set_cmds_to_safe_vals(self):
+        
+        # to be implented
+
+        a = 3
+
+    def _close_handshake(self):
+
+        if self.handshake_manager is not None:
+                
+                self.handshake_manager.terminate() # will close/detach all shared memory 
+                
+        if self._handshake_thread is not None:
+                
+            self._close_thread(self._handshake_thread) # we first wait for thread to exit, if still alive
+
+    def _close_thread(self, 
+                    thread):
+        
+        if thread.is_alive():
+                        
+            print(f"[{self.__class__.__name__}]"  + f"[{self.journal.info}]" + \
+                ": terminating child thread " + str(thread.name))
+        
+            thread.join() # wait for thread to join
+
+    def __del__(self):
+                
+        self.close()
+
     def _setup(self):
 
         self._compute_n_control_actions() # necessary ti apply control input only at 
@@ -220,7 +439,7 @@ class ControlClusterClient(ABC):
                                         wait=True) # wait for synch to succeed
         
         # self.trigger_flags.reset_bool(True) # sets all flags
-
+    
     def _wait_for_solution(self):
 
         solved = False
@@ -249,8 +468,8 @@ class ControlClusterClient(ABC):
 
                 break
         
-        return solved
-        
+        return
+                
     def _compute_n_control_actions(self):
 
         if self.cluster_dt < self.control_dt:
@@ -272,13 +491,6 @@ class ControlClusterClient(ABC):
                 "Number of sim steps per control step: " + str(self.n_sim_step_per_cntrl)
 
         print(message)
-    
-    def is_cluster_instant(self, 
-                        control_index: int):
-        
-        # control_index the current simulation loop number (0-based)
-        
-        return (control_index + 1) % self.n_sim_step_per_cntrl == 0
     
     def _finalize_init(self):
         
@@ -310,167 +522,3 @@ class ControlClusterClient(ABC):
 
         print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                     ": connection achieved.")
-        
-    def cluster_ready(self):
-
-        return self._was_cluster_ready and self.handshake_manager.handshake_done
-    
-    def is_first_control_step(self):
-
-        return self._is_first_control_step
-    
-    def solve(self):
-
-        # various checks do detect invalid states and cluster state transitions
-
-        handshake_done = self.handshake_manager.handshake_done
-
-        self.controllers_active = self.launch_controllers.all()
-    
-        if not handshake_done or \
-            (self.controller_status.trigger.get_n_clients() != self.cluster_size):
-            
-            if self._verbose: 
-
-                print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                    ": waiting connection to ControlCluster server")
-
-        if self.controller_status.trigger.get_n_clients() > self.cluster_size:
-            
-            exception = f"[{self.__class__.__name__}]"  + f"[{self.journal.exception}]" + \
-                        f": more than cluster size ({self.cluster_size}) clients registered." + \
-                        ". It's very likely a memory leak on the shared memory layer occurred." + \
-                        " You might need to reboot the system."
-
-            self.close()
-
-            raise Exception(exception)
-            
-        if self._is_first_control_step:
-                
-            self._is_first_control_step = False
-                
-        if (not self._was_cluster_ready) and handshake_done:
-            
-            # first time the cluster is ready 
-
-            self._finalize_init() # we perform the final initializations
-
-            self._was_cluster_ready = True
-
-            self._is_first_control_step = True
-
-            self.is_cluster_ready = True
-
-        # solve all the TO problems in the control cluster
-
-        if self._debug and self.is_cluster_ready:
-            
-            # we profile the whole solution pipeline
-            # [
-            # robot and contact state update/synchronization, 
-            # solution triggering, 
-            # commands reading/synchronization, 
-            # ]
-            self.start_time = time.perf_counter() 
-
-        if self.robot_states is not None:
-            
-            # updates shared tensor on CPU with data from states on GPU
-            self.robot_states.synch() 
-
-        if self.contact_states is not None:
-            
-            # updates shared tensor on CPU with contact data from the simulator
-            # (possibly on GPU)
-            self.contact_states.synch() 
-
-        if self.is_cluster_ready:
-            
-            if self.controllers_active:
-                
-                self._trigger_solution() # triggers solution of all controllers in the cluster 
-                # using latest state
-
-                # we wait for all controllers to finish      
-                solved = self._wait_for_solution() # this is blocking
-                
-                # at this point all controllers are done -> we synchronize the control commands on GPU
-                # with the ones written by each controller on CPU
-                self.controllers_cmds.synch()
-            
-            else:
-            
-                if self._verbose: 
-
-                    print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                        ": controllers waiting to be activated...")
-
-            self.solution_counter += 1
-
-        if self._debug and self.cluster_ready:
-
-            self.solution_time = time.perf_counter() - self.start_time # we profile the whole solution pipeline
-            
-            self.shared_cluster_info.update(solve_time=self.solution_time, 
-                                        controllers_up = self.controllers_active) # we update the shared info
-
-    def close(self):
-        
-        if not self._terminate:
-            
-            self._terminate = True
-            
-            if self.robot_states is not None:
-                
-                self.robot_states.terminate()
-
-            if self.launch_controllers is not None:
-
-                self.launch_controllers.terminate()
-
-            if self.controllers_cmds is not None:
-                
-                self.controllers_cmds.terminate()
-
-            if self.rhc_task_refs is not None:
-
-                self.rhc_task_refs.terminate()
-
-            if self.contact_states is not None:
-
-                self.contact_states.terminate()
-
-            if self.shared_cluster_info is not None:
-
-                self.shared_cluster_info.terminate()
-
-            if self.controller_status is not None:
-
-                self.controller_status.terminate()
-
-        self._close_handshake()
-
-    def _close_handshake(self):
-
-        if self.handshake_manager is not None:
-                
-                self.handshake_manager.terminate() # will close/detach all shared memory 
-                
-        if self._handshake_thread is not None:
-                
-            self._close_thread(self._handshake_thread) # we first wait for thread to exit, if still alive
-
-    def _close_thread(self, 
-                    thread):
-        
-        if thread.is_alive():
-                        
-            print(f"[{self.__class__.__name__}]"  + f"[{self.journal.info}]" + \
-                ": terminating child thread " + str(thread.name))
-        
-            thread.join() # wait for thread to join
-
-    def __del__(self):
-                
-        self.close()
