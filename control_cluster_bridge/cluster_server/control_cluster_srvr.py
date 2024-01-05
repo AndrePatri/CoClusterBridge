@@ -47,6 +47,8 @@ class ControlClusterSrvr(ABC):
 
         self.use_isolated_cores = use_isolated_cores # will spawn each controller
         # in a isolated core, if they fit
+        self.distribute_over_cores = False
+
         self.isolated_cores = []
 
         self.namespace = namespace
@@ -107,14 +109,13 @@ class ControlClusterSrvr(ABC):
                 # core
                 
             if len(self.isolated_cores) < self.cluster_size:
-
-                self.use_isolated_cores = False # if we can't fit the controllers in 
-                # the available cores, we don't set the affinity of the processes and
-                # notify the user
-
+                
+                self.distribute_over_cores = True # instead of assigning each process to a separate core
+                # we distribute the controllers over the available ones
                 warning = f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + \
                     ": Not enough isolated cores available to distribute the controllers " + \
-                    f"on them. N. available cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}."
+                    f"on them. N. available cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}. "+ \
+                    "Processes will be distributed among the available ones."
                 
                 print(warning)
 
@@ -132,11 +133,17 @@ class ControlClusterSrvr(ABC):
                 process.start()
 
                 if self.use_isolated_cores:
+                    
+                    if not self.distribute_over_cores:
 
-                    os.sched_setaffinity(process.pid, {self.isolated_cores[i]})
+                        os.sched_setaffinity(process.pid, {self.isolated_cores[i]})
+                        
+                    else:
+
+                        os.sched_setaffinity(process.pid, {8, 9, 10, 11, 12, 13, 14, 15})
 
                     info = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
-                        f": setting affinity ID {self.isolated_cores[i]} for controller n.{i}." 
+                            f": setting affinity ID {os.sched_getaffinity(process.pid) } for controller n.{i}." 
                     
                     print(info)
                 
