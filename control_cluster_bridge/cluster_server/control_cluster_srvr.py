@@ -94,7 +94,14 @@ class ControlClusterSrvr(ABC):
                 process.terminate()  # Forcefully terminate the process
             
             print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": terminating child process " + str(process.name))
-        
+    
+    def _assign_process_to_core_idx(self, 
+                process_index: int, core_ids: List[int]):
+
+        num_cores = len(core_ids)
+
+        return core_ids[process_index % num_cores]
+
     def _spawn_processes(self):
 
         print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
@@ -107,6 +114,14 @@ class ControlClusterSrvr(ABC):
                 self.isolated_cores = get_isolated_cores()[1] # available isolated
                 # cores -> if possible we spawn a controller for each isolated 
                 # core
+
+                if not len(self.isolated_cores) > 0: 
+                    
+                    exception = "[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
+                        ": No isolated cores found on this machine. Either isolate some cores or " + \
+                        "deactivate the use_isolated_cores flag."
+
+                    raise Exception(exception)
                 
             if len(self.isolated_cores) < self.cluster_size:
                 
@@ -119,6 +134,14 @@ class ControlClusterSrvr(ABC):
                 
                 print(warning)
 
+                if not (self.cluster_size % len(self.isolated_cores) == 0):
+
+                    cores_not_saturated_warn = f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + \
+                        f": the number of cluster controllers {self.cluster_size} is not a multiple of "+ \
+                        f"the number of available isolated_cores "
+
+                    print(cores_not_saturated_warn)
+                
             for i in range(0, self.cluster_size):
 
                 process = mp.Process(target=self._controllers[i].solve, 
@@ -126,7 +149,7 @@ class ControlClusterSrvr(ABC):
                 
                 self._processes.append(process)
                 
-            # we start the processes
+            # we start the processes and set affinity
             i = 0
             for process in self._processes:
 
@@ -139,8 +162,16 @@ class ControlClusterSrvr(ABC):
                         os.sched_setaffinity(process.pid, {self.isolated_cores[i]})
                         
                     else:
+                        
+                        # processes are distributed over all isolated cores (the scheduler takes
+                        # care of that)
+                        # os.sched_setaffinity(process.pid, self.isolated_cores)
+                        
+                        # processes are manually ditributed among available cores. For maximum
+                        # hardware saturation, the number of processes should be a multiple of the 
+                        # number of isolated cores
 
-                        os.sched_setaffinity(process.pid, {8, 9, 10, 11, 12, 13, 14, 15})
+                        os.sched_setaffinity(process.pid, {self._assign_process_to_core_idx(i, self.isolated_cores)})
 
                     info = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
                             f": setting affinity ID {os.sched_getaffinity(process.pid) } for controller n.{i}." 
