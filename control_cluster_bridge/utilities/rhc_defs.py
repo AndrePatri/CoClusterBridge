@@ -1365,8 +1365,8 @@ class RHCDebugData():
         # actual data
         self.data = self.Data(namespace = namespace,
                 is_server = is_server, 
-                n_rows = n_dims, 
-                n_cols = n_nodes, 
+                n_dims= n_dims, 
+                n_nodes = n_nodes, 
                 verbose = verbose, 
                 vlevel = vlevel)
         
@@ -1463,9 +1463,9 @@ class RHCDebugData():
 
         self.data.close()
 
-        self.names.close()
+        self.shared_names.close()
 
-        self.dimensions.close()
+        self.shared_dims.close()
             
 class RHCInternal():
 
@@ -1502,7 +1502,7 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            basename = "v" # velocity vector
+            basename = "q" # velocity vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -1522,7 +1522,7 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
             
-            basename = "a" # acceleration vector
+            basename = "A" # acceleration vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -1619,7 +1619,6 @@ class RHCInternal():
                 dimensions: List[int] = None, # not needed if client
                 n_nodes: int = -1, # not needed if client 
                 namespace = "",
-                basename = "",
                 is_server = False, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
@@ -1629,8 +1628,7 @@ class RHCInternal():
             super().__init__(names = names, # not needed if client
                     dimensions = dimensions, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
-                    namespace = namespace,
-                    basename = basename,
+                    namespace = namespace + basename,
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel) 
@@ -1642,7 +1640,6 @@ class RHCInternal():
                 dimensions: List[int] = None, # not needed if client
                 n_nodes: int = -1, # not needed if client 
                 namespace = "",
-                basename = "",
                 is_server = False, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0):
@@ -1652,8 +1649,7 @@ class RHCInternal():
             super().__init__(names = names, # not needed if client
                     dimensions = dimensions, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
-                    namespace = namespace,
-                    basename = basename,
+                    namespace = namespace + basename,
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel) 
@@ -1779,7 +1775,7 @@ class RHCInternal():
         self.cnstr = None
 
         if self.enable_list.enable_q:
-
+            
             self.q = self.Q(namespace = namespace,
                     is_server = is_server, 
                     n_dims = 3 + 4 + n_jnts, 

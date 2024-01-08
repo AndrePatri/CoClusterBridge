@@ -52,6 +52,7 @@ class RHController(ABC):
             cluster_size: int,
             controller_index: int,
             srdf_path: str,
+            n_nodes: int,
             verbose = False, 
             debug = False,
             array_dtype = torch.float32, 
@@ -110,6 +111,8 @@ class RHController(ABC):
 
         self.n_resets = 0
         self.n_fails = 0
+
+        self._n_nodes = n_nodes
 
         self._homer: RobotHomer = None
 
@@ -182,6 +185,7 @@ class RHController(ABC):
                                     is_server=True, 
                                     n_contacts=self.n_contacts,
                                     n_jnts=self.n_dofs,
+                                    n_nodes=self._n_nodes,
                                     verbose = self._verbose,
                                     vlevel=VLevel.V2)
             
