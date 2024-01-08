@@ -30,7 +30,7 @@ from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterIn
 
 from control_cluster_bridge.utilities.defs import Journal
 
-from control_cluster_bridge.utilities.control_cluster_defs import ControllersStatus
+from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
 from SharsorIPCpp.PySharsorIPC import VLevel
 
 import time
@@ -313,7 +313,7 @@ class ControlClusterClient(ABC):
 
             if self.controller_status is not None:
 
-                self.controller_status.terminate()
+                self.controller_status.close()
 
         self._close_handshake()
     
@@ -419,7 +419,7 @@ class ControlClusterClient(ABC):
                                     namespace=self.namespace,
                                     dtype=dtype) 
 
-        self.controller_status = ControllersStatus(is_server=True,
+        self.controller_status = RHCStatus(is_server=True,
                                         cluster_size=self.cluster_size,
                                         namespace=self.namespace, 
                                         verbose=self._verbose, 

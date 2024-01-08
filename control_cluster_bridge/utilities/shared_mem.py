@@ -34,7 +34,7 @@ from control_cluster_bridge.utilities.defs import shared_srvr_ncols_name
 
 from control_cluster_bridge.utilities.defs import Journal
 
-from SharsorIPCpp.PySharsorIPC import ServerFactory, ClientFactory, StringTensorServer, StringTensorClient
+from SharsorIPCpp.PySharsorIPC import ServerFactory, ClientFactory
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import RowMajor, ColMajor
 from SharsorIPCpp.PySharsorIPC import toNumpyDType
@@ -1789,7 +1789,7 @@ class SharedDataView:
             col_index: int, 
             data: Union[np.ndarray, 
                         torch.Tensor] = None):
-
+            
         if isinstance(data, torch.Tensor):  
             
             if not self._ensure2D(data):
@@ -1870,7 +1870,7 @@ class SharedDataView:
 
                 return None, False
             
-            # copy data into part of torch view
+            # copy data into part of numpy view
             data[:, :] = self.numpy_view[row_index:row_index + input_rows, 
                     col_index:col_index + input_cols]
             
@@ -1914,14 +1914,14 @@ class SharedDataView:
 
         while not read_done: 
             
-            data, read_done = self.read(
+            data_read, read_done = self.read(
                                 row_index=row_index,
                                 col_index=col_index,
                                 data=data)
             
             if read_done:
 
-                return data, read_done
+                return data_read, read_done
             
             else:
 

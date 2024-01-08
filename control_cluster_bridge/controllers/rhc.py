@@ -25,7 +25,9 @@ from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
 
-from control_cluster_bridge.utilities.control_cluster_defs import ControllersStatus
+from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
+from control_cluster_bridge.utilities.rhc_defs import RHCInternal
+
 from SharsorIPCpp.PySharsorIPC import VLevel
 
 from typing import List, TypeVar
@@ -53,7 +55,8 @@ class RHController(ABC):
             verbose = False, 
             debug = False,
             array_dtype = torch.float32, 
-            namespace = ""):
+            namespace = "",
+            debug_sol = False):
         
         self.namespace = namespace
         
@@ -68,6 +71,8 @@ class RHController(ABC):
         self._verbose = verbose
         self._debug = debug
 
+        self._debug_sol = debug_sol
+
         self.cluster_size = cluster_size
 
         self.n_dofs = None
@@ -78,6 +83,7 @@ class RHController(ABC):
         self.contact_state = None 
 
         self.controller_status = None
+        self.rhc_internal = None
 
         self.robot_cmds = None
         self.rhc_task_refs:RhcTaskRefsChild = None
@@ -129,19 +135,58 @@ class RHController(ABC):
         
         if self.controller_status is not None:
 
-            self.controller_status.terminate()
+            self.controller_status.close()
+        
+        if self.rhc_internal is not None:
+
+            self.rhc_internal.close()
 
     def _init(self):
 
         self._init_problem() # we call the child's initialization method
 
-        self.controller_status = ControllersStatus(is_server=False,
+        self.controller_status = RHCStatus(is_server=False,
                                             namespace=self.namespace, 
                                             verbose=True, 
                                             vlevel=VLevel.V2)
 
         self.controller_status.run()
         
+        if self._debug_sol:
+            
+            # internal solution is published on shared mem.
+
+            cost_dims = [1, 4, 6]
+            constr_dims = [3, 4, 8]
+            cost_names = ["pipi", "popi", "pu"]
+            constr_names = ["pipi1", "pop2i", "p4u"]
+
+            enable_list = RHCInternal.Enabled(is_server=True, 
+                        enable_q= True, 
+                        enable_v=True, 
+                        enable_a=True, 
+                        enable_a_dot=True, 
+                        enable_f=True,
+                        enable_f_dot=True, 
+                        enable_eff=True, 
+                        enable_costs=True, 
+                        enable_constr=True, 
+                        cost_names=cost_names, 
+                        cost_dims=cost_dims,
+                        constr_names=constr_names,
+                        constr_dims=constr_dims,
+                        )
+            
+            self.rhc_internal = RHCInternal(enable_list=enable_list, 
+                                    namespace=self.namespace,
+                                    is_server=True, 
+                                    n_contacts=self.n_contacts,
+                                    n_jnts=self.n_dofs,
+                                    verbose = self._verbose,
+                                    vlevel=VLevel.V2)
+            
+            self.rhc_internal.run()
+
         self._homer = RobotHomer(self.srdf_path, 
                             self._server_side_jnt_names)
         

@@ -28,6 +28,15 @@ from control_cluster_bridge.utilities.defs import Journal
 
 from abc import ABC, abstractmethod
 
+import numpy as np
+
+from control_cluster_bridge.utilities.shared_mem import SharedDataView
+from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import Journal as Logger
+from SharsorIPCpp.PySharsorIPC import dtype
+
+from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
+
 class ContactState:
 
     class ContactState:
@@ -1195,3 +1204,735 @@ class RhcTaskRefs:
 RobotStateChild = TypeVar('RobotStateChild', bound='RobotState')
 RobotCmdsChild = TypeVar('RobotCmdsChild', bound='RobotCmds')
 RhcTaskRefsChild = TypeVar('RhcTaskRefsChild', bound='RhcTaskRefs')
+
+class RHCDebugData():
+
+    # shared aggregate data object.
+    # useful for sharing and debugging rhc data like
+    # costs and constraints 
+
+    class Names():
+        
+        def __init__(self,
+            names: List[str] = None,
+            namespace = "",
+            is_server = False, 
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0):
+
+            basename = "debug_data_names"
+            
+            self.is_server = is_server
+
+            self.names = names
+
+            if self.is_server:
+
+                self.shared_names = StringTensorServer(length = len(names), 
+                                            basename = basename, 
+                                            name_space = namespace,
+                                            verbose = verbose, 
+                                            vlevel = vlevel, 
+                                            force_reconnection = True)
+
+            else:
+
+                self.shared_names = StringTensorClient(
+                                            basename = basename, 
+                                            name_space = namespace,
+                                            verbose = self.verbose, 
+                                            vlevel = self.vlevel)
+                
+        def run(self):
+            
+            if self.is_server:
+
+                jnt_names_written = self.shared_names.write_vec(self.names, 0)
+
+                if not jnt_names_written:
+
+                    raise Exception("Could not write joint names on shared memory!")
+            
+            else:
+                
+                self.names = [""] * self.n_jnts
+
+                jnt_names_read = self.shared_jnt_names.read_vec(self.names, 0)
+
+                if not jnt_names_read:
+
+                    raise Exception("Could not read joint names on shared memory!")
+
+        def close(self):
+
+            self.shared_names.close()
+            
+    class DataDims(SharedDataView):
+        
+        def __init__(self,
+            dims: List[int] = None,
+            n_nodes: int = -1,
+            namespace = "",
+            is_server = False, 
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0):
+        
+            basename = "debug_data_dims"
+
+            self.dims = dims
+            
+            n_dims = 0
+            for i in range(0, len(dims)):
+
+                n_dims += dims[i]
+                
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+        def run(self):
+
+            super().run()
+
+            if self.is_server:
+                
+                dims = np.array(self.dims).reshape((len(self.dims), 1))
+
+                self.write_wait(data = dims, row_index= 0,
+                        col_index=0)
+            
+            else:
+
+                # updates shared dims
+                self.synch_all(read=True, wait=True)
+
+                self.dims = self.numpy_view[:, :].copy()
+
+                self.n_dims = self.data.n_rows
+                self.n_nodes = self.data.n_cols
+                
+    class Data(SharedDataView):
+        
+        def __init__(self,
+            namespace = "",
+            is_server = False, 
+            n_dims: int = -1, 
+            n_nodes: int = -1, 
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0):
+        
+            basename = "debug_data" 
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    def __init__(self,
+            names: List[str] = None, # not needed if client
+            dimensions: List[int] = None, # not needed if client
+            n_nodes: int = -1, # not needed if client 
+            namespace = "",
+            is_server = False, 
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0):
+        
+        self.names = names
+        self.dimensions = dimensions
+
+        self.n_dims = -1
+        self.n_nodes = n_nodes
+
+        self.is_server = is_server
+
+        if self.is_server:
+            
+            n_dims = 0
+
+            for i in range(0, len(dimensions)):
+
+                n_dims = n_dims + dimensions[i]
+
+            self.n_dims = n_dims
+
+        # actual data
+        self.data = self.Data(namespace = namespace,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+        
+        # names of each block of data
+        self.shared_names = self.Names(namespace = namespace,
+                is_server = is_server, 
+                names = self.names,
+                verbose = verbose, 
+                vlevel = vlevel)
+
+        # dimenions of each block of data
+        self.shared_dims = self.DataDims(namespace = namespace,
+                is_server = is_server, 
+                dims = dimensions,
+                n_nodes = n_nodes,
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    def run(self):
+
+        self.data.run()
+
+        self.shared_names.run()
+
+        self.shared_dims.run()
+
+        if not self.is_server:
+
+            self.names = self.shared_names.names
+            
+            # updates shared dims
+            self.shared_dims.synch_all(read=True, wait=True)
+
+            self.dimensions = self.shared_dims.dims.flatten().tolist()
+
+            self.n_dims = self.data.n_rows
+            self.n_nodes = self.data.n_cols
+
+    def write(self,
+        data: np.ndarray,
+        name: str,
+        wait = True):
+
+        # we assume names does not contain
+        # duplicates
+        data_idx = self.names.index(name)
+
+        # we sum dimensions up until the data we 
+        # need to write to get the starting index
+        # of the data block
+        starting_idx = 0
+        for index in range(data_idx + 1):
+
+            starting_idx += self.dimensions[index]
+
+        if wait: 
+
+            self.data.write_wait(data, starting_idx, 0) # blocking
+            
+            return True
+        
+        else:
+
+            return self.data.write(data, starting_idx, 0) # non-blocking
+
+    def synch(self,
+            wait = True):
+
+        # to be called before using get() on one or more data 
+        # blocks
+
+        # updates the whole view with shared data
+        return self.data.synch_all(read = True, wait = wait)
+
+    def get(self,
+        name: str):
+
+        # we assume names does not contain
+        # duplicates
+        data_idx = self.names.index(name)
+
+        # we sum dimensions up until the data we 
+        # need to write to get the starting index
+        # of the data block
+        starting_idx = 0
+        for index in range(data_idx + 1):
+
+            starting_idx += self.dimensions[index]
+
+        # we return a copy
+        return self.data.numpy_view[starting_idx:starting_idx + self.dimensions[index], :].copy()
+    
+    def close(self):
+
+        self.data.close()
+
+        self.names.close()
+
+        self.dimensions.close()
+            
+class RHCInternal():
+
+    # shared data for an acceleration-based
+    # formulation RHC controller
+
+    class Q(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "q" # configuration vector
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class V(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "v" # velocity vector
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class A(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "a" # acceleration vector
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class ADot(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "a_dot" # jerk vector
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+    
+    class F(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "f" # cartesian force vector
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+            
+    class FDot(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "f_dot" # yank vector
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+            
+    class Eff(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                n_dims: int = -1, 
+                n_nodes: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "v" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_dims, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel)
+
+    class RHCosts(RHCDebugData):
+
+        def __init__(self,
+                names: List[str] = None, # not needed if client
+                dimensions: List[int] = None, # not needed if client
+                n_nodes: int = -1, # not needed if client 
+                namespace = "",
+                basename = "",
+                is_server = False, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "rhc_costs"
+
+            super().__init__(names = names, # not needed if client
+                    dimensions = dimensions, # not needed if client
+                    n_nodes = n_nodes, # not needed if client 
+                    namespace = namespace,
+                    basename = basename,
+                    is_server = is_server, 
+                    verbose = verbose, 
+                    vlevel = vlevel) 
+    
+    class RHConstr(RHCDebugData):
+
+        def __init__(self,
+                names: List[str] = None, # not needed if client
+                dimensions: List[int] = None, # not needed if client
+                n_nodes: int = -1, # not needed if client 
+                namespace = "",
+                basename = "",
+                is_server = False, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0):
+            
+            basename = "rhc_constraints"
+
+            super().__init__(names = names, # not needed if client
+                    dimensions = dimensions, # not needed if client
+                    n_nodes = n_nodes, # not needed if client 
+                    namespace = namespace,
+                    basename = basename,
+                    is_server = is_server, 
+                    verbose = verbose, 
+                    vlevel = vlevel) 
+    
+    class Enabled():
+
+        def __init__(self,
+            is_server: bool = False,
+            enable_q: bool = True, 
+            enable_v: bool = True, 
+            enable_a: bool = True,
+            enable_a_dot: bool = False, 
+            enable_f: bool = True, 
+            enable_f_dot: bool = False, 
+            enable_eff: bool = True, 
+            enable_costs: bool = False, 
+            enable_constr: bool = False,
+            cost_names: List[str] = None, 
+            constr_names: List[str] = None,
+            cost_dims: List[int] = None, 
+            constr_dims: List[int] = None):
+
+            self.is_server = is_server
+
+            self.enable_q = enable_q
+            self.enable_v = enable_v
+            self.enable_a = enable_a
+            self.enable_a_dot = enable_a_dot
+            self.enable_f = enable_f
+            self.enable_f_dot = enable_f_dot
+            self.enable_eff = enable_eff
+            self.enable_costs = enable_costs
+            self.enable_constr = enable_constr
+            
+            self.cost_names = None
+            self.cost_dims = None
+
+            self.constr_names = None
+            self.constr_dims = None
+
+            self._set_cost_names(cost_names)
+            self._set_cost_dims(cost_dims)
+            self._set_constr_names(constr_names)
+            self._set_constr_dims(constr_dims)
+
+        def _set_cost_names(self, 
+                        names: List[str]):
+
+            self.cost_names = names
+
+            if self.enable_costs and (self.cost_names is None) and \
+                self.is_server:
+                
+                excep = "Cost enabled but no cost_names list was provided"
+
+                raise Exception(excep)
+
+        def _set_cost_dims(self, 
+                        dims: List[str]):
+
+            self.cost_dims = dims
+
+            if self.enable_costs and (self.cost_dims is None) and \
+                self.is_server:
+                
+                excep = "Cost enabled but no cost_dims list was provided"
+
+                raise Exception(excep)
+
+
+        def _set_constr_names(self, 
+                        names: List[str]):
+
+            self.constr_names = names
+
+            if not self.enable_constr and (self.constr_names is None) and \
+                self.is_server:
+                
+                excep = "Constraints enabled but no cost_names list was provided"
+
+                raise Exception(excep)
+
+
+        def _set_constr_dims(self, 
+                        dims: List[str]):
+
+            self.constr_dims = dims
+
+            if self.enable_costs and (self.constr_dims is None) and \
+                self.is_server:
+                
+                excep = "Cost enabled but no constr_dims list was provided"
+
+                raise Exception(excep)
+
+    def __init__(self,
+            enable_list: Enabled = None,
+            namespace = "",
+            is_server = False, 
+            n_nodes: int = -1, 
+            n_contacts: int = -1,
+            n_jnts: int = -1,
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0):
+
+        if enable_list is not None:
+
+            self.enable_list = enable_list
+        
+        else:
+            
+            # use defaults
+            self.enable_list = self.Enabled()
+
+        self.q = None
+        self.v = None
+        self.a = None
+        self.a_dot = None
+        self.f = None
+        self.f_dot = None
+        self.eff = None
+        self.costs = None
+        self.cnstr = None
+
+        if self.enable_list.enable_q:
+
+            self.q = self.Q(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 3 + 4 + n_jnts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+        
+        if self.enable_list.enable_v:
+
+            self.v = self.V(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 3 + 3 + n_jnts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+        
+        if self.enable_list.enable_a:
+
+            self.a = self.A(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 3 + 3 + n_jnts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+        
+        if self.enable_list.enable_a_dot:
+
+            self.a_dot = self.ADot(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 3 + 3 + n_jnts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+        
+        if self.enable_list.enable_f:
+
+            self.f = self.F(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 6 * n_contacts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+            
+        if self.enable_list.enable_f_dot:
+
+            self.f_dot = self.FDot(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 6 * n_contacts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+        
+        if self.enable_list.enable_eff:
+
+            self.eff = self.Eff(namespace = namespace,
+                    is_server = is_server, 
+                    n_dims = 3 + 3 + n_jnts, 
+                    n_nodes = n_nodes, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+            
+        if self.enable_list.enable_costs:
+
+            self.costs = self.RHCosts(names = self.enable_list.cost_names, # not needed if client
+                    dimensions = self.enable_list.cost_dims, # not needed if client
+                    n_nodes = n_nodes, # not needed if client 
+                    namespace = namespace,
+                    is_server = is_server, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+        
+        if self.enable_list.enable_constr:
+
+            self.cnstr = self.RHConstr(names = self.enable_list.cost_names, # not needed if client
+                    dimensions = self.enable_list.constr_dims, # not needed if client
+                    n_nodes = n_nodes, # not needed if client 
+                    namespace = namespace,
+                    is_server = is_server, 
+                    verbose = verbose, 
+                    vlevel = vlevel)
+    
+    def run(self):
+
+        if self.q is not None:
+
+            self.q.run()
+        
+        if self.v is not None:
+
+            self.v.run()
+        
+        if self.a is not None:
+
+            self.a.run()
+        
+        if self.a_dot is not None:
+
+            self.a_dot.run()
+        
+        if self.f is not None:
+
+            self.f.run()
+            
+        if self.f_dot is not None:
+
+            self.f_dot.run()
+        
+        if self.eff is not None:
+
+            self.eff.run()
+            
+        if self.costs is not None:
+
+            self.costs.run()
+        
+        if self.cnstr is not None:
+
+            self.cnstr.run()
+
+    def close(self):
+
+        if self.q is not None:
+
+            self.q.close()
+        
+        if self.v is not None:
+
+            self.v.close()
+        
+        if self.a is not None:
+
+            self.a.close()
+        
+        if self.a_dot is not None:
+
+            self.a_dot.close()
+        
+        if self.f is not None:
+
+            self.f.close()
+            
+        if self.f_dot is not None:
+
+            self.f_dot.close()
+        
+        if self.eff is not None:
+
+            self.eff.close()
+            
+        if self.costs is not None:
+
+            self.costs.close()
+        
+        if self.cnstr is not None:
+
+            self.cnstr.close()
