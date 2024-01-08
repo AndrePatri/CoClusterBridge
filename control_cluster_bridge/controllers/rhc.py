@@ -235,10 +235,10 @@ class RHController(ABC):
                         start = time.perf_counter()
 
                     # latest state is employed
-                    failed = self._solve() # solve actual TO
+                    success = self._solve() # solve actual TO
 
-                    if (failed):
-
+                    if (not success):
+                        
                         self._on_failure()
 
                     self._fill_cmds_from_sol() # we update update the views of the cmd
