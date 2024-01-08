@@ -102,6 +102,9 @@ class RHController(ABC):
 
         self.add_data_lenght = 0
 
+        self.n_resets = 0
+        self.n_fails = 0
+
         self._homer: RobotHomer = None
 
         self._init()
@@ -278,10 +281,18 @@ class RHController(ABC):
 
         self.reset() # resets controller (this has to be defined by the user)
 
+        self.n_fails += 1
+
     @abstractmethod
-    def reset(self):
+    def _reset(self):
         
         pass
+
+    def reset(self):
+        
+        self._reset()
+
+        self.n_resets += 1
 
     def assign_client_side_jnt_names(self, 
                         jnt_names: List[str]):
