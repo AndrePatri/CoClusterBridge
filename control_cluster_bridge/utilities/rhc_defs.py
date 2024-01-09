@@ -1245,8 +1245,10 @@ class RHCDebugData():
                 
         def run(self):
             
-            if self.is_server:
+            self.shared_names.run()
 
+            if self.is_server:
+                
                 jnt_names_written = self.shared_names.write_vec(self.names, 0)
 
                 if not jnt_names_written:
@@ -1665,8 +1667,6 @@ class RHCInternal():
             enable_f: bool = True, 
             enable_f_dot: bool = False, 
             enable_eff: bool = True, 
-            enable_costs: bool = False, 
-            enable_constr: bool = False,
             cost_names: List[str] = None, 
             constr_names: List[str] = None,
             cost_dims: List[int] = None, 
@@ -1681,79 +1681,94 @@ class RHCInternal():
             self.enable_f = enable_f
             self.enable_f_dot = enable_f_dot
             self.enable_eff = enable_eff
-            self.enable_costs = enable_costs
-            self.enable_constr = enable_constr
-            
+
+            self.enable_costs = False
+            self.enable_constr = False
+
             self.cost_names = None
             self.cost_dims = None
 
             self.constr_names = None
             self.constr_dims = None
 
-            self._set_cost_names(cost_names)
-            self._set_cost_dims(cost_dims)
-            self._set_constr_names(constr_names)
-            self._set_constr_dims(constr_dims)
+            self._set_cost_data(cost_names, cost_dims)
+            self._set_constr_data(constr_names, constr_dims)
 
-        def _set_cost_names(self, 
-                        names: List[str]):
+        def _set_cost_data(self, 
+                        names: List[str] = None,
+                        dims: List[str] = None):
 
             self.cost_names = names
+            self.cost_dims = dims
 
-            if self.enable_costs and (self.cost_names is None) and \
+            if (names is not None) and (self.cost_names is None) and \
                 self.is_server:
                 
                 excep = "Cost enabled but no cost_names list was provided"
 
                 raise Exception(excep)
 
-        def _set_cost_dims(self, 
-                        dims: List[str]):
-
-            self.cost_dims = dims
-
-            if self.enable_costs and (self.cost_dims is None) and \
+            if (dims is not None) and (self.cost_dims is None) and \
                 self.is_server:
                 
                 excep = "Cost enabled but no cost_dims list was provided"
 
                 raise Exception(excep)
 
+            if not (len(self.cost_names) == len(self.cost_dims)):
+                
+                excep = f"Cost names dimension {len(self.cost_names)} " + \
+                    f"does not match dim. vector length {len(self.cost_dims)}"
 
-        def _set_constr_names(self, 
-                        names: List[str]):
+                raise Exception(excep)
+            
+            self.enable_costs = True
+
+        def _set_constr_data(self, 
+                        names: List[str] = None,
+                        dims: List[str] = None):
 
             self.constr_names = names
+            self.constr_dims = dims
 
-            if not self.enable_constr and (self.constr_names is None) and \
+            if (names is not None) and (self.constr_names is None) and \
                 self.is_server:
                 
                 excep = "Constraints enabled but no cost_names list was provided"
 
                 raise Exception(excep)
 
-
-        def _set_constr_dims(self, 
-                        dims: List[str]):
-
-            self.constr_dims = dims
-
-            if self.enable_costs and (self.constr_dims is None) and \
+            if (dims is not None) and (self.constr_dims is None) and \
                 self.is_server:
                 
                 excep = "Cost enabled but no constr_dims list was provided"
 
                 raise Exception(excep)
 
+            if not (len(self.constr_names) == len(self.constr_dims)):
+
+                excep = f"Cost names dimension {len(self.constr_names)} " + \
+                    f"does not match dim. vector length {len(self.constr_dims)}"
+
+                raise Exception(excep)
+            
+            self.enable_constr = True
+
     def __init__(self,
             enable_list: Enabled = None,
             namespace = "",
+            rhc_index = 0,
             is_server = False, 
             n_nodes: int = -1, 
             n_contacts: int = -1,
             n_jnts: int = -1,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0):
+
+        self.rhc_index = rhc_index
+
+        # appending controller index to namespace
+        self.namespace = namespace + "_n_" + str(self.rhc_index)
 
         if enable_list is not None:
 
@@ -1773,10 +1788,10 @@ class RHCInternal():
         self.eff = None
         self.costs = None
         self.cnstr = None
-
+            
         if self.enable_list.enable_q:
             
-            self.q = self.Q(namespace = namespace,
+            self.q = self.Q(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 3 + 4 + n_jnts, 
                     n_nodes = n_nodes, 
@@ -1785,7 +1800,7 @@ class RHCInternal():
         
         if self.enable_list.enable_v:
 
-            self.v = self.V(namespace = namespace,
+            self.v = self.V(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
@@ -1794,7 +1809,7 @@ class RHCInternal():
         
         if self.enable_list.enable_a:
 
-            self.a = self.A(namespace = namespace,
+            self.a = self.A(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
@@ -1803,7 +1818,7 @@ class RHCInternal():
         
         if self.enable_list.enable_a_dot:
 
-            self.a_dot = self.ADot(namespace = namespace,
+            self.a_dot = self.ADot(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
@@ -1812,7 +1827,7 @@ class RHCInternal():
         
         if self.enable_list.enable_f:
 
-            self.f = self.F(namespace = namespace,
+            self.f = self.F(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 6 * n_contacts, 
                     n_nodes = n_nodes, 
@@ -1821,7 +1836,7 @@ class RHCInternal():
             
         if self.enable_list.enable_f_dot:
 
-            self.f_dot = self.FDot(namespace = namespace,
+            self.f_dot = self.FDot(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 6 * n_contacts, 
                     n_nodes = n_nodes, 
@@ -1830,7 +1845,7 @@ class RHCInternal():
         
         if self.enable_list.enable_eff:
 
-            self.eff = self.Eff(namespace = namespace,
+            self.eff = self.Eff(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
@@ -1842,7 +1857,7 @@ class RHCInternal():
             self.costs = self.RHCosts(names = self.enable_list.cost_names, # not needed if client
                     dimensions = self.enable_list.cost_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
-                    namespace = namespace,
+                    namespace = self.namespace,
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel)
@@ -1852,7 +1867,7 @@ class RHCInternal():
             self.cnstr = self.RHConstr(names = self.enable_list.cost_names, # not needed if client
                     dimensions = self.enable_list.constr_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
-                    namespace = namespace,
+                    namespace = self.namespace,
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel)

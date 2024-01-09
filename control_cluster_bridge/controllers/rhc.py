@@ -157,31 +157,25 @@ class RHController(ABC):
         
         if self._debug_sol:
             
-            # internal solution is published on shared mem.
-
-            cost_dims = [1, 4, 6]
-            constr_dims = [3, 4, 8]
-            cost_names = ["pipi", "popi", "pu"]
-            constr_names = ["pipi1", "pop2i", "p4u"]
+            # internal solution is published on shared mem
 
             enable_list = RHCInternal.Enabled(is_server=True, 
                         enable_q= True, 
-                        enable_v=True, 
-                        enable_a=True, 
+                        enable_v=False, 
+                        enable_a=False, 
                         enable_a_dot=True, 
                         enable_f=True,
                         enable_f_dot=True, 
                         enable_eff=True, 
-                        enable_costs=True, 
-                        enable_constr=True, 
-                        cost_names=cost_names, 
-                        cost_dims=cost_dims,
-                        constr_names=constr_names,
-                        constr_dims=constr_dims,
+                        cost_names=self._get_cost_names(), 
+                        cost_dims=self._get_cost_dims(),
+                        constr_names=self._get_constr_names(),
+                        constr_dims=self._get_constr_dims(),
                         )
             
             self.rhc_internal = RHCInternal(enable_list=enable_list, 
                                     namespace=self.namespace,
+                                    rhc_index = self.controller_index,
                                     is_server=True, 
                                     n_contacts=self.n_contacts,
                                     n_jnts=self.n_dofs,
@@ -332,11 +326,6 @@ class RHController(ABC):
 
         self.n_fails += 1
 
-    @abstractmethod
-    def _reset(self):
-        
-        pass
-
     def reset(self):
         
         self._reset()
@@ -408,7 +397,32 @@ class RHController(ABC):
                 ": server-side and client-side joint names do not match!"
 
             raise Exception(exception)
+    
+    def _get_cost_names(self):
         
+        # to be overridden by child class
+        return None
+    
+    def _get_cost_dims(self):
+        
+        # to be overridden by child class
+        return None
+    
+    def _get_constr_names(self):
+        
+        # to be overridden by child class
+        return None
+    
+    def _get_constr_dims(self):
+        
+        # to be overridden by child class
+        return None
+    
+    @abstractmethod
+    def _reset(self):
+        
+        pass
+
     @abstractmethod
     def _init_rhc_task_cmds(self) -> RhcTaskRefsChild:
 
