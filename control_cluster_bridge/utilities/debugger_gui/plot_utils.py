@@ -501,7 +501,8 @@ class WidgetUtils:
 
         # Create a horizontal layout for the title and the show/hide all button
         title_layout = QHBoxLayout()
-        plot_selector_title = QLabel(title)
+        plot_selector_title = QLabel(title, 
+                                alignment=Qt.AlignHCenter)
         title_layout.addWidget(plot_selector_title)
 
         # Create the show/hide all button
