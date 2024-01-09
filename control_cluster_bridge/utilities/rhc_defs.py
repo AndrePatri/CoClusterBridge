@@ -1414,25 +1414,26 @@ class RHCDebugData():
 
         # we assume names does not contain
         # duplicates
+        
         data_idx = self.names.index(name)
 
         # we sum dimensions up until the data we 
         # need to write to get the starting index
         # of the data block
         starting_idx = 0
-        for index in range(data_idx + 1):
+        for index in range(data_idx):
 
             starting_idx += self.dimensions[index]
 
         if wait: 
 
-            self.data.write_wait(data, starting_idx, 0) # blocking
+            self.data.write_wait(np.atleast_2d(data), starting_idx, 0) # blocking
             
             return True
         
         else:
 
-            return self.data.write(data, starting_idx, 0) # non-blocking
+            return self.data.write(np.atleast_2d(data), starting_idx, 0) # non-blocking
 
     def synch(self,
             wait = True):
@@ -1656,7 +1657,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel) 
     
-    class Enabled():
+    class Config():
 
         def __init__(self,
             is_server: bool = False,
@@ -1691,8 +1692,12 @@ class RHCInternal():
             self.constr_names = None
             self.constr_dims = None
 
+            self.n_costs = 0
+            self.n_constr = 0
+
             self._set_cost_data(cost_names, cost_dims)
             self._set_constr_data(constr_names, constr_dims)
+
 
         def _set_cost_data(self, 
                         names: List[str] = None,
@@ -1723,6 +1728,7 @@ class RHCInternal():
                 raise Exception(excep)
             
             self.enable_costs = True
+            self.n_costs = len(self.cost_names)
 
         def _set_constr_data(self, 
                         names: List[str] = None,
@@ -1753,9 +1759,10 @@ class RHCInternal():
                 raise Exception(excep)
             
             self.enable_constr = True
+            self.n_constr = len(self.constr_names)
 
     def __init__(self,
-            enable_list: Enabled = None,
+            config: Config = None,
             namespace = "",
             rhc_index = 0,
             is_server = False, 
@@ -1770,14 +1777,14 @@ class RHCInternal():
         # appending controller index to namespace
         self.namespace = namespace + "_n_" + str(self.rhc_index)
 
-        if enable_list is not None:
+        if config is not None:
 
-            self.enable_list = enable_list
+            self.config = config
         
         else:
             
             # use defaults
-            self.enable_list = self.Enabled()
+            self.config = self.Config()
 
         self.q = None
         self.v = None
@@ -1789,7 +1796,7 @@ class RHCInternal():
         self.costs = None
         self.cnstr = None
             
-        if self.enable_list.enable_q:
+        if self.config.enable_q:
             
             self.q = self.Q(namespace = self.namespace,
                     is_server = is_server, 
@@ -1798,7 +1805,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
         
-        if self.enable_list.enable_v:
+        if self.config.enable_v:
 
             self.v = self.V(namespace = self.namespace,
                     is_server = is_server, 
@@ -1807,7 +1814,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
         
-        if self.enable_list.enable_a:
+        if self.config.enable_a:
 
             self.a = self.A(namespace = self.namespace,
                     is_server = is_server, 
@@ -1816,7 +1823,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
         
-        if self.enable_list.enable_a_dot:
+        if self.config.enable_a_dot:
 
             self.a_dot = self.ADot(namespace = self.namespace,
                     is_server = is_server, 
@@ -1825,7 +1832,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
         
-        if self.enable_list.enable_f:
+        if self.config.enable_f:
 
             self.f = self.F(namespace = self.namespace,
                     is_server = is_server, 
@@ -1834,7 +1841,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
             
-        if self.enable_list.enable_f_dot:
+        if self.config.enable_f_dot:
 
             self.f_dot = self.FDot(namespace = self.namespace,
                     is_server = is_server, 
@@ -1843,7 +1850,7 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
         
-        if self.enable_list.enable_eff:
+        if self.config.enable_eff:
 
             self.eff = self.Eff(namespace = self.namespace,
                     is_server = is_server, 
@@ -1852,20 +1859,20 @@ class RHCInternal():
                     verbose = verbose, 
                     vlevel = vlevel)
             
-        if self.enable_list.enable_costs:
+        if self.config.enable_costs:
 
-            self.costs = self.RHCosts(names = self.enable_list.cost_names, # not needed if client
-                    dimensions = self.enable_list.cost_dims, # not needed if client
+            self.costs = self.RHCosts(names = self.config.cost_names, # not needed if client
+                    dimensions = self.config.cost_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
                     namespace = self.namespace,
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel)
         
-        if self.enable_list.enable_constr:
+        if self.config.enable_constr:
 
-            self.cnstr = self.RHConstr(names = self.enable_list.cost_names, # not needed if client
-                    dimensions = self.enable_list.constr_dims, # not needed if client
+            self.cnstr = self.RHConstr(names = self.config.constr_names, # not needed if client
+                    dimensions = self.config.constr_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
                     namespace = self.namespace,
                     is_server = is_server, 
@@ -1947,3 +1954,154 @@ class RHCInternal():
         if self.cnstr is not None:
 
             self.cnstr.close()
+
+    def write_q(self, 
+                data: np.ndarray = None,
+                wait = True):
+
+        if (self.q is not None) and (data is not None):
+            
+            if wait:
+                
+                self.q.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.q.write(data=data,
+                        row_index=0, col_index=0)
+    
+    def write_v(self, 
+            data: np.ndarray = None,
+            wait = True):
+            
+        if (self.v is not None) and (data is not None):
+            
+            if wait:
+                
+                self.v.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.v.write(data=data,
+                        row_index=0, col_index=0)
+
+    def write_a(self, 
+            data: np.ndarray = None,
+            wait = True):
+        
+        if (self.a is not None) and (data is not None):
+            
+            if wait:
+                
+                self.a.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.a.write(data=data,
+                        row_index=0, col_index=0)
+            
+    def write_a_dot(self, 
+        data: np.ndarray = None,
+        wait = True):
+
+        if (self.a_dot is not None) and (data is not None):
+            
+            if wait:
+                
+                self.a_dot.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.a_dot.write(data=data,
+                        row_index=0, col_index=0)
+    
+    def write_f(self, 
+        data: np.ndarray = None,
+        wait = True):
+            
+        if (self.f is not None) and (data is not None):
+            
+            if wait:
+                
+                self.f.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.f.write(data=data,
+                        row_index=0, col_index=0)
+    
+    def write_f_dot(self, 
+        data: np.ndarray = None,
+        wait = True):
+
+        if (self.f is not None) and (data is not None):
+            
+            if wait:
+                
+                self.f_dot.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.f_dot.write(data=data,
+                        row_index=0, col_index=0)
+    
+    def write_eff(self, 
+        data: np.ndarray = None,
+        wait = True):
+
+        if (self.eff is not None) and (data is not None):
+            
+            if wait:
+                
+                self.eff.write_wait(data=data,
+                        row_index=0, col_index=0)
+            else:
+
+                self.eff.write(data=data,
+                        row_index=0, col_index=0)
+                
+    def write_cost(self, 
+                cost_name: str,
+                data: np.ndarray = None,
+                wait = True):
+
+        if (self.costs is not None) and (data is not None):
+            
+            self.costs.write(data = data, 
+                            name=cost_name,
+                            wait=wait)
+    
+    def read_cost(self, 
+            cost_name: str,
+            wait = True):
+        
+        if self.costs is not None:
+            
+            return self.costs.get(cost_name)
+        
+        else:
+            
+            raise Exception("Cannot retrieve costs. Make sure to provide cost names and dims to Config.")
+            
+    def write_constr(self, 
+                constr_name: str,
+                data: np.ndarray = None,
+                wait = True):
+
+        if (self.cnstr is not None) and (data is not None):
+            
+            self.cnstr.write(data = data, 
+                            name=constr_name,
+                            wait=wait)
+            
+    def read_constr(self, 
+            constr_name,
+            wait = True):
+        
+        if self.cnstr is not None:
+            
+            return self.cnstr.get(constr_name)
+        
+        else:
+            
+            raise Exception("Cannot retrieve constraint. Make sure to provide constraint names and dims to Config.")

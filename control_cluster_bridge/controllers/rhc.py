@@ -159,7 +159,14 @@ class RHController(ABC):
             
             # internal solution is published on shared mem
 
-            enable_list = RHCInternal.Enabled(is_server=True, 
+            # we assume the user has made available the cost
+            # and constraint data at this point (e.g. through
+            # the solution of a bootstrap)
+             
+            cost_data = self._get_cost_data()
+            constr_data = self._get_constr_data()
+
+            config = RHCInternal.Config(is_server=True, 
                         enable_q= True, 
                         enable_v=False, 
                         enable_a=False, 
@@ -167,13 +174,13 @@ class RHController(ABC):
                         enable_f=True,
                         enable_f_dot=True, 
                         enable_eff=True, 
-                        cost_names=self._get_cost_names(), 
-                        cost_dims=self._get_cost_dims(),
-                        constr_names=self._get_constr_names(),
-                        constr_dims=self._get_constr_dims(),
+                        cost_names=cost_data[0], 
+                        cost_dims=cost_data[1],
+                        constr_names=constr_data[0],
+                        constr_dims=constr_data[1],
                         )
             
-            self.rhc_internal = RHCInternal(enable_list=enable_list, 
+            self.rhc_internal = RHCInternal(config=config, 
                                     namespace=self.namespace,
                                     rhc_index = self.controller_index,
                                     is_server=True, 
@@ -290,6 +297,12 @@ class RHController(ABC):
                     self._fill_cmds_from_sol() # we update update the views of the cmd
                     # from the latest solution
 
+                    if self._debug_sol:
+                        
+                        # if in debug, rhc internal state is streamed over 
+                        # shared data
+                        self._update_rhc_internal()
+
                     # we signal the client this controller has finished its job by
                     # resetting the flag
                     self.controller_status.trigger.write_wait(False, 
@@ -398,24 +411,114 @@ class RHController(ABC):
 
             raise Exception(exception)
     
-    def _get_cost_names(self):
+    def _get_cost_data(self):
         
         # to be overridden by child class
+        return None, None
+    
+    def _get_constr_data(self):
+        
+        # to be overridden by child class
+        return None, None
+    
+    def _update_rhc_internal(self):
+
+        # data which is not enabled in the config is not actually 
+        # written so overhead is minimal
+
+        self.rhc_internal.write_q(data= self._get_q_from_sol(),
+                            wait=True)
+
+        self.rhc_internal.write_v(data= self._get_v_from_sol(),
+                            wait=True)
+        
+        self.rhc_internal.write_a(data= self._get_a_from_sol(),
+                            wait=True)
+        
+        self.rhc_internal.write_a_dot(data= self._get_a_dot_from_sol(),
+                            wait=True)
+        
+        self.rhc_internal.write_f(data= self._get_f_from_sol(),
+                            wait=True)
+        
+        self.rhc_internal.write_f_dot(data= self._get_f_dot_from_sol(),
+                            wait=True)
+        
+        self.rhc_internal.write_eff(data= self._get_eff_from_sol(),
+                            wait=True)
+
+        for cost_idx in range(self.rhc_internal.config.n_costs):
+            
+            # iterate over all costs and update all values
+            cost_name = self.rhc_internal.config.cost_names[cost_idx]
+
+            self.rhc_internal.write_cost(data= self._get_cost_from_sol(cost_name = cost_name),
+                                cost_name = cost_name,
+                                wait=True)
+        
+        for constr_idx in range(self.rhc_internal.config.n_constr):
+
+            # iterate over all constraints and update all values
+            constr_name = self.rhc_internal.config.constr_names[constr_idx]
+
+            self.rhc_internal.write_constr(data= self._get_constr_from_sol(constr_name=constr_name),
+                                constr_name = constr_name,
+                                wait=True)
+        
+    def _get_q_from_sol(self):
+
+        # to be overridden by child class
+
+        return None
+
+    def _get_v_from_sol(self):
+
+        # to be overridden by child class
+        
         return None
     
-    def _get_cost_dims(self):
-        
+    def _get_a_from_sol(self):
+
         # to be overridden by child class
+        
         return None
     
-    def _get_constr_names(self):
-        
+    def _get_a_dot_from_sol(self):
+
         # to be overridden by child class
+        
         return None
     
-    def _get_constr_dims(self):
-        
+    def _get_f_from_sol(self):
+
         # to be overridden by child class
+        
+        return None
+    
+    def _get_f_dot_from_sol(self):
+
+        # to be overridden by child class
+        
+        return None
+    
+    def _get_eff_from_sol(self):
+
+        # to be overridden by child class
+        
+        return None
+    
+    def _get_cost_from_sol(self,
+                    cost_name: str):
+
+        # to be overridden by child class
+        
+        return None
+    
+    def _get_constr_from_sol(self,
+                    constr_name: str):
+
+        # to be overridden by child class
+        
         return None
     
     @abstractmethod
@@ -487,4 +590,3 @@ class RHController(ABC):
         pass
    
 RHChild = TypeVar('RHChild', bound='RHController')
-
