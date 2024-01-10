@@ -24,6 +24,8 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcCmdsWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcStateWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcInternalData
+
 
 from typing import List
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
@@ -201,7 +203,16 @@ class RtClusterDebugger(QMainWindow):
                                 parent=None, 
                                 verbose = self.verbose)
         
-        self.base_spawnable_tabs = [rhc_task_ref, rhc_cms, rhc_state, rhc_contact_state]
+        rhc_internal_costs = RhcInternalData(update_data_dt=self.data_update_dt, 
+                                update_plot_dt=self.plot_update_dt,
+                                window_duration=self.window_length, 
+                                window_buffer_factor=self.window_buffer_factor, 
+                                namespace=self.namespace,
+                                parent=None, 
+                                verbose=self.verbose,
+                                is_cost=True)
+        
+        self.base_spawnable_tabs = [rhc_task_ref, rhc_cms, rhc_state, rhc_contact_state, rhc_internal_costs]
 
     def __del__(self):
         

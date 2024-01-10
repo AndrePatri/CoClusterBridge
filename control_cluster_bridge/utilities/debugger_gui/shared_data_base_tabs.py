@@ -3,7 +3,10 @@ from PyQt5.QtWidgets import QWidget
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState, ContactState
+from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState, ContactState, RHCInternal
+from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
+
+from SharsorIPCpp.PySharsorIPC import VLevel
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedStringArray
 
 import torch
@@ -522,3 +525,172 @@ class RhcContactStatesWindow(SharedDataWindow):
             for i in range(0, self.n_sensors):
 
                 self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx].contact_state.get(self.contact_names[i]).numpy())
+
+class RhcInternalData(SharedDataWindow):
+
+    def __init__(self, 
+        update_data_dt: int,
+        update_plot_dt: int,
+        window_duration: int,
+        window_buffer_factor: int = 2,
+        namespace = "",
+        parent: QWidget = None, 
+        verbose = False,
+        is_cost: bool = True
+        ):
+
+        self.is_cost = is_cost
+        
+        self.cluster_size = -1
+
+        self.names = []
+        self.dims = []
+        self.n_nodes = -1
+
+        name = ""
+        if self.is_cost:
+
+            name = "RhcInternalCosts"
+        
+        else:
+
+            name = "RhcInternalConstr"
+            
+        super().__init__(update_data_dt = update_data_dt,
+            update_plot_dt = update_plot_dt,
+            window_duration = window_duration,
+            window_buffer_factor = window_buffer_factor,
+            grid_n_rows = 2,
+            grid_n_cols = 3,
+            namespace = namespace,
+            name = name,
+            parent = parent, 
+            verbose = verbose)
+
+    def _init_shared_data(self):
+        
+        is_server = False
+        
+        self.rhc_status_info = RHCStatus(is_server=is_server,
+                            namespace=self.namespace, 
+                            verbose=self.verbose,
+                            vlevel=VLevel.V1)
+
+        self.rhc_status_info.run()
+        
+        self.cluster_size = self.rhc_status_info.trigger.n_rows
+
+        self.rhc_status_info.close() # we don't need the client anymore
+
+        enable_costs = False
+        enable_constr = False
+
+        if self.is_cost:
+            
+            enable_costs = True
+
+        else:
+            
+            enable_constr = True
+
+        config = RHCInternal.Config(is_server=is_server, 
+                        enable_q=False, 
+                        enable_v=False, 
+                        enable_a=False, 
+                        enable_a_dot=False, 
+                        enable_f=False,
+                        enable_f_dot=False, 
+                        enable_eff=False,
+                        enable_costs=enable_costs, 
+                        enable_constr=enable_constr)
+
+        # view of rhc internal data
+        for i in range(0, self.cluster_size):
+
+            self.shared_data_clients.append(RHCInternal(config=config,
+                                            namespace=self.namespace,
+                                            rhc_index = i,
+                                            is_server=is_server,
+                                            verbose=self.verbose,
+                                            vlevel=VLevel.V1))
+        
+        # run clients
+        for i in range(0, self.cluster_size):
+
+            self.shared_data_clients[i].run()
+
+    def _post_shared_init(self):
+        
+        if self.is_cost:
+
+            self.names = self.shared_data_clients[0].costs.names
+            self.dims = self.shared_data_clients[0].costs.dimensions
+            self.n_nodes =  self.shared_data_clients[0].costs.n_nodes
+
+        else:
+
+            self.names = self.shared_data_clients[0].cnstr.names
+            self.dims = self.shared_data_clients[0].cnstr.dimensions
+            self.n_nodes =  self.shared_data_clients[0].cnstr.n_nodes
+
+        if len(self.names) <= 0:
+
+            warning = "[{self.__class__.__name__}]" + f"[{self.journal.warning}]" \
+                + f": terminating since no contact sensor was found."
+            
+            print(warning)
+
+            self.terminate()
+
+        # distributing plots over a square grid
+        self.grid_n_rows = len(self.names)
+        self.grid_n_cols = 1
+
+    def _initialize(self):
+        
+        base_name = ""
+
+        if self.is_cost:
+
+            base_name = "Cost name"
+
+        else:
+
+            base_name = "Constr. name"
+
+        # distribute plots on each row
+        counter = 0
+        for i in range(0, self.grid_n_rows):
+            
+            for j in range(0, self.grid_n_cols):
+            
+                if (counter < len(self.names)):
+                    
+                    legend_list = [""] * self.dims[counter]
+                    for i in range(self.dims[counter]):
+                        
+                        legend_list = str(i)
+
+                    self.rt_plotters.append(RtPlotWindow(n_data=self.dims[counter], 
+                                update_data_dt=self.update_data_dt, 
+                                update_plot_dt=self.update_plot_dt,
+                                window_duration=self.window_duration, 
+                                parent=None, 
+                                base_name=f"{base_name}: {self.names[counter]}", 
+                                window_buffer_factor=self.window_buffer_factor, 
+                                legend_list=legend_list, 
+                                ylabel="")
+                                )
+                    
+                    self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
+
+                    counter = counter + 1
+
+    def update(self):
+
+        if not self._terminated:
+                        
+            for i in range(0, len(self.names)):
+
+                # self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx].)
+                a = 1

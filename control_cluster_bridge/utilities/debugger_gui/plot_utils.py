@@ -865,18 +865,18 @@ class RtPlotWindow():
         # Set up the layout
         self.splitter_layout = QVBoxLayout()
         self.splitter_layout.addWidget(self.splitter)
+        
         self.base_frame.setLayout(self.splitter_layout)        
 
 class GridFrameWidget():
 
-    def __init__(self, 
-            rows, 
-            cols, 
-            parent: QWidget = None):
-        
+    def __init__(self, rows, cols, parent: QWidget = None):
+
         self.journal = Journal()
 
-        self.base_frame = QFrame(parent = parent)
+        self.base_frame = QFrame()
+        self.base_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.base_frame.setFrameShape(QFrame.StyledPanel)
 
         self.rows = rows
         self.cols = cols
@@ -884,7 +884,7 @@ class GridFrameWidget():
         row_layout = QVBoxLayout(self.base_frame)
         row_layout.setContentsMargins(0, 0, 0, 0)
         self.base_frame.setLayout(row_layout)
-        
+
         row_splitter = QSplitter(Qt.Vertical)
         row_splitter.setHandleWidth(1)
         row_layout.addWidget(row_splitter)
@@ -892,9 +892,9 @@ class GridFrameWidget():
         self.frames = []
         self.col_layouts = []
         self.atomic_layouts = []
-        
+
         for row in range(rows):
-            
+
             col_frames = []
             atomic_layouts_tmp = []
 
@@ -926,17 +926,91 @@ class GridFrameWidget():
             self.frames.append(col_frames)
             self.col_layouts.append(col_layout)
             self.atomic_layouts.append(atomic_layouts_tmp)
-            
-            col_frames = [] # reset
+
+            col_frames = []  # reset
             atomic_layouts_tmp = []
-
-    def addFrame(self,
-            frame: QWidget, 
-            row_idx: int, 
-            col_idx: int):
         
-        if row_idx < self.rows and \
-            col_idx < self.cols:
+        # Create a scroll area and set its widget to be the base frame
+        self.scroll_area = QScrollArea(parent)
+        self.scroll_area.setWidgetResizable(True)  # Make the scroll area resizable
+        self.scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.scroll_area.setWidget(self.base_frame)  # Set the frame as the scroll area's widget
 
+    def addFrame(self, frame: QWidget, row_idx: int, col_idx: int):
+         
+        if row_idx < self.rows and col_idx < self.cols:
             self.atomic_layouts[row_idx][col_idx].addWidget(frame)
+
+# class GridFrameWidget():
+
+#     def __init__(self, 
+#             rows, 
+#             cols, 
+#             parent: QWidget = None):
+        
+#         self.journal = Journal()
+
+#         self.base_frame = QFrame(parent = parent)
+
+#         self.rows = rows
+#         self.cols = cols
+
+#         row_layout = QVBoxLayout(self.base_frame)
+#         row_layout.setContentsMargins(0, 0, 0, 0)
+#         self.base_frame.setLayout(row_layout)
+        
+#         row_splitter = QSplitter(Qt.Vertical)
+#         row_splitter.setHandleWidth(1)
+#         row_layout.addWidget(row_splitter)
+
+#         self.frames = []
+#         self.col_layouts = []
+#         self.atomic_layouts = []
+        
+#         for row in range(rows):
+            
+#             col_frames = []
+#             atomic_layouts_tmp = []
+
+#             row_frame = QFrame(parent=self.base_frame)
+#             row_frame.setFrameShape(QFrame.StyledPanel)
+
+#             col_layout = QHBoxLayout(row_frame)
+#             col_layout.setContentsMargins(0, 0, 0, 0)
+#             row_frame.setLayout(col_layout)
+#             col_splitter = QSplitter(Qt.Horizontal)
+#             col_splitter.setHandleWidth(2)
+#             col_layout.addWidget(col_splitter)
+#             row_layout.addWidget(row_frame)
+#             row_splitter.addWidget(row_frame)
+
+#             for col in range(cols):
+#                 col_frame = QFrame(parent=row_frame)
+#                 col_frame.setFrameShape(QFrame.StyledPanel)
+#                 atomic_layout = QVBoxLayout()
+#                 atomic_layout.setContentsMargins(0, 0, 0, 0)
+#                 col_frame.setLayout(atomic_layout)
+#                 atomic_layouts_tmp.append(atomic_layout)
+
+#                 col_layout.addWidget(col_frame)
+#                 col_splitter.addWidget(col_frame)
+
+#                 col_frames.append(col_frame)
+
+#             self.frames.append(col_frames)
+#             self.col_layouts.append(col_layout)
+#             self.atomic_layouts.append(atomic_layouts_tmp)
+            
+#             col_frames = [] # reset
+#             atomic_layouts_tmp = []
+
+#     def addFrame(self,
+#             frame: QWidget, 
+#             row_idx: int, 
+#             col_idx: int):
+        
+#         if row_idx < self.rows and \
+#             col_idx < self.cols:
+
+#             self.atomic_layouts[row_idx][col_idx].addWidget(frame)
 

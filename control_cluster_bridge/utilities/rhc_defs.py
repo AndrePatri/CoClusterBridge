@@ -33,7 +33,7 @@ import numpy as np
 from control_cluster_bridge.utilities.shared_mem import SharedDataView
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal as Logger
-from SharsorIPCpp.PySharsorIPC import dtype
+from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype, toNumpyDType
 
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 
@@ -1240,13 +1240,13 @@ class RHCDebugData():
                 self.shared_names = StringTensorClient(
                                             basename = basename, 
                                             name_space = namespace,
-                                            verbose = self.verbose, 
-                                            vlevel = self.vlevel)
+                                            verbose = verbose, 
+                                            vlevel = vlevel)
                 
         def run(self):
             
             self.shared_names.run()
-
+            
             if self.is_server:
                 
                 jnt_names_written = self.shared_names.write_vec(self.names, 0)
@@ -1257,9 +1257,9 @@ class RHCDebugData():
             
             else:
                 
-                self.names = [""] * self.n_jnts
+                self.names = [""] * self.shared_names.length()
 
-                jnt_names_read = self.shared_jnt_names.read_vec(self.names, 0)
+                jnt_names_read = self.shared_names.read_vec(self.names, 0)
 
                 if not jnt_names_read:
 
@@ -1273,7 +1273,6 @@ class RHCDebugData():
         
         def __init__(self,
             dims: List[int] = None,
-            n_nodes: int = -1,
             namespace = "",
             is_server = False, 
             verbose: bool = False, 
@@ -1283,26 +1282,40 @@ class RHCDebugData():
 
             self.dims = dims
             
-            n_dims = 0
-            for i in range(0, len(dims)):
+            n_dims = None
 
-                n_dims += dims[i]
+            if is_server:
+
+                n_dims = 0
+                for i in range(0, len(dims)):
+
+                    n_dims += dims[i]
                 
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_dims, 
-                n_cols = n_nodes, 
-                verbose = verbose, 
-                vlevel = vlevel)
+                super().__init__(namespace = namespace,
+                    basename = basename,
+                    is_server = is_server, 
+                    n_rows = n_dims, 
+                    n_cols = 1, 
+                    verbose = verbose, 
+                    vlevel = vlevel,
+                    dtype=sharsor_dtype.Int)
 
+            else:
+
+                super().__init__(namespace = namespace,
+                    basename = basename,
+                    is_server = is_server, 
+                    verbose = verbose, 
+                    vlevel = vlevel,
+                    dtype=sharsor_dtype.Int)
+                
         def run(self):
 
             super().run()
 
             if self.is_server:
-                
-                dims = np.array(self.dims).reshape((len(self.dims), 1))
+
+                dims = np.array(self.dims, dtype=toNumpyDType(self.shared_mem.getScalarType())).reshape((len(self.dims), 1))
 
                 self.write_wait(data = dims, row_index= 0,
                         col_index=0)
@@ -1311,11 +1324,11 @@ class RHCDebugData():
 
                 # updates shared dims
                 self.synch_all(read=True, wait=True)
-
+                
                 self.dims = self.numpy_view[:, :].copy()
 
-                self.n_dims = self.data.n_rows
-                self.n_nodes = self.data.n_cols
+                self.n_dims = self.n_rows
+                self.n_nodes = self.n_cols
                 
     class Data(SharedDataView):
         
@@ -1349,7 +1362,7 @@ class RHCDebugData():
         self.names = names
         self.dimensions = dimensions
 
-        self.n_dims = -1
+        self.n_dims = None
         self.n_nodes = n_nodes
 
         self.is_server = is_server
@@ -1367,7 +1380,7 @@ class RHCDebugData():
         # actual data
         self.data = self.Data(namespace = namespace,
                 is_server = is_server, 
-                n_dims= n_dims, 
+                n_dims= self.n_dims, 
                 n_nodes = n_nodes, 
                 verbose = verbose, 
                 vlevel = vlevel)
@@ -1383,12 +1396,11 @@ class RHCDebugData():
         self.shared_dims = self.DataDims(namespace = namespace,
                 is_server = is_server, 
                 dims = dimensions,
-                n_nodes = n_nodes,
                 verbose = verbose, 
                 vlevel = vlevel)
 
     def run(self):
-
+        
         self.data.run()
 
         self.shared_names.run()
@@ -1671,7 +1683,9 @@ class RHCInternal():
             cost_names: List[str] = None, 
             constr_names: List[str] = None,
             cost_dims: List[int] = None, 
-            constr_dims: List[int] = None):
+            constr_dims: List[int] = None,
+            enable_costs: bool = False,
+            enable_constr: bool = False):
 
             self.is_server = is_server
 
@@ -1683,8 +1697,8 @@ class RHCInternal():
             self.enable_f_dot = enable_f_dot
             self.enable_eff = enable_eff
 
-            self.enable_costs = False
-            self.enable_constr = False
+            self.enable_costs = enable_costs
+            self.enable_constr = enable_constr
 
             self.cost_names = None
             self.cost_dims = None
@@ -1720,15 +1734,17 @@ class RHCInternal():
 
                 raise Exception(excep)
 
-            if not (len(self.cost_names) == len(self.cost_dims)):
+            if self.is_server and (not (len(self.cost_names) == len(self.cost_dims))):
                 
                 excep = f"Cost names dimension {len(self.cost_names)} " + \
                     f"does not match dim. vector length {len(self.cost_dims)}"
 
                 raise Exception(excep)
             
-            self.enable_costs = True
-            self.n_costs = len(self.cost_names)
+            if self.is_server:
+
+                self.enable_costs = True
+                self.n_costs = len(self.cost_names)
 
         def _set_constr_data(self, 
                         names: List[str] = None,
@@ -1751,15 +1767,17 @@ class RHCInternal():
 
                 raise Exception(excep)
 
-            if not (len(self.constr_names) == len(self.constr_dims)):
+            if self.is_server and (not (len(self.constr_names) == len(self.constr_dims))):
 
                 excep = f"Cost names dimension {len(self.constr_names)} " + \
                     f"does not match dim. vector length {len(self.constr_dims)}"
 
                 raise Exception(excep)
             
-            self.enable_constr = True
-            self.n_constr = len(self.constr_names)
+            if self.is_server:
+
+                self.enable_constr = True
+                self.n_constr = len(self.constr_names)
 
     def __init__(self,
             config: Config = None,
