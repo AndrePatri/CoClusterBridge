@@ -642,8 +642,8 @@ class RhcInternalData(SharedDataWindow):
 
             self.terminate()
 
-        # distributing plots over a square grid
         self.grid_n_rows = len(self.names)
+
         self.grid_n_cols = 1
 
     def _initialize(self):

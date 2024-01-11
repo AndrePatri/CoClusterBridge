@@ -202,7 +202,6 @@ class RtClusterDebugger(QMainWindow):
                                 namespace=self.namespace,
                                 parent=None, 
                                 verbose = self.verbose)
-        
         rhc_internal_costs = RhcInternalData(update_data_dt=self.data_update_dt, 
                                 update_plot_dt=self.plot_update_dt,
                                 window_duration=self.window_length, 
@@ -426,15 +425,19 @@ class RtClusterDebugger(QMainWindow):
             
         self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        self.splitter.addWidget(self.tabs)
-
         # Create a scroll area and set its widget to be the settings frame
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)  # Make the scroll area resizable
-        self.scroll_area.setWidget(self.settings_frame)  # Set the frame as the scroll area's widget
-        self.scroll_area.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
+        self.scroll_area_settings = QScrollArea()
+        self.scroll_area_settings.setWidgetResizable(True)  # Make the scroll area resizable
+        self.scroll_area_settings.setWidget(self.settings_frame)  # Set the frame as the scroll area's widget
+        self.scroll_area_settings.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
 
-        self.splitter.addWidget(self.scroll_area)
+        self.scroll_area_tabs = QScrollArea()
+        self.scroll_area_tabs.setWidgetResizable(True)  # Make the scroll area resizable
+        self.scroll_area_tabs.setWidget(self.tabs)  # Set the frame as the scroll area's widget
+        self.scroll_area_tabs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
+
+        self.splitter.addWidget(self.scroll_area_tabs)
+        self.splitter.addWidget(self.scroll_area_settings)
 
     def _init_data_thread(self):
 
