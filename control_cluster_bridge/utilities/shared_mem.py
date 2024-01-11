@@ -1955,9 +1955,6 @@ class SharedDataView:
             success = self.shared_mem.read(self.numpy_view[row_index:row_index + n_rows, 
                     col_index:col_index + n_cols], row_index, col_index)
             
-            print("wWIWIWIWIWIWIIWIWIWIW")
-            print(self.numpy_view)
-            
             return success
             
         else:
