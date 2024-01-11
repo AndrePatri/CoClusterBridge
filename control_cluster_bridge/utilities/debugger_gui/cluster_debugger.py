@@ -69,7 +69,7 @@ class SharedDataThread(QThread):
 
         self.perf_timer = PerfSleep()
 
-        self._cluster_index = 0 # data for this cluster will be emitted
+        # self._cluster_index = 0 # data for this cluster will be emitted
 
         self.update_dt = update_dt
 
@@ -161,7 +161,8 @@ class RtClusterDebugger(QMainWindow):
 
         # shared mem
         self.cluster_size_clnt = None
-
+        self.cluster_index = 0
+        
         self.launch_controllers = None
         self.shared_sim_info = None
         self.add_sim_data = add_sim_data
@@ -202,7 +203,8 @@ class RtClusterDebugger(QMainWindow):
                                 namespace=self.namespace,
                                 parent=None, 
                                 verbose = self.verbose)
-        rhc_internal_costs = RhcInternalData(update_data_dt=self.data_update_dt, 
+        rhc_internal_costs = RhcInternalData(name = "RhcInternalCosts",
+                                update_data_dt=self.data_update_dt, 
                                 update_plot_dt=self.plot_update_dt,
                                 window_duration=self.window_length, 
                                 window_buffer_factor=self.window_buffer_factor, 
@@ -499,6 +501,10 @@ class RtClusterDebugger(QMainWindow):
 
                 if checked and self._tabs_terminated[i]:
                     
+                    print("################")
+                    print(self.shared_data_tabs_name[i])
+                    print(i)
+
                     self.shared_data_window[i].run()
 
                     self.tabs_widgets[i] = QWidget()
@@ -583,7 +589,7 @@ class RtClusterDebugger(QMainWindow):
                 if not self._tabs_terminated[i] and \
                     self.shared_data_window[i] is not None:
 
-                    self.shared_data_window[i].update()
+                    self.shared_data_window[i].update(index = self.cluster_index)
 
             # other data
 
@@ -602,11 +608,13 @@ class RtClusterDebugger(QMainWindow):
 
         self.env_index.tensor_view[0, 0] = idx
 
-        for i in range(len(self.shared_data_tabs_name)):
+        self.cluster_index = idx
 
-            if not self._tabs_terminated[i]:
+        # for i in range(len(self.shared_data_tabs_name)):
 
-                self.shared_data_window[i].cluster_idx = idx
+        #     if not self._tabs_terminated[i]:
+
+        #         self.shared_data_window[i].cluster_idx = idx
 
     def _toggle_controllers(self):
         

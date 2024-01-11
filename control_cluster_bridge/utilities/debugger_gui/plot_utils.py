@@ -57,12 +57,10 @@ class RtPlotWidget(pg.PlotWidget):
 
         if legend_list is not None and len(legend_list) != n_data:
             
-            warning = "[{self.__class__.__name__}]" + f"[{self.journal.warning}]" \
+            exception = "[{self.__class__.__name__}]" + f"[{self.journal.exception}]" \
                 + f": provided legend list length {len(legend_list)} does not match data dimension {n_data}"
             
-            print(warning)
-
-            self.legend_list = None
+            raise Exception(exception)
 
         self.legend_list = legend_list
 
@@ -344,16 +342,16 @@ class WidgetUtils:
                 self.labels[i].setText(str(round(data[i], 4)))
 
     def generate_complex_slider(self, 
-                parent: QWidget, 
-                parent_layout: Union[QHBoxLayout, QVBoxLayout],
-                callback: Callable[[int], None], 
-                min_shown: str, 
+                callback: Callable[[int], None],
+                min_shown: str,
                 min: int,
                 max_shown: str, 
                 max: int,
                 init_val_shown: str,
                 init: int,
-                title: str):
+                title: str,
+                parent: QWidget = None,
+                parent_layout: Union[QHBoxLayout, QVBoxLayout] = None):
 
         slider_data = self.SliderData()
 
@@ -401,7 +399,8 @@ class WidgetUtils:
         base_layout.addWidget(val_frame)
         base_layout.addWidget(val_slider_frame)
         
-        parent_layout.addWidget(base_frame)
+        if parent_layout is not None:
+            parent_layout.addWidget(base_frame)
 
         slider_data.base_frame = base_frame
         slider_data.base_layout = base_layout
@@ -839,7 +838,7 @@ class RtPlotWindow():
         # use a QSplitter to handle resizable width between plot and legend frames
         self.base_frame = QFrame(parent=parent)
         self.base_frame.setFrameShape(QFrame.StyledPanel)
-
+        self.base_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.splitter = QSplitter(Qt.Horizontal)
 
         # create the plot widget
@@ -873,22 +872,48 @@ class GridFrameWidget():
     def __init__(self, 
             rows, 
             cols, 
-            parent: QWidget = None):
+            parent: QWidget = None,
+            add_settings_tab = True,
+            settings_title = "SETTINGS"):
         
+        add_settings_tab = True
+
+        self.finalized = False
+
         self.journal = Journal()
 
         self.base_frame = QFrame(parent = parent)
+        self.base_frame.setFrameShape(QFrame.StyledPanel)
+        self.base_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.add_settings_tab = add_settings_tab
+        self.settings_frame_layout = None
+        self.settings_frame = None
+        self.settings_title = settings_title
+        self.settings_widget_list = []
 
         self.rows = rows
         self.cols = cols
 
-        row_layout = QVBoxLayout(self.base_frame)
+        self.settings_splitter = QSplitter(orientation=Qt.Horizontal)
+            
+        self.row_splitter = QSplitter(Qt.Vertical)
+        self.row_splitter.setHandleWidth(1)
+        row_layout = QVBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
-        self.base_frame.setLayout(row_layout)
-        
-        row_splitter = QSplitter(Qt.Vertical)
-        row_splitter.setHandleWidth(1)
-        row_layout.addWidget(row_splitter)
+        row_layout.addWidget(self.row_splitter)
+
+        if self.add_settings_tab:
+            
+            self.settings_frame = QFrame()
+            self.settings_frame.setFrameShape(QFrame.StyledPanel)
+            self.settings_frame.setContentsMargins(0, 0, 0, 0)
+            self.settings_frame_layout = QVBoxLayout(self.settings_frame)  # Use QVBoxLayout here
+            self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
+
+            self.settings_title = QLabel(self.settings_title)
+            self.settings_title.setAlignment(Qt.AlignTop | Qt.AlignCenter)
+            self.settings_frame_layout.addWidget(self.settings_title)
 
         self.frames = []
         self.col_layouts = []
@@ -912,7 +937,7 @@ class GridFrameWidget():
             col_splitter.setHandleWidth(2)
             col_layout.addWidget(col_splitter)
             row_layout.addWidget(row_frame)
-            row_splitter.addWidget(row_frame)
+            self.row_splitter.addWidget(row_frame)
 
             for col in range(cols):
                 
@@ -935,12 +960,61 @@ class GridFrameWidget():
             col_frames = [] # reset
             atomic_layouts_tmp = []
 
+        self.settings_splitter.setHandleWidth(1)
+
+        self.settings_splitter.addWidget(self.row_splitter)
+        if self.add_settings_tab:
+            self.settings_splitter.addWidget(self.settings_frame)
+            
+        self.settings_splitter_layout = QVBoxLayout()
+        self.settings_splitter_layout.addWidget(self.settings_splitter)
+
+        self.base_frame.setLayout(self.settings_splitter_layout) 
+        
     def addFrame(self,
             frame: QWidget, 
             row_idx: int, 
             col_idx: int):
         
-        if row_idx < self.rows and \
-            col_idx < self.cols:
+        if not self.finalized:
+            if row_idx < self.rows and \
+                col_idx < self.cols:
 
-            self.atomic_layouts[row_idx][col_idx].addWidget(frame)
+                self.atomic_layouts[row_idx][col_idx].addWidget(frame)
+        else:
+
+            excep = "Can call addFrame only if finalize() was not called yet!"
+            
+            raise Exception(excep)
+        
+    def addToSettings(self,
+                widget_frame_list: List = []):
+        
+        if not self.finalized and self.add_settings_tab:
+
+            self.settings_widget_list = widget_frame_list
+        
+        else:
+            
+            excep = "Can call addToSettings only before finalize() is called and"  + \
+                    "the add_settings_tab was set to True in the constructor!"
+            
+            raise Exception(excep)
+    
+    def finalize(self):
+
+        self._finalize_settings_window()
+
+        self.finalized = True
+
+    def _finalize_settings_window(self):
+        
+        if self.add_settings_tab:
+            
+            for i in range(len(self.settings_widget_list)):
+                
+                self.settings_frame_layout.addWidget(self.settings_widget_list[i].base_frame)
+
+            # adding spacer at the end to push all stuff to top
+            self.settings_frame_layout.addItem(QSpacerItem(20, 40, 
+                                                QSizePolicy.Minimum, QSizePolicy.Expanding))

@@ -15,6 +15,8 @@ from control_cluster_bridge.utilities.defs import jnt_names_client_name
 from control_cluster_bridge.utilities.defs import additional_data_name
 from control_cluster_bridge.utilities.defs import n_contacts_name
 
+from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
+
 class RhcTaskRefWindow(SharedDataWindow):
 
     def __init__(self, 
@@ -518,17 +520,20 @@ class RhcContactStatesWindow(SharedDataWindow):
 
                     counter = counter + 1
 
-    def update(self):
+    def update(self,
+            index: int = 0):
 
         if not self._terminated:
                         
             for i in range(0, self.n_sensors):
-
+                
+                # cluster index is updated manually
                 self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx].contact_state.get(self.contact_names[i]).numpy())
 
 class RhcInternalData(SharedDataWindow):
 
     def __init__(self, 
+        name: str,
         update_data_dt: int,
         update_plot_dt: int,
         window_duration: int,
@@ -536,26 +541,27 @@ class RhcInternalData(SharedDataWindow):
         namespace = "",
         parent: QWidget = None, 
         verbose = False,
-        is_cost: bool = True
+        is_cost: bool = True,
+        is_constraint: bool = False,
+        add_settings_tab = True,
+        settings_title = "SETTINGS (RhcInternalData)"
         ):
+        
+        self.add_settings_tab = add_settings_tab
 
         self.is_cost = is_cost
-        
+        self.is_constraint = is_constraint
+
         self.cluster_size = -1
+
+        self.current_node_index = 0
 
         self.names = []
         self.dims = []
         self.n_nodes = -1
 
-        name = ""
-        if self.is_cost:
-
-            name = "RhcInternalCosts"
+        self.name = name
         
-        else:
-
-            name = "RhcInternalConstr"
-            
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
             window_duration = window_duration,
@@ -565,7 +571,10 @@ class RhcInternalData(SharedDataWindow):
             namespace = namespace,
             name = name,
             parent = parent, 
-            verbose = verbose)
+            verbose = verbose,
+            add_settings_tab = add_settings_tab,
+            settings_title = settings_title
+            )
 
     def _init_shared_data(self):
         
@@ -589,7 +598,7 @@ class RhcInternalData(SharedDataWindow):
             
             enable_costs = True
 
-        else:
+        if self.is_constraint:
             
             enable_constr = True
 
@@ -627,11 +636,19 @@ class RhcInternalData(SharedDataWindow):
             self.dims = self.shared_data_clients[0].costs.dimensions
             self.n_nodes =  self.shared_data_clients[0].costs.n_nodes
 
-        else:
+        if self.is_constraint:
 
             self.names = self.shared_data_clients[0].cnstr.names
             self.dims = self.shared_data_clients[0].cnstr.dimensions
             self.n_nodes =  self.shared_data_clients[0].cnstr.n_nodes
+
+        # import math 
+
+        # grid_size = math.ceil(math.sqrt(len(self.names)))
+
+        # # distributing plots over a square grid
+        # self.grid_n_rows = grid_size
+        # self.grid_n_cols = grid_size
 
         self.grid_n_rows = len(self.names)
 
@@ -645,13 +662,9 @@ class RhcInternalData(SharedDataWindow):
 
             base_name = "Cost name"
 
-        else:
+        if self.is_constraint:
 
-            base_name = "Constr. name"
-        
-        print("AAAAAAAAAAAAAAA")
-        print(self.grid_n_rows)
-        print(self.grid_n_cols)
+            base_name = "Constr.name"
 
         # distribute plots on each row
         counter = 0
@@ -681,11 +694,41 @@ class RhcInternalData(SharedDataWindow):
 
                     counter = counter + 1
 
-    def update(self):
+    def _finalize_grid(self):
+        
+        widget_utils = WidgetUtils()
+
+        settings_frames = []
+
+        node_index_slider = widget_utils.generate_complex_slider(
+                        parent=None, 
+                        parent_layout=None,
+                        min_shown=f"{0}", min= 0, 
+                        max_shown=f"{self.n_nodes - 1}", 
+                        max=self.n_nodes - 1, 
+                        init_val_shown=f"{0}", init=0, 
+                        title="node index slider", 
+                        callback=self._update_node_idx)
+        
+        settings_frames.append(node_index_slider)
+        
+        self.grid.addToSettings(settings_frames)
+    
+    def _update_node_idx(self,
+                    idx: int):
+
+        self.current_node_index = idx
+
+        self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
+
+    def update(self,
+            index: int):
 
         if not self._terminated:
-                        
+            
             for i in range(0, len(self.names)):
+                
+                # iterate over data names (i.e. plots)
 
-                # self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx].)
+                # self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[index].)
                 a = 1

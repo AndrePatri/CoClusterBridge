@@ -19,7 +19,13 @@ class SharedDataWindow():
             namespace = "",
             name = "SharedDataWindow",
             parent: QWidget = None, 
-            verbose = False):
+            verbose = False,
+            add_settings_tab = False, 
+            settings_title = "SharedDataSettings"):
+
+        self.add_settings_tab = add_settings_tab
+
+        self.settings_title = settings_title
 
         self.grid_n_rows = grid_n_rows
         self.grid_n_cols = grid_n_cols
@@ -59,8 +65,12 @@ class SharedDataWindow():
         pass
     
     @abstractmethod
-    def update(self):
+    def update(self,
+            index: int = 0):
 
+        # index -> index of the shared data client to be used for updating 
+        # the plots 
+        
         # this would tipically update each plotter in self.rt_plotters
         # using data from shared memory
 
@@ -76,6 +86,16 @@ class SharedDataWindow():
 
         self._init_ui()
 
+        self._finalize_grid()
+
+        self.grid.finalize()
+
+    def _finalize_grid(self):
+
+        # to be overridden
+
+        pass
+
     def _reset(self):
 
         self._terminated = False
@@ -89,7 +109,9 @@ class SharedDataWindow():
     def _init_ui(self):
 
         self.grid = GridFrameWidget(self.grid_n_rows, self.grid_n_cols, 
-            parent=self.parent)
+                        parent=self.parent,
+                        add_settings_tab = self.add_settings_tab, 
+                        settings_title=self.settings_title)
         
         self.base_frame = self.grid.base_frame
 
