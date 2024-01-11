@@ -17,6 +17,8 @@ from control_cluster_bridge.utilities.defs import n_contacts_name
 
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 
+import numpy as np
+
 class RhcTaskRefWindow(SharedDataWindow):
 
     def __init__(self, 
@@ -621,7 +623,7 @@ class RhcInternalData(SharedDataWindow):
                                             rhc_index = i,
                                             is_server=is_server,
                                             verbose=self.verbose,
-                                            vlevel=VLevel.V1))
+                                            vlevel=VLevel.V2))
         
         # run clients
         for i in range(0, self.cluster_size):
@@ -724,11 +726,27 @@ class RhcInternalData(SharedDataWindow):
     def update(self,
             index: int):
 
+        self.shared_data_clients[index].synch()
+
         if not self._terminated:
             
             for i in range(0, len(self.names)):
                 
                 # iterate over data names (i.e. plots)
+                
+                if self.is_cost:
+                    
+                    data = np.atleast_1d(self.shared_data_clients[index].read_cost(self.names[i])[:, self.current_node_index])
+                    
+                    print("AAAAAAAAA")
+                    print(self.names[i])
+                    print(data)
+                    print(data.shape)
+                    self.rt_plotters[i].rt_plot_widget.update(data)
 
-                # self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[index].)
-                a = 1
+                # if self.is_constraint:
+
+                #     self.rt_plotters[i].rt_plot_widget.update(
+                #         self.shared_data_clients[index].read_constr(self.names[i])[:, self.current_node_index])
+                    
+                # a = 1

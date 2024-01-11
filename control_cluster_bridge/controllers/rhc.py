@@ -424,7 +424,7 @@ class RHController(ABC):
     def _update_rhc_internal(self):
 
         # data which is not enabled in the config is not actually 
-        # written so overhead is minimal
+        # written so overhead is minimal in for non-enabled data
 
         self.rhc_internal.write_q(data= self._get_q_from_sol(),
                             wait=True)

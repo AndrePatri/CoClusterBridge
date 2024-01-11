@@ -1437,15 +1437,17 @@ class RHCDebugData():
 
             starting_idx += self.dimensions[index]
 
+        data_2D = np.atleast_2d(data)
+
         if wait: 
 
-            self.data.write_wait(np.atleast_2d(data), starting_idx, 0) # blocking
+            self.data.write_wait(np.atleast_2d(data_2D), starting_idx, 0) # blocking
             
             return True
         
         else:
 
-            return self.data.write(np.atleast_2d(data), starting_idx, 0) # non-blocking
+            return self.data.write(np.atleast_2d(data_2D), starting_idx, 0) # non-blocking
 
     def synch(self,
             wait = True):
@@ -1469,10 +1471,13 @@ class RHCDebugData():
         starting_idx = 0
         for index in range(data_idx + 1):
 
-            starting_idx += self.dimensions[index]
+            starting_idx += self.dimensions[index] - 1
 
-        # we return a copy
-        return self.data.numpy_view[starting_idx:starting_idx + self.dimensions[index], :].copy()
+        view = self.data.numpy_view[starting_idx:starting_idx + self.dimensions[index], :]
+
+        view_copy = view.copy()
+
+        return view_copy
     
     def close(self):
 
@@ -1804,6 +1809,8 @@ class RHCInternal():
             # use defaults
             self.config = self.Config()
 
+        self.finalized = False
+
         self.q = None
         self.v = None
         self.a = None
@@ -1935,6 +1942,50 @@ class RHCInternal():
 
             self.cnstr.run()
 
+        self.finalized = True
+
+    def synch(self):
+        
+        # to be used to read updated data 
+        # (before calling any read method)
+        # it synchs all available data
+        
+        if self.q is not None:
+
+            self.q.synch()
+        
+        if self.v is not None:
+
+            self.v.synch()
+        
+        if self.a is not None:
+
+            self.a.synch()
+        
+        if self.a_dot is not None:
+
+            self.a_dot.synch()
+        
+        if self.f is not None:
+
+            self.f.synch()
+            
+        if self.f_dot is not None:
+
+            self.f_dot.synch()
+        
+        if self.eff is not None:
+
+            self.eff.synch()
+            
+        if self.costs is not None:
+
+            self.costs.synch()
+        
+        if self.cnstr is not None:
+
+            self.cnstr.synch()
+
     def close(self):
 
         if self.q is not None:
@@ -1976,7 +2027,11 @@ class RHCInternal():
     def write_q(self, 
                 data: np.ndarray = None,
                 wait = True):
+        
+        if not self.finalized:
 
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.q is not None) and (data is not None):
             
             if wait:
@@ -1991,7 +2046,11 @@ class RHCInternal():
     def write_v(self, 
             data: np.ndarray = None,
             wait = True):
-            
+        
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.v is not None) and (data is not None):
             
             if wait:
@@ -2006,6 +2065,10 @@ class RHCInternal():
     def write_a(self, 
             data: np.ndarray = None,
             wait = True):
+        
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
         
         if (self.a is not None) and (data is not None):
             
@@ -2022,6 +2085,10 @@ class RHCInternal():
         data: np.ndarray = None,
         wait = True):
 
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.a_dot is not None) and (data is not None):
             
             if wait:
@@ -2036,7 +2103,11 @@ class RHCInternal():
     def write_f(self, 
         data: np.ndarray = None,
         wait = True):
-            
+        
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.f is not None) and (data is not None):
             
             if wait:
@@ -2052,6 +2123,10 @@ class RHCInternal():
         data: np.ndarray = None,
         wait = True):
 
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.f is not None) and (data is not None):
             
             if wait:
@@ -2066,6 +2141,10 @@ class RHCInternal():
     def write_eff(self, 
         data: np.ndarray = None,
         wait = True):
+
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
 
         if (self.eff is not None) and (data is not None):
             
@@ -2083,8 +2162,12 @@ class RHCInternal():
                 data: np.ndarray = None,
                 wait = True):
 
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.costs is not None) and (data is not None):
-            
+
             self.costs.write(data = data, 
                             name=cost_name,
                             wait=wait)
@@ -2093,6 +2176,10 @@ class RHCInternal():
             cost_name: str,
             wait = True):
         
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+
         if self.costs is not None:
             
             return self.costs.get(cost_name)
@@ -2106,6 +2193,10 @@ class RHCInternal():
                 data: np.ndarray = None,
                 wait = True):
 
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
+        
         if (self.cnstr is not None) and (data is not None):
             
             self.cnstr.write(data = data, 
@@ -2115,6 +2206,10 @@ class RHCInternal():
     def read_constr(self, 
             constr_name,
             wait = True):
+        
+        if not self.finalized:
+
+            raise Exception("RHCInternal not initialized. Did you call the run()?")
         
         if self.cnstr is not None:
             

@@ -1952,13 +1952,20 @@ class SharedDataView:
         
         if read:
             
-            return self.shared_mem.read(self.numpy_view[row_index:row_index + n_rows, 
+            success = self.shared_mem.read(self.numpy_view[row_index:row_index + n_rows, 
                     col_index:col_index + n_cols], row_index, col_index)
             
+            print("wWIWIWIWIWIWIIWIWIWIW")
+            print(self.numpy_view)
+            
+            return success
+            
         else:
-
-            return self.shared_mem.write(self.numpy_view[row_index:row_index + n_rows, 
+            
+            success = self.shared_mem.write(self.numpy_view[row_index:row_index + n_rows, 
                     col_index:col_index + n_cols], row_index, col_index)
+            
+            return success
     
     def synch_wait(self, 
         row_index: int, 
