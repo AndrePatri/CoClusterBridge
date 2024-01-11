@@ -893,19 +893,18 @@ class GridFrameWidget():
         self.frames = []
         self.col_layouts = []
         self.atomic_layouts = []
-        
-        print("AAAAAAAAAAAAAAAAA")
-        print(rows)
-        print(cols)
 
+        n_rows = 0
         for row in range(rows):
             
+
             col_frames = []
             atomic_layouts_tmp = []
-
+            
+            n_rows = n_rows + 1
             row_frame = QFrame(parent=self.base_frame)
             row_frame.setFrameShape(QFrame.StyledPanel)
-
+            
             col_layout = QHBoxLayout(row_frame)
             col_layout.setContentsMargins(0, 0, 0, 0)
             row_frame.setLayout(col_layout)

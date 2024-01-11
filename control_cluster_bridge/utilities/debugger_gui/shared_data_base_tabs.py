@@ -633,15 +633,6 @@ class RhcInternalData(SharedDataWindow):
             self.dims = self.shared_data_clients[0].cnstr.dimensions
             self.n_nodes =  self.shared_data_clients[0].cnstr.n_nodes
 
-        if len(self.names) <= 0:
-
-            warning = "[{self.__class__.__name__}]" + f"[{self.journal.warning}]" \
-                + f": terminating since no contact sensor was found."
-            
-            print(warning)
-
-            self.terminate()
-
         self.grid_n_rows = len(self.names)
 
         self.grid_n_cols = 1
@@ -657,6 +648,10 @@ class RhcInternalData(SharedDataWindow):
         else:
 
             base_name = "Constr. name"
+        
+        print("AAAAAAAAAAAAAAA")
+        print(self.grid_n_rows)
+        print(self.grid_n_cols)
 
         # distribute plots on each row
         counter = 0
@@ -667,9 +662,9 @@ class RhcInternalData(SharedDataWindow):
                 if (counter < len(self.names)):
                     
                     legend_list = [""] * self.dims[counter]
-                    for i in range(self.dims[counter]):
+                    for k in range(self.dims[counter]):
                         
-                        legend_list = str(i)
+                        legend_list = str(k)
 
                     self.rt_plotters.append(RtPlotWindow(n_data=self.dims[counter], 
                                 update_data_dt=self.update_data_dt, 
@@ -679,8 +674,8 @@ class RhcInternalData(SharedDataWindow):
                                 base_name=f"{base_name}: {self.names[counter]}", 
                                 window_buffer_factor=self.window_buffer_factor, 
                                 legend_list=legend_list, 
-                                ylabel="")
-                                )
+                                ylabel=""))
+
                     
                     self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
 
