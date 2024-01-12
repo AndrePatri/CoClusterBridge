@@ -46,7 +46,8 @@ class RhcTaskRefWindow(SharedDataWindow):
     
     def _initialize(self):
 
-        self.rt_plotters.append(RtPlotWindow(n_data=self.n_contacts, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.n_contacts, 
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -56,7 +57,9 @@ class RhcTaskRefWindow(SharedDataWindow):
                     legend_list=None, 
                     ylabel=""))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=1, 
+        self.rt_plotters.append(RtPlotWindow(
+                    data_dim=1, 
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -65,7 +68,8 @@ class RhcTaskRefWindow(SharedDataWindow):
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=["task mode code"]))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=7, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=7, 
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -75,7 +79,8 @@ class RhcTaskRefWindow(SharedDataWindow):
                     legend_list=["p_x", "p_y", "p_z", 
                                 "q_w", "q_i", "q_j", "q_k"]))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=7, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=7, 
+                    n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -85,7 +90,8 @@ class RhcTaskRefWindow(SharedDataWindow):
                     legend_list=["p_x", "p_y", "p_z", 
                                 "q_w", "q_i", "q_j", "q_k"]))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=10, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=10, 
+                    n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -150,11 +156,11 @@ class RhcTaskRefWindow(SharedDataWindow):
 
         if not self._terminated:
             
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.get_contacts().numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.phase_id.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].base_pose.get_pose().numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].com_pose.get_com_pose().numpy())
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.get_flight_param().numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.get_contacts().numpy().flatten())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.phase_id.numpy().flatten())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].base_pose.get_pose().numpy().flatten())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].com_pose.get_com_pose().numpy().flatten())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.get_flight_param().numpy().flatten())
 
 class RhcCmdsWindow(SharedDataWindow):
 
@@ -184,7 +190,8 @@ class RhcCmdsWindow(SharedDataWindow):
 
     def _initialize(self):
 
-        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.jnt_number, 
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -194,7 +201,8 @@ class RhcCmdsWindow(SharedDataWindow):
                     legend_list=self.jnt_names, 
                     ylabel="[rad]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.jnt_number, 
+                    n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -204,7 +212,8 @@ class RhcCmdsWindow(SharedDataWindow):
                     legend_list=self.jnt_names, 
                     ylabel="[rad/s]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.jnt_number, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.jnt_number, 
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
@@ -214,7 +223,8 @@ class RhcCmdsWindow(SharedDataWindow):
                     legend_list=self.jnt_names, 
                     ylabel="[Nm]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.add_data_length, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.add_data_length, 
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -281,10 +291,10 @@ class RhcCmdsWindow(SharedDataWindow):
         
         if not self._terminated:
             
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.q.numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.v.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.eff.numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 2].slvr_state.info.numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.q.numpy().flatten())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.v.numpy().flatten())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.eff.numpy().flatten())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 2].slvr_state.info.numpy().flatten())
 
 class RhcStateWindow(SharedDataWindow):
 
@@ -312,7 +322,8 @@ class RhcStateWindow(SharedDataWindow):
 
     def _initialize(self):
 
-        self.rt_plotters.append(RtPlotWindow(n_data=self.shared_data_clients[1].root_state.p.shape[1], 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].root_state.p.shape[1],
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -322,7 +333,9 @@ class RhcStateWindow(SharedDataWindow):
                     legend_list=["p_x", "p_y", "p_z"], 
                     ylabel="[m]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.shared_data_clients[1].root_state.q.shape[1], 
+        self.rt_plotters.append(RtPlotWindow(
+                    data_dim=self.shared_data_clients[1].root_state.q.shape[1],
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -331,7 +344,8 @@ class RhcStateWindow(SharedDataWindow):
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=["q_w", "q_i", "q_j", "q_k"]))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.shared_data_clients[1].root_state.v.shape[1], 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].root_state.v.shape[1],
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
@@ -341,7 +355,8 @@ class RhcStateWindow(SharedDataWindow):
                     legend_list=["v_x", "v_y", "v_z"], 
                     ylabel="[m/s]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.shared_data_clients[1].root_state.omega.shape[1], 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].root_state.omega.shape[1],
+                    n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
@@ -351,7 +366,8 @@ class RhcStateWindow(SharedDataWindow):
                     legend_list=["omega_x", "omega_y", "omega_z"], 
                     ylabel="[rad/s]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.shared_data_clients[1].jnt_state.n_dofs, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].jnt_state.n_dofs,
+                    n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -361,7 +377,8 @@ class RhcStateWindow(SharedDataWindow):
                     legend_list=self.jnt_names, 
                     ylabel="[rad]"))
         
-        self.rt_plotters.append(RtPlotWindow(n_data=self.shared_data_clients[1].jnt_state.n_dofs, 
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].jnt_state.n_dofs,
+                    n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
@@ -424,14 +441,14 @@ class RhcStateWindow(SharedDataWindow):
         if not self._terminated:
             
             # root state
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.p.numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.q.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.v.numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.omega.numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.p.numpy().flatten())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.q.numpy().flatten())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.v.numpy().flatten())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.omega.numpy().flatten())
 
             # joint state
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.q.numpy())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.v.numpy())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.q.numpy().flatten())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.v.numpy().flatten())
 
 class RhcContactStatesWindow(SharedDataWindow):
 
@@ -510,7 +527,8 @@ class RhcContactStatesWindow(SharedDataWindow):
             
                 if (counter < self.n_sensors):
                     
-                    self.rt_plotters.append(RtPlotWindow(n_data=self.contact_info_size, 
+                    self.rt_plotters.append(RtPlotWindow(data_dim=self.contact_info_size,
+                                n_data = 1,
                                 update_data_dt=self.update_data_dt, 
                                 update_plot_dt=self.update_plot_dt,
                                 window_duration=self.window_duration, 
@@ -533,7 +551,7 @@ class RhcContactStatesWindow(SharedDataWindow):
             for i in range(0, self.n_sensors):
                 
                 # cluster index is updated manually
-                self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[index].contact_state.get(self.contact_names[i]).numpy())
+                self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[index].contact_state.get(self.contact_names[i]).numpy().flatten())
 
 class RhcInternalData(SharedDataWindow):
 
@@ -667,7 +685,7 @@ class RhcInternalData(SharedDataWindow):
 
         if self.is_constraint:
 
-            base_name = "Constr.name"
+            base_name = "Constraint name"
 
         # distribute plots on each row
         counter = 0
@@ -680,9 +698,10 @@ class RhcInternalData(SharedDataWindow):
                     legend_list = [""] * self.dims[counter]
                     for k in range(self.dims[counter]):
                         
-                        legend_list = str(k)
+                        legend_list[k] = str(k)
 
-                    self.rt_plotters.append(RtPlotWindow(n_data=self.dims[counter], 
+                    self.rt_plotters.append(RtPlotWindow(data_dim=self.dims[counter],
+                                n_data = self.n_nodes,
                                 update_data_dt=self.update_data_dt, 
                                 update_plot_dt=self.update_plot_dt,
                                 window_duration=self.window_duration, 
@@ -692,7 +711,6 @@ class RhcInternalData(SharedDataWindow):
                                 legend_list=legend_list, 
                                 ylabel=""))
 
-                    
                     self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
 
                     counter = counter + 1
@@ -724,6 +742,10 @@ class RhcInternalData(SharedDataWindow):
 
         self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
 
+        for i in range(0, len(self.names)):
+
+            self.rt_plotters[i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+
     def update(self,
             index: int):
 
@@ -737,13 +759,13 @@ class RhcInternalData(SharedDataWindow):
                 
                 if self.is_cost:
                     
-                    data = np.atleast_1d(self.shared_data_clients[index].read_cost(self.names[i])[:, self.current_node_index])
+                    data = np.atleast_2d(self.shared_data_clients[index].read_cost(self.names[i])[:, :])
                     
                     self.rt_plotters[i].rt_plot_widget.update(data)
 
-                # if self.is_constraint:
+                if self.is_constraint:
 
-                #     self.rt_plotters[i].rt_plot_widget.update(
-                #         self.shared_data_clients[index].read_constr(self.names[i])[:, self.current_node_index])
+                    data = np.atleast_2d(self.shared_data_clients[index].read_constr(self.names[i])[:, :])
                     
-                # a = 1
+                    self.rt_plotters[i].rt_plot_widget.update(data)
+                    

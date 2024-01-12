@@ -26,7 +26,6 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcInternalData
 
-
 from typing import List
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
 
@@ -42,8 +41,6 @@ from control_cluster_bridge.utilities.defs import env_selector_name
 from control_cluster_bridge.utilities.sysutils import PathsGetter
 from control_cluster_bridge.utilities.defs import Journal
 
-import os
-
 import torch
 
 import sys
@@ -51,8 +48,6 @@ import sys
 import time
 
 from perf_sleep.pyperfsleep import PerfSleep
-
-from typing import Callable
 
 class SharedDataThread(QThread):
 
@@ -212,8 +207,21 @@ class RtClusterDebugger(QMainWindow):
                                 parent=None, 
                                 verbose=self.verbose,
                                 is_cost=True)
+        rhc_internal_constr = RhcInternalData(name = "RhcInternalConstr",
+                                update_data_dt=self.data_update_dt, 
+                                update_plot_dt=self.plot_update_dt,
+                                window_duration=self.window_length, 
+                                window_buffer_factor=self.window_buffer_factor, 
+                                namespace=self.namespace,
+                                parent=None, 
+                                verbose=self.verbose,
+                                is_cost=False,
+                                is_constraint=True)
         
-        self.base_spawnable_tabs = [rhc_task_ref, rhc_cms, rhc_state, rhc_contact_state, rhc_internal_costs]
+        self.base_spawnable_tabs = [rhc_task_ref, rhc_cms, rhc_state, 
+                            rhc_contact_state, 
+                            rhc_internal_costs,
+                            rhc_internal_constr]
 
     def __del__(self):
         
@@ -293,7 +301,7 @@ class RtClusterDebugger(QMainWindow):
 
     def _init_ui(self):
 
-        self.setGeometry(100, 100, 1000, 500)
+        self.setGeometry(500, 500, 1300, 900)
         self.setWindowTitle("Cluster real-time debugger")
         self.setContentsMargins(0, 0, 0, 0)
 

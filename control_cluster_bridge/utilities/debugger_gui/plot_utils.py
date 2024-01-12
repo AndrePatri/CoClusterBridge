@@ -37,10 +37,11 @@ class RtPlotWidget(pg.PlotWidget):
 
     def __init__(self, 
                 window_duration: int,
-                n_data: int,  
+                n_dims: int,  
                 update_data_dt: float, 
                 update_plot_dt: float, 
                 base_name: str, 
+                n_data: int = 1, # in case of matrix plot
                 legend_list: List[str] = None,
                 parent: QWidget = None, 
                 xlabel = "sample n.", 
@@ -55,10 +56,10 @@ class RtPlotWidget(pg.PlotWidget):
         
         self.plot_item = self.getPlotItem()
 
-        if legend_list is not None and len(legend_list) != n_data:
+        if legend_list is not None and len(legend_list) != n_dims:
             
             exception = "[{self.__class__.__name__}]" + f"[{self.journal.exception}]" \
-                + f": provided legend list length {len(legend_list)} does not match data dimension {n_data}"
+                + f": provided legend list length {len(legend_list)} does not match data dimension {n_dims}"
             
             raise Exception(exception)
 
@@ -73,7 +74,11 @@ class RtPlotWidget(pg.PlotWidget):
 
         # self.ntimestamps_per_window = 10
         
-        self.n_data = n_data
+        self.n_dims = n_dims # number of dimensions of the single sample (the one visualized)
+
+        self.n_data = n_data # number of "timelines" to be stored. Useful for plotting time-series
+        # of matrices
+        self.current_data_index = 0 # only one data can be plotted at a time
 
         self.window_offset = 0
 
@@ -89,7 +94,7 @@ class RtPlotWidget(pg.PlotWidget):
         self.update_data_dt = update_data_dt
         self.update_plot_dt = update_plot_dt
 
-        self.data = np.zeros((self.n_data, self.window_buffer_size))
+        self.data = np.zeros((self.window_buffer_size, self.n_dims, self.n_data))
 
         self.sample_stamps = np.arange(0, self.window_buffer_size)
 
@@ -107,18 +112,74 @@ class RtPlotWidget(pg.PlotWidget):
         self._init_timers()
     
     def update(self, 
-            new_data: np.ndarray):
+            new_data: np.ndarray,
+            data_idx: int = 0
+            ):
 
         # updates window with new data
 
-        self.data[:, :] = np.roll(self.data, -1, axis=1) # roll data backwards
+        self.data[:, :, :] = np.roll(self.data, -1, axis=0) # roll data "pages" backwards
+        # for each page (first dimension) data is arranges in a matrix
+        # [data dim x data sample]
 
-        self.data[:, -1] = new_data.flatten() # assign new sample
+        updated_data_shape = new_data.shape
+        data_size = len(updated_data_shape)
+
+        if data_size == 2:
+            
+            # data in assumed to be of shape data_dim x num_data (data_idx is not used)
+
+            if updated_data_shape[0] != self.n_dims:
+                
+                exep = f"Provided data n. rows should be equal to {self.n_dims}, " + \
+                    f"but got {updated_data_shape[0]}"
+                
+                raise Exception(exep)
+            
+            if updated_data_shape[1] != self.n_data:
+                
+                exep = f"Provided data n. cols should be equal to {self.n_data}, " + \
+                    f"but got {updated_data_shape[1]}"
+                
+                raise Exception(exep)
+            
+            # update last sample
+            self.data[-1, :, :] = new_data
+
+        if data_size == 1:
+
+            if updated_data_shape[0] != self.n_dims:
+                
+                exep = f"Provided data length should be equal to {self.n_dims}, " + \
+                    f"but got {updated_data_shape[0]}"
+                
+                raise Exception(exep)
+
+            # update last sample at provided data idx(if not default)
+            self.data[-1, :, data_idx] = new_data
         
-        # self.sample_stamps = [(current_time - self.reference_time - self.update_dt * i) for i in range(self.window_buffer_size)]
-        # self.sample_stamps = self.sample_stamps[::-1]
+        if data_size == 0:
 
-        # self._update_timestams_ticks(self.sample_stamps) 
+            exep = f"Cannot update time-series with 0-D data"
+            
+            raise Exception(exep)
+        
+        if data_size > 2:
+
+            exep = f"Can only plot time-series of vectors (1D) or matrices (2D)"
+            
+            raise Exception(exep)
+
+    def switch_to_data(self,
+            data_idx: int):
+
+        if data_idx > (self.n_data - 1):
+            
+            exep = f"Provided data index {data_idx} exceeds max. val. of {self.n_data - 1}"
+
+            raise Exception(exep)
+        
+        self.current_data_index = data_idx
 
     def set_timer_interval(self, 
                     sec: float):
@@ -198,7 +259,7 @@ class RtPlotWidget(pg.PlotWidget):
 
     def _init_lines(self):
 
-        for i in range(0, self.n_data):
+        for i in range(0, self.n_dims):
             
             if self.legend_list is None:
 
@@ -216,7 +277,7 @@ class RtPlotWidget(pg.PlotWidget):
             pen = pg.mkPen(color=color, 
                     width=2.3)
 
-            self.lines.append(self.plot_item.plot(self.data[i, :], 
+            self.lines.append(self.plot_item.plot(self.data[:, i, self.current_data_index], 
                         pen=pen))
         
     def _setup_plot(self):
@@ -237,7 +298,7 @@ class RtPlotWidget(pg.PlotWidget):
         self.y_axis.setGrid(255) 
 
         # Define a list of colors for each row
-        self.colors = [pg.intColor(i, self.n_data, 255) for i in range(self.n_data)]
+        self.colors = [pg.intColor(i, self.n_dims, 255) for i in range(self.n_dims)]
 
         self.dayshift() # sets uppearance for light mode
     
@@ -267,9 +328,9 @@ class RtPlotWidget(pg.PlotWidget):
         
         if not self.paused:
 
-            for i in range(0, self.data.shape[0]):
+            for i in range(0, self.n_dims):
 
-                self.lines[i].setData(self.data[i, :])
+                self.lines[i].setData(self.data[:, i, self.current_data_index])
 
     def _update_timestams_ticks(self, 
                         elapsed_times: List[float]):
@@ -823,11 +884,12 @@ class SettingsWidget():
 class RtPlotWindow():
 
     def __init__(self, 
-            n_data: int, 
+            data_dim: int, 
             update_data_dt: float, 
             update_plot_dt: float, 
             window_duration: float, 
             parent: QWidget,
+            n_data: int = 1,
             legend_list: List[str] = None,
             base_name: str = "", 
             window_buffer_factor: int = 2, 
@@ -836,6 +898,8 @@ class RtPlotWindow():
         self.journal = Journal()
 
         self.n_data = n_data
+        self.data_dim = data_dim
+
         self.update_data_dt = update_data_dt
         self.update_plot_dt = update_plot_dt    
 
@@ -855,6 +919,7 @@ class RtPlotWindow():
             window_duration=self.window_duration,
             update_data_dt=self.update_data_dt,
             update_plot_dt=self.update_plot_dt,
+            n_dims=self.data_dim,
             n_data=self.n_data,
             base_name=self.base_name,
             parent=None, 
