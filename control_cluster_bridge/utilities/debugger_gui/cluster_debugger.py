@@ -444,11 +444,6 @@ class RtClusterDebugger(QMainWindow):
         self.scroll_area_settings.setWidget(self.settings_frame)  # Set the frame as the scroll area's widget
         self.scroll_area_settings.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)  # Set size policy for scroll area
 
-        # self.scroll_area_tabs = QScrollArea()
-        # self.scroll_area_tabs.setWidgetResizable(True)  # Make the scroll area resizable
-        # self.scroll_area_tabs.setWidget(self.tabs)  # Set the frame as the scroll area's widget
-        # self.scroll_area_tabs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
-
         # self.splitter.addWidget(self.scroll_area_tabs)
         self.splitter.addWidget(self.tabs)
         self.splitter.addWidget(self.scroll_area_settings)
