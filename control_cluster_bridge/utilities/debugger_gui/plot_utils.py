@@ -118,57 +118,59 @@ class RtPlotWidget(pg.PlotWidget):
 
         # updates window with new data
 
-        self.data[:, :, :] = np.roll(self.data, -1, axis=0) # roll data "pages" backwards
-        # for each page (first dimension) data is arranges in a matrix
-        # [data dim x data sample]
+        if not self.paused:
 
-        updated_data_shape = new_data.shape
-        data_size = len(updated_data_shape)
+            self.data[:, :, :] = np.roll(self.data, -1, axis=0) # roll data "pages" backwards
+            # for each page (first dimension) data is arranges in a matrix
+            # [data dim x data sample]
 
-        if data_size == 2:
-            
-            # data in assumed to be of shape data_dim x num_data (data_idx is not used)
+            updated_data_shape = new_data.shape
+            data_size = len(updated_data_shape)
 
-            if updated_data_shape[0] != self.n_dims:
+            if data_size == 2:
                 
-                exep = f"Provided data n. rows should be equal to {self.n_dims}, " + \
-                    f"but got {updated_data_shape[0]}"
+                # data in assumed to be of shape data_dim x num_data (data_idx is not used)
+
+                if updated_data_shape[0] != self.n_dims:
+                    
+                    exep = f"Provided data n. rows should be equal to {self.n_dims}, " + \
+                        f"but got {updated_data_shape[0]}"
+                    
+                    raise Exception(exep)
+                
+                if updated_data_shape[1] != self.n_data:
+                    
+                    exep = f"Provided data n. cols should be equal to {self.n_data}, " + \
+                        f"but got {updated_data_shape[1]}"
+                    
+                    raise Exception(exep)
+                
+                # update last sample
+                self.data[-1, :, :] = new_data
+
+            if data_size == 1:
+
+                if updated_data_shape[0] != self.n_dims:
+                    
+                    exep = f"Provided data length should be equal to {self.n_dims}, " + \
+                        f"but got {updated_data_shape[0]}"
+                    
+                    raise Exception(exep)
+
+                # update last sample at provided data idx(if not default)
+                self.data[-1, :, data_idx] = new_data
+            
+            if data_size == 0:
+
+                exep = f"Cannot update time-series with 0-D data"
                 
                 raise Exception(exep)
             
-            if updated_data_shape[1] != self.n_data:
-                
-                exep = f"Provided data n. cols should be equal to {self.n_data}, " + \
-                    f"but got {updated_data_shape[1]}"
-                
-                raise Exception(exep)
-            
-            # update last sample
-            self.data[-1, :, :] = new_data
+            if data_size > 2:
 
-        if data_size == 1:
-
-            if updated_data_shape[0] != self.n_dims:
-                
-                exep = f"Provided data length should be equal to {self.n_dims}, " + \
-                    f"but got {updated_data_shape[0]}"
+                exep = f"Can only plot time-series of vectors (1D) or matrices (2D)"
                 
                 raise Exception(exep)
-
-            # update last sample at provided data idx(if not default)
-            self.data[-1, :, data_idx] = new_data
-        
-        if data_size == 0:
-
-            exep = f"Cannot update time-series with 0-D data"
-            
-            raise Exception(exep)
-        
-        if data_size > 2:
-
-            exep = f"Can only plot time-series of vectors (1D) or matrices (2D)"
-            
-            raise Exception(exep)
 
     def switch_to_data(self,
             data_idx: int):
@@ -326,11 +328,9 @@ class RtPlotWidget(pg.PlotWidget):
     
     def _update_plot_data(self):
         
-        if not self.paused:
+        for i in range(0, self.n_dims):
 
-            for i in range(0, self.n_dims):
-
-                self.lines[i].setData(self.data[:, i, self.current_data_index])
+            self.lines[i].setData(self.data[:, i, self.current_data_index])
 
     def _update_timestams_ticks(self, 
                         elapsed_times: List[float]):

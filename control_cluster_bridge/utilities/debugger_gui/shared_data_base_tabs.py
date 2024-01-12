@@ -743,7 +743,8 @@ class RhcInternalData(SharedDataWindow):
         self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
 
         for i in range(0, len(self.names)):
-
+            
+            print("UIIIIIIIIIIIIIIIIIIIIIIIIIIIIi")
             self.rt_plotters[i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
 
     def update(self,
