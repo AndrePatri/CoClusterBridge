@@ -357,11 +357,13 @@ class WidgetUtils:
 
         base_frame = QFrame(parent)
         base_frame.setFrameShape(QFrame.StyledPanel)
+        base_frame.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Minimum)
         base_layout = QVBoxLayout(base_frame)  # Use QVBoxLayout here
         base_layout.setContentsMargins(0, 0, 0, 0)
 
         val_frame = QFrame(base_frame)
         val_frame.setFrameShape(QFrame.StyledPanel)
+        val_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         val_layout = QHBoxLayout(val_frame)  # Use QVBoxLayout here
         val_layout.setContentsMargins(2, 2, 2, 2)
 
@@ -369,20 +371,25 @@ class WidgetUtils:
         current_val = QLabel(init_val_shown)
         current_val.setAlignment(Qt.AlignRight)
         current_val.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
+        val_title.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        current_val.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
         val_layout.addWidget(val_title, 
                                 alignment=Qt.AlignLeft)
+        val_layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         val_layout.addWidget(current_val)
 
         val_slider_frame = QFrame(base_frame)
         val_slider_frame.setFrameShape(QFrame.StyledPanel)
         val_slider_frame_layout = QHBoxLayout(val_slider_frame)  # Use QHBoxLayout here
         val_slider_frame_layout.setContentsMargins(2, 2, 2, 2)
+        val_slider_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
         min_label = QLabel(min_shown)
         min_label.setAlignment(Qt.AlignCenter)
         min_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
         val_slider_frame_layout.addWidget(min_label)
+        min_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
         val_slider = QSlider(Qt.Horizontal)
         val_slider.setMinimum(min)
@@ -390,12 +397,13 @@ class WidgetUtils:
         val_slider.setValue(init)
         val_slider.valueChanged.connect(callback)
         val_slider_frame_layout.addWidget(val_slider)
+        min_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
         max_label = QLabel(max_shown)
         max_label.setAlignment(Qt.AlignCenter)
         max_label.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
         val_slider_frame_layout.addWidget(max_label)
-
+        max_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         base_layout.addWidget(val_frame)
         base_layout.addWidget(val_slider_frame)
         
@@ -473,6 +481,7 @@ class WidgetUtils:
         button_data.button_descr = button_descr
 
         button_layout.addWidget(button_descr)
+        button_layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         button_layout.addWidget(button)
         
         parent_layout.addWidget(button_frame)
@@ -838,7 +847,7 @@ class RtPlotWindow():
         # use a QSplitter to handle resizable width between plot and legend frames
         self.base_frame = QFrame(parent=parent)
         self.base_frame.setFrameShape(QFrame.StyledPanel)
-        self.base_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.base_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.splitter = QSplitter(Qt.Horizontal)
 
         # create the plot widget
@@ -873,18 +882,16 @@ class GridFrameWidget():
             rows, 
             cols, 
             parent: QWidget = None,
-            add_settings_tab = True,
+            add_settings_tab = False,
             settings_title = "SETTINGS"):
         
-        add_settings_tab = True
-
         self.finalized = False
 
         self.journal = Journal()
 
         self.base_frame = QFrame(parent = parent)
         self.base_frame.setFrameShape(QFrame.StyledPanel)
-        self.base_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.base_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.add_settings_tab = add_settings_tab
         self.settings_frame_layout = None
@@ -896,11 +903,21 @@ class GridFrameWidget():
         self.cols = cols
 
         self.settings_splitter = QSplitter(orientation=Qt.Horizontal)
-            
+        self.settings_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         self.row_splitter = QSplitter(Qt.Vertical)
-        self.row_splitter.setHandleWidth(1)
+        self.row_splitter.setHandleWidth(5)
+        self.row_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.scroll_area_grid = QScrollArea(parent=self.settings_splitter)
+        self.scroll_area_grid.setWidgetResizable(True)  # Make the scroll area resizable
+        self.scroll_area_grid.setWidget(self.row_splitter)  # Set the frame as the scroll area's widget
+        self.scroll_area_grid.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Set size policy for scroll area
+        self.scroll_area_grid.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
         row_layout = QVBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.addItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         row_layout.addWidget(self.row_splitter)
 
         if self.add_settings_tab:
@@ -908,6 +925,7 @@ class GridFrameWidget():
             self.settings_frame = QFrame()
             self.settings_frame.setFrameShape(QFrame.StyledPanel)
             self.settings_frame.setContentsMargins(0, 0, 0, 0)
+            self.settings_frame.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.settings_frame_layout = QVBoxLayout(self.settings_frame)  # Use QVBoxLayout here
             self.settings_frame_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -962,7 +980,8 @@ class GridFrameWidget():
 
         self.settings_splitter.setHandleWidth(1)
 
-        self.settings_splitter.addWidget(self.row_splitter)
+        self.settings_splitter.addWidget(self.scroll_area_grid)
+
         if self.add_settings_tab:
             self.settings_splitter.addWidget(self.settings_frame)
             
@@ -1016,5 +1035,5 @@ class GridFrameWidget():
                 self.settings_frame_layout.addWidget(self.settings_widget_list[i].base_frame)
 
             # adding spacer at the end to push all stuff to top
-            self.settings_frame_layout.addItem(QSpacerItem(20, 40, 
+            self.settings_frame_layout.addItem(QSpacerItem(1, 1, 
                                                 QSizePolicy.Minimum, QSizePolicy.Expanding))

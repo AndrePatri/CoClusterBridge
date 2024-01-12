@@ -1468,10 +1468,10 @@ class RHCDebugData():
         # we sum dimensions up until the data we 
         # need to write to get the starting index
         # of the data block
-        starting_idx = 0
+        starting_idx = - 1
         for index in range(data_idx + 1):
 
-            starting_idx += self.dimensions[index] - 1
+            starting_idx += self.dimensions[index]
 
         view = self.data.numpy_view[starting_idx:starting_idx + self.dimensions[index], :]
 

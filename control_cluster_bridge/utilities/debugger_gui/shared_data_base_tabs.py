@@ -145,15 +145,16 @@ class RhcTaskRefWindow(SharedDataWindow):
 
         pass
 
-    def update(self):
+    def update(self,
+            index: int):
 
         if not self._terminated:
             
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].phase_id.get_contacts().numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].phase_id.phase_id.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].base_pose.get_pose().numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].com_pose.get_com_pose().numpy())
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].phase_id.get_flight_param().numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.get_contacts().numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.phase_id.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].base_pose.get_pose().numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].com_pose.get_com_pose().numpy())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].phase_id.get_flight_param().numpy())
 
 class RhcCmdsWindow(SharedDataWindow):
 
@@ -275,14 +276,15 @@ class RhcCmdsWindow(SharedDataWindow):
 
         pass
 
-    def update(self):
+    def update(self,
+            index: int):
         
         if not self._terminated:
             
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].jnt_cmd.q.numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].jnt_cmd.v.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].jnt_cmd.eff.numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 2].slvr_state.info.numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.q.numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.v.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.eff.numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 2].slvr_state.info.numpy())
 
 class RhcStateWindow(SharedDataWindow):
 
@@ -416,19 +418,20 @@ class RhcStateWindow(SharedDataWindow):
 
         pass
 
-    def update(self):
+    def update(self,
+            index: int):
 
         if not self._terminated:
             
             # root state
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.p.numpy())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.q.numpy())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.v.numpy())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].root_state.omega.numpy())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.p.numpy())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.q.numpy())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.v.numpy())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.omega.numpy())
 
             # joint state
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].jnt_state.q.numpy())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx + 1].jnt_state.v.numpy())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.q.numpy())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.v.numpy())
 
 class RhcContactStatesWindow(SharedDataWindow):
 
@@ -530,7 +533,7 @@ class RhcContactStatesWindow(SharedDataWindow):
             for i in range(0, self.n_sensors):
                 
                 # cluster index is updated manually
-                self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[self.cluster_idx].contact_state.get(self.contact_names[i]).numpy())
+                self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[index].contact_state.get(self.contact_names[i]).numpy())
 
 class RhcInternalData(SharedDataWindow):
 
@@ -548,9 +551,7 @@ class RhcInternalData(SharedDataWindow):
         add_settings_tab = True,
         settings_title = "SETTINGS (RhcInternalData)"
         ):
-        
-        self.add_settings_tab = add_settings_tab
-
+                
         self.is_cost = is_cost
         self.is_constraint = is_constraint
 
@@ -738,10 +739,6 @@ class RhcInternalData(SharedDataWindow):
                     
                     data = np.atleast_1d(self.shared_data_clients[index].read_cost(self.names[i])[:, self.current_node_index])
                     
-                    print("AAAAAAAAA")
-                    print(self.names[i])
-                    print(data)
-                    print(data.shape)
                     self.rt_plotters[i].rt_plot_widget.update(data)
 
                 # if self.is_constraint:

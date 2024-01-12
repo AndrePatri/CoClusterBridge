@@ -293,7 +293,7 @@ class RtClusterDebugger(QMainWindow):
 
     def _init_ui(self):
 
-        self.setGeometry(100, 100, 1000, 800)
+        self.setGeometry(100, 100, 1000, 500)
         self.setWindowTitle("Cluster real-time debugger")
         self.setContentsMargins(0, 0, 0, 0)
 
@@ -301,16 +301,19 @@ class RtClusterDebugger(QMainWindow):
         self.central_widget.setContentsMargins(0, 0, 0, 0)
         self.setCentralWidget(self.central_widget)
 
-        self.layout = QHBoxLayout(self.central_widget)
-        
+        self.layout = QVBoxLayout(self.central_widget)
+
         self.splitter = QSplitter(Qt.Horizontal)
-        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.splitter.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         self.splitter.setHandleWidth(1)
         self.layout.addWidget(self.splitter)
         
         self.tabs = self.widget_utils.ClosableTabWidget()
-        self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.tabs_layout = QVBoxLayout(self.tabs)
+        self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.tabs_layout = QVBoxLayout()
+        # self.tabs_layout.addItem(QSpacerItem(1000, 1, hPolicy = QSizePolicy.Expanding, vPolicy = QSizePolicy.Minimum))
+        self.tabs_layout.addWidget(self.tabs)
+
         # self.splitter_layout.addWidget(self.tabs)
         self.tabs.add_closing_method(self._terminate_tab)
         
@@ -431,14 +434,15 @@ class RtClusterDebugger(QMainWindow):
         self.scroll_area_settings = QScrollArea()
         self.scroll_area_settings.setWidgetResizable(True)  # Make the scroll area resizable
         self.scroll_area_settings.setWidget(self.settings_frame)  # Set the frame as the scroll area's widget
-        self.scroll_area_settings.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
+        self.scroll_area_settings.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)  # Set size policy for scroll area
 
-        self.scroll_area_tabs = QScrollArea()
-        self.scroll_area_tabs.setWidgetResizable(True)  # Make the scroll area resizable
-        self.scroll_area_tabs.setWidget(self.tabs)  # Set the frame as the scroll area's widget
-        self.scroll_area_tabs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
+        # self.scroll_area_tabs = QScrollArea()
+        # self.scroll_area_tabs.setWidgetResizable(True)  # Make the scroll area resizable
+        # self.scroll_area_tabs.setWidget(self.tabs)  # Set the frame as the scroll area's widget
+        # self.scroll_area_tabs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)  # Set size policy for scroll area
 
-        self.splitter.addWidget(self.scroll_area_tabs)
+        # self.splitter.addWidget(self.scroll_area_tabs)
+        self.splitter.addWidget(self.tabs)
         self.splitter.addWidget(self.scroll_area_settings)
 
     def _init_data_thread(self):
@@ -500,10 +504,6 @@ class RtClusterDebugger(QMainWindow):
                 checked = self.data_spawner.buttons[i].isChecked()  # Get the new state of the button
 
                 if checked and self._tabs_terminated[i]:
-                    
-                    print("################")
-                    print(self.shared_data_tabs_name[i])
-                    print(i)
 
                     self.shared_data_window[i].run()
 
