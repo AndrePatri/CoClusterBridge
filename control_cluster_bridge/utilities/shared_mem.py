@@ -1538,10 +1538,13 @@ class SharedDataView:
             n_cols: int = -1, 
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
-            dtype: sharsor_dtype = sharsor_dtype.Float):
+            dtype: sharsor_dtype = sharsor_dtype.Float,
+            fill_value = 0.0):
 
         self.basename = basename
         self.namespace = namespace
+
+        self.fill_value = fill_value
 
         self.verbose = verbose
         self.vlevel = vlevel
@@ -1653,11 +1656,15 @@ class SharedDataView:
         # in case only a portion of it is needed, this is not optimal
         # memory-wise. However, this way we gain in simplicity
 
-        self.numpy_view = np.zeros((self.n_rows, self.n_cols),
+        # self.numpy_view = np.zeros((self.n_rows, self.n_cols),
+        #                     dtype=toNumpyDType(self.shared_mem.getScalarType()),
+        #                     order=self.order 
+        #                     )
+        self.numpy_view = np.full((self.n_rows, self.n_cols),
+                            self.fill_value,
                             dtype=toNumpyDType(self.shared_mem.getScalarType()),
-                            order=self.order 
+                            order=self.order
                             )
-
         self.torch_view = torch.from_numpy(self.numpy_view) # changes in either the 
         # numpy or torch view will be reflected into the other one
 
