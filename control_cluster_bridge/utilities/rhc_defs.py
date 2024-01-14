@@ -1348,7 +1348,8 @@ class RHCDebugData():
                 n_rows = n_dims, 
                 n_cols = n_nodes, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                fill_value=np.nan)
 
     def __init__(self,
             names: List[str] = None, # not needed if client

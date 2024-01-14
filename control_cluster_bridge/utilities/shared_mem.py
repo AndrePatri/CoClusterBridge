@@ -1539,7 +1539,7 @@ class SharedDataView:
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             dtype: sharsor_dtype = sharsor_dtype.Float,
-            fill_value = 0.0):
+            fill_value = None):
 
         self.basename = basename
         self.namespace = namespace
@@ -1656,18 +1656,33 @@ class SharedDataView:
         # in case only a portion of it is needed, this is not optimal
         # memory-wise. However, this way we gain in simplicity
 
-        # self.numpy_view = np.zeros((self.n_rows, self.n_cols),
-        #                     dtype=toNumpyDType(self.shared_mem.getScalarType()),
-        #                     order=self.order 
-        #                     )
-        self.numpy_view = np.full((self.n_rows, self.n_cols),
+        if self.fill_value is not None:
+            
+            self.numpy_view = np.full((self.n_rows, self.n_cols),
                             self.fill_value,
                             dtype=toNumpyDType(self.shared_mem.getScalarType()),
                             order=self.order
                             )
+
+        else:
+            
+            self.numpy_view = np.zeros((self.n_rows, self.n_cols),
+                                dtype=toNumpyDType(self.shared_mem.getScalarType()),
+                                order=self.order 
+                                )
+        
         self.torch_view = torch.from_numpy(self.numpy_view) # changes in either the 
         # numpy or torch view will be reflected into the other one
 
+        # also write fill value to shared memory
+
+        if self.fill_value is not None and self.is_server:
+                
+                # view is initialized with NaN -> 
+                # we write initialization
+                self.synch_all(read = False, 
+                        wait=True)
+                
     def write(self, 
             data: Union[bool, int, float, 
                         np.float32, np.float64,
