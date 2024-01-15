@@ -149,9 +149,9 @@ class RHController(ABC):
         self._init_problem() # we call the child's initialization method
 
         self.controller_status = RHCStatus(is_server=False,
-                                            namespace=self.namespace, 
-                                            verbose=True, 
-                                            vlevel=VLevel.V2)
+                                    namespace=self.namespace, 
+                                    verbose=True, 
+                                    vlevel=VLevel.V2)
 
         self.controller_status.run()
         
@@ -272,14 +272,19 @@ class RHController(ABC):
             
             try:
                 
-                # if self.reset_flag.read_bool(): # reset request from client
-                    
-                #     self.reset()
+                # checks for reset requests
+                if self.controller_status.resets.read_wait(row_index=self.controller_index,
+                                            col_index=0)[0]:
 
-                #     self.fail_n = 0 # resets number of fails
+                    self.reset()
 
-                #     self.reset_flag.set_bool(False) # reset completed
+                    self.fail_n = 0 # resets number of fails
 
+                    self.controller_status.resets.write_wait(False, 
+                                                    row_index=self.controller_index,
+                                                    col_index=0)
+
+                # checks for trigger requests
                 if self.controller_status.trigger.read_wait(row_index=self.controller_index,
                                                     col_index=0)[0]:
                     
@@ -300,7 +305,7 @@ class RHController(ABC):
                     if self._debug_sol:
                         
                         # if in debug, rhc internal state is streamed over 
-                        # shared data
+                        # shared mem.
                         self._update_rhc_internal()
 
                     # we signal the client this controller has finished its job by
@@ -319,10 +324,8 @@ class RHController(ABC):
                             f"[{self.journal.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
                 
                 else:
-
-                    # and not self.reset_flag.read_bool()): # not triggered, not reset
                     
-                    # we avoid busy waiting and sleep for a small amount of time
+                    # we avoid busy waiting and CPU saturation by sleeping for a small amount of time
 
                     self.perf_timer.clock_sleep(1000000) # nanoseconds (actually resolution is much
                     # poorer)
@@ -335,8 +338,12 @@ class RHController(ABC):
         
         # self.controller_fail_flag.set_bool(True) # can be read by the cluster client
 
-        self.reset() # resets controller (this has to be defined by the user)
+        # self.reset() # resets controller (this has to be defined by the user)
 
+        self.controller_status.fails.write_wait(True, 
+                                        row_index=self.controller_index,
+                                        col_index=0)
+        
         self.n_fails += 1
 
     def reset(self):

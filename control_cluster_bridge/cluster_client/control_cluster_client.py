@@ -237,7 +237,16 @@ class ControlClusterClient(ABC):
 
                     print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
                         ": controllers waiting to be activated...")
+    
+    def _on_failure(self):
 
+        # checks failure status
+        self.controller_status.fails.synch_all(read=True, 
+                                    wait=True)
+        
+        self.controller_status.resets.write_wait(self.controller_status.fails.torch_view,
+                                    0, 0)
+    
     def wait_for_solution(self):
 
         # will only return True after the solution signal from the cluster is received
@@ -250,6 +259,11 @@ class ControlClusterClient(ABC):
                 # we wait for all controllers to finish      
                 self._wait_for_solution() # this is blocking (but no busy wait)
                 
+                # at this point we are sure solutions and controllers status are updated
+
+                # we handle controller fails
+                self._on_failure()
+
                 # at this point all controllers are done -> we synchronize the control commands on GPU
                 # with the ones written by each controller on CPU
                 self.controllers_cmds.synch()
@@ -437,9 +451,7 @@ class ControlClusterClient(ABC):
         # writes whole internal view to shared memory
         self.controller_status.trigger.synch_all(read=False, 
                                         wait=True) # wait for synch to succeed
-        
-        # self.trigger_flags.reset_bool(True) # sets all flags
-    
+            
     def _wait_for_solution(self):
 
         solved = False

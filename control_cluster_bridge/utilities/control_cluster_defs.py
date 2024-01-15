@@ -1085,27 +1085,7 @@ class HanshakeDataCntrlClient:
 # new SharsorIPC-based shared data
         
 class RHCStatus():
-
-    class ActivationStateView(SharedDataView):
-        
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                cluster_size: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
-            
-            basename = "ClusterActivationState" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = cluster_size, 
-                n_cols = 1, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                dtype=dtype.Bool)
-            
+    
     class FailFlagView(SharedDataView):
         
         def __init__(self,
@@ -1183,12 +1163,6 @@ class RHCStatus():
 
         self.vlevel = vlevel
 
-        self.active = self.ActivationStateView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel)
-
         self.fails = self.FailFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
@@ -1213,10 +1187,9 @@ class RHCStatus():
 
     def run(self):
     
-        # self.fails.run()
-        # self.resets.run()
+        self.fails.run()
+        self.resets.run()
         self.trigger.run()
-        # self.active.run()
 
     def close(self):
         
