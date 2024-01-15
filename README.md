@@ -43,5 +43,12 @@ Some notes:
 
 #### ToDo:
 
-- [] Move shared memory implementation to separate package.
-- [] Add optional shared structure to the cluster client for exposing the FULL internal MPC state (RHCInternal?).
+- [] Expose rhc status to GUI
+- [] Test reset of single environment and single robot
+- [] add check to match controller rate in sim with cluster rate
+- [] Test rhc reset after failure, add reset and reset all buttons to reset a single or multiple rhc controllers (and corresponding robot)
+- [] Move old shared structures relying to new SharsorIPCpp. Remove distinction between cluster and sinlge rhc shared structure and add child class for GPU interface. Expose at the cluster client level, aside from state, cmds also the rhc status structure and move rhc info like cost etc.. into rhc status object
+- [] merge all data in the observation tensor for the agent, penalize rhc total cost and controller failure over episode.
+- [] use PPO to optimaze the policy of the agent, save policy. Load it in separate script and make a parser which evaluates agents commands and forwards them over shared memory. Sinchronize with sim stepping (at a custom frequency) and test over a simple task of lifting the robot base to an height
+- [] scale to complex tasks, integrate and improve new MPC, eventually go to stepping...
+- [] test bound squashing (inequality expansion) for integration of inequalities into iLQR 
