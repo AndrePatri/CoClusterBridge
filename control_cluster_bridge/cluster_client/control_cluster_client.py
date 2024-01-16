@@ -24,9 +24,9 @@ from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCn
 from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
-from control_cluster_bridge.utilities.defs import trigger_flagname, launch_controllers_flagname
+from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 
-from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
+# from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 
 from control_cluster_bridge.utilities.defs import Journal
 
@@ -106,7 +106,7 @@ class ControlClusterClient(ABC):
         self.launch_controllers = None
         self.rhc_task_refs = None
         self.contact_states = None
-        self.shared_cluster_info = None
+        # self.shared_cluster_info = None
 
         self.controller_status = None
 
@@ -290,8 +290,8 @@ class ControlClusterClient(ABC):
 
             self.solution_time = time.perf_counter() - self.start_time # we profile the whole solution pipeline
             
-            self.shared_cluster_info.update(solve_time=self.solution_time, 
-                                        controllers_up = self.controllers_active) # we update the shared info
+            # self.shared_cluster_info.update(solve_time=self.solution_time, 
+            #                             controllers_up = self.controllers_active) # we update the shared info
 
         self.controllers_were_active = self.controllers_active
 
@@ -321,9 +321,9 @@ class ControlClusterClient(ABC):
 
                 self.contact_states.terminate()
 
-            if self.shared_cluster_info is not None:
+            # if self.shared_cluster_info is not None:
 
-                self.shared_cluster_info.terminate()
+            #     self.shared_cluster_info.terminate()
 
             if self.controller_status is not None:
 
@@ -381,7 +381,7 @@ class ControlClusterClient(ABC):
         self.launch_controllers.start()
         self.launch_controllers.reset_bool(False)
 
-        self.shared_cluster_info.start()
+        # self.shared_cluster_info.start()
 
         self.controller_status.run()
 
@@ -441,7 +441,7 @@ class ControlClusterClient(ABC):
         
         # debug info from the client
 
-        self.shared_cluster_info = SharedClusterInfo(name=self.namespace)
+        # self.shared_cluster_info = SharedClusterInfo(name=self.namespace)
 
     def _trigger_solution(self):
         

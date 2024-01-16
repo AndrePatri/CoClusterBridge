@@ -1763,7 +1763,7 @@ class SharedDataView:
                     message,
                     LogType.EXCEP,
                     throw_when_excep = False)
-                
+                                
                 return False
             
             input_rows, input_cols = data.shape

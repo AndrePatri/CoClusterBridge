@@ -29,8 +29,7 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from typing import List
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
 
-from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
-from omni_robo_gym.utils.shared_sim_info import SharedSimInfo
+from control_cluster_bridge.utilities.shared_info import SharedSimInfo
 
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr
@@ -42,6 +41,7 @@ from control_cluster_bridge.utilities.sysutils import PathsGetter
 from control_cluster_bridge.utilities.defs import Journal
 
 import torch
+import numpy as np
 
 import sys
 
@@ -124,8 +124,7 @@ class RtClusterDebugger(QMainWindow):
                 window_length: float = 10.0, # [s]
                 window_buffer_factor: int = 2,
                 verbose: bool = False, 
-                add_sim_data: bool = True, 
-                add_cluster_data: bool = True):
+                add_sim_data: bool = True):
 
         self.app = QApplication(sys.argv)
 
@@ -161,8 +160,6 @@ class RtClusterDebugger(QMainWindow):
         self.launch_controllers = None
         self.shared_sim_info = None
         self.add_sim_data = add_sim_data
-        self.shared_cluster_info = None
-        self.add_shared_cluster_info = add_cluster_data
         self.launch_keyboard_cmds = None
         self.env_index = None
 
@@ -247,11 +244,8 @@ class RtClusterDebugger(QMainWindow):
         if self.env_index is not None:
             self.env_index.terminate()
 
-        if self.shared_cluster_info is not None:
-            self.shared_cluster_info.terminate()
-
         if self.shared_sim_info is not None:
-            self.shared_sim_info.terminate()
+            self.shared_sim_info.close()
 
         # terminate shared data windows
         for i in range(len(self.shared_data_tabs_name)):
@@ -421,21 +415,13 @@ class RtClusterDebugger(QMainWindow):
                                                 title="DATA SPAWNER")
 
         if self.add_sim_data:
-
+            
             self.sim_info_widget = self.widget_utils.create_scrollable_label_list(parent=self.settings_frame, 
                                                     parent_layout=self.settings_frame_layout, 
-                                                    list_names=self.shared_sim_info.get_names(),
+                                                    list_names=self.shared_sim_info.param_keys,
                                                     title="SIMULATOR INFO", 
-                                                    init=[-1] * len(self.shared_sim_info.get_names()))
-        
-        if self.add_shared_cluster_info:
+                                                    init=[np.nan] * len(self.shared_sim_info.param_keys))
 
-            self.cluster_info_widget = self.widget_utils.create_scrollable_label_list(parent=self.settings_frame, 
-                                                    parent_layout=self.settings_frame_layout, 
-                                                    list_names=self.shared_cluster_info.get_names(),
-                                                    title="CLUSTER DEBUG INFO", 
-                                                    init=[-1] * len(self.shared_cluster_info.get_names()))
-            
         self.settings_frame_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
         # Create a scroll area and set its widget to be the settings frame
@@ -485,15 +471,10 @@ class RtClusterDebugger(QMainWindow):
         self.env_index.start()
         self.env_index.tensor_view[0, 0] = 0 # inizialize to 1st environment
 
-        if self.add_shared_cluster_info:
-
-            self.shared_cluster_info = SharedClusterInfo(name = self.namespace, is_client=True)
-            self.shared_cluster_info.start()
-
         if self.add_sim_data:
             
-            self.shared_sim_info = SharedSimInfo(is_client=True)
-            self.shared_sim_info.start()
+            self.shared_sim_info = SharedSimInfo(is_server=False)
+            self.shared_sim_info.run()
 
         self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
             
@@ -598,11 +579,7 @@ class RtClusterDebugger(QMainWindow):
 
             if self.add_sim_data and (self.shared_sim_info is not None):
                 
-                self.sim_info_widget.update(self.shared_sim_info.shared_sim_data.tensor_view.flatten().tolist())
-
-            if self.add_shared_cluster_info and (self.shared_cluster_info is not None):
-                
-                self.cluster_info_widget.update(self.shared_cluster_info.shared_cluster_data.tensor_view.flatten().tolist())
+                self.sim_info_widget.update(self.shared_sim_info.get().flatten())
 
     def _update_cluster_idx(self, 
                         idx: int):

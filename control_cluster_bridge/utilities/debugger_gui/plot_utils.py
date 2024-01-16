@@ -396,11 +396,16 @@ class WidgetUtils:
             self.labels = []
         
         def update(self, 
-                data: List[float]):
+                data: np.ndarray):
 
+            if data.ndim != 1:
+
+                raise Exception("Provided data should be a 1D numpy array!")
+            
             for i in range(0, len(data)):
                 
-                self.labels[i].setText(str(round(data[i], 4)))
+                # for now using np.round
+                self.labels[i].setText(str((round(data[i], 4))))
 
     def generate_complex_slider(self, 
                 callback: Callable[[int], None],

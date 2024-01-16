@@ -32,7 +32,6 @@ import numpy as np
 
 from control_cluster_bridge.utilities.shared_mem import SharedDataView
 from SharsorIPCpp.PySharsorIPC import VLevel
-from SharsorIPCpp.PySharsorIPC import Journal as Logger
 from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype, toNumpyDType
 
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient

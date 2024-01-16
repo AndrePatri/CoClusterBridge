@@ -744,7 +744,6 @@ class RhcInternalData(SharedDataWindow):
 
         for i in range(0, len(self.names)):
             
-            print("UIIIIIIIIIIIIIIIIIIIIIIIIIIIIi")
             self.rt_plotters[i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
 
     def update(self,
@@ -769,4 +768,215 @@ class RhcInternalData(SharedDataWindow):
                     data = np.atleast_2d(self.shared_data_clients[index].read_constr(self.names[i])[:, :])
                     
                     self.rt_plotters[i].rt_plot_widget.update(data)
+
+class SimInfo(SharedDataWindow):
+
+    def __init__(self, 
+        name: str,
+        update_data_dt: int,
+        update_plot_dt: int,
+        window_duration: int,
+        window_buffer_factor: int = 2,
+        namespace = "",
+        parent: QWidget = None, 
+        verbose = False,
+        add_settings_tab = True,
+        settings_title = "SETTINGS (SimInfo)"
+        ):
+
+        self.cluster_size = -1
+
+        self.current_node_index = 0
+
+        self.names = []
+        self.dims = []
+        self.n_nodes = -1
+
+        self.name = name
+        
+        super().__init__(update_data_dt = update_data_dt,
+            update_plot_dt = update_plot_dt,
+            window_duration = window_duration,
+            window_buffer_factor = window_buffer_factor,
+            grid_n_rows = 2,
+            grid_n_cols = 3,
+            namespace = namespace,
+            name = name,
+            parent = parent, 
+            verbose = verbose,
+            add_settings_tab = add_settings_tab,
+            settings_title = settings_title
+            )
+
+    def _init_shared_data(self):
+        
+        is_server = False
+        
+        self.rhc_status_info = RHCStatus(is_server=is_server,
+                            namespace=self.namespace, 
+                            verbose=self.verbose,
+                            vlevel=VLevel.V1)
+
+        self.rhc_status_info.run()
+        
+        self.cluster_size = self.rhc_status_info.trigger.n_rows
+
+        self.rhc_status_info.close() # we don't need the client anymore
+
+        enable_costs = False
+        enable_constr = False
+
+        if self.is_cost:
+            
+            enable_costs = True
+
+        if self.is_constraint:
+            
+            enable_constr = True
+
+        config = RHCInternal.Config(is_server=is_server, 
+                        enable_q=False, 
+                        enable_v=False, 
+                        enable_a=False, 
+                        enable_a_dot=False, 
+                        enable_f=False,
+                        enable_f_dot=False, 
+                        enable_eff=False,
+                        enable_costs=enable_costs, 
+                        enable_constr=enable_constr)
+
+        # view of rhc internal data
+        for i in range(0, self.cluster_size):
+
+            self.shared_data_clients.append(RHCInternal(config=config,
+                                            namespace=self.namespace,
+                                            rhc_index = i,
+                                            is_server=is_server,
+                                            verbose=self.verbose,
+                                            vlevel=VLevel.V2))
+        
+        # run clients
+        for i in range(0, self.cluster_size):
+
+            self.shared_data_clients[i].run()
+
+    def _post_shared_init(self):
+        
+        if self.is_cost:
+
+            self.names = self.shared_data_clients[0].costs.names
+            self.dims = self.shared_data_clients[0].costs.dimensions
+            self.n_nodes =  self.shared_data_clients[0].costs.n_nodes
+
+        if self.is_constraint:
+
+            self.names = self.shared_data_clients[0].cnstr.names
+            self.dims = self.shared_data_clients[0].cnstr.dimensions
+            self.n_nodes =  self.shared_data_clients[0].cnstr.n_nodes
+
+        # import math 
+
+        # grid_size = math.ceil(math.sqrt(len(self.names)))
+
+        # # distributing plots over a square grid
+        # self.grid_n_rows = grid_size
+        # self.grid_n_cols = grid_size
+
+        self.grid_n_rows = len(self.names)
+
+        self.grid_n_cols = 1
+
+    def _initialize(self):
+        
+        base_name = ""
+
+        if self.is_cost:
+
+            base_name = "Cost name"
+
+        if self.is_constraint:
+
+            base_name = "Constraint name"
+
+        # distribute plots on each row
+        counter = 0
+        for i in range(0, self.grid_n_rows):
+            
+            for j in range(0, self.grid_n_cols):
+            
+                if (counter < len(self.names)):
                     
+                    legend_list = [""] * self.dims[counter]
+                    for k in range(self.dims[counter]):
+                        
+                        legend_list[k] = str(k)
+
+                    self.rt_plotters.append(RtPlotWindow(data_dim=self.dims[counter],
+                                n_data = self.n_nodes,
+                                update_data_dt=self.update_data_dt, 
+                                update_plot_dt=self.update_plot_dt,
+                                window_duration=self.window_duration, 
+                                parent=None, 
+                                base_name=f"{base_name}: {self.names[counter]}", 
+                                window_buffer_factor=self.window_buffer_factor, 
+                                legend_list=legend_list, 
+                                ylabel=""))
+
+                    self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
+
+                    counter = counter + 1
+
+    def _finalize_grid(self):
+        
+        widget_utils = WidgetUtils()
+
+        settings_frames = []
+
+        node_index_slider = widget_utils.generate_complex_slider(
+                        parent=None, 
+                        parent_layout=None,
+                        min_shown=f"{0}", min= 0, 
+                        max_shown=f"{self.n_nodes - 1}", 
+                        max=self.n_nodes - 1, 
+                        init_val_shown=f"{0}", init=0, 
+                        title="node index slider", 
+                        callback=self._update_node_idx)
+        
+        settings_frames.append(node_index_slider)
+        
+        self.grid.addToSettings(settings_frames)
+    
+    def _update_node_idx(self,
+                    idx: int):
+
+        self.current_node_index = idx
+
+        self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
+
+        for i in range(0, len(self.names)):
+            
+            self.rt_plotters[i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+
+    def update(self,
+            index: int):
+
+        self.shared_data_clients[index].synch()
+
+        if not self._terminated:
+            
+            for i in range(0, len(self.names)):
+                
+                # iterate over data names (i.e. plots)
+                
+                if self.is_cost:
+                    
+                    data = np.atleast_2d(self.shared_data_clients[index].read_cost(self.names[i])[:, :])
+                    
+                    self.rt_plotters[i].rt_plot_widget.update(data)
+
+                if self.is_constraint:
+
+                    data = np.atleast_2d(self.shared_data_clients[index].read_constr(self.names[i])[:, :])
+                    
+                    self.rt_plotters[i].rt_plot_widget.update(data)
+                      
