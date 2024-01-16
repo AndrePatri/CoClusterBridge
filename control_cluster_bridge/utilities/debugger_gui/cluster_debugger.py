@@ -25,6 +25,7 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcStateWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcInternalData
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
 
 from typing import List
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
@@ -167,6 +168,14 @@ class RtClusterDebugger(QMainWindow):
         self.shared_data_tabs_name = [] # init to empty list
         self.shared_data_window = []
 
+        sim_info = SimInfo(name="SharedSimInfo",
+                        update_data_dt=self.data_update_dt, 
+                        update_plot_dt=self.plot_update_dt,
+                        window_duration=self.window_length, 
+                        window_buffer_factor=self.window_buffer_factor, 
+                        namespace=self.namespace,
+                        parent=None, 
+                        verbose=self.verbose)
         rhc_task_ref = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
                             update_plot_dt=self.plot_update_dt,
                             window_duration=self.window_length, 
@@ -215,7 +224,8 @@ class RtClusterDebugger(QMainWindow):
                                 is_cost=False,
                                 is_constraint=True)
         
-        self.base_spawnable_tabs = [rhc_task_ref, rhc_cms, rhc_state, 
+        self.base_spawnable_tabs = [sim_info, 
+                            rhc_task_ref, rhc_cms, rhc_state, 
                             rhc_contact_state, 
                             rhc_internal_costs,
                             rhc_internal_constr]

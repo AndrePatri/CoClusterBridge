@@ -392,7 +392,9 @@ class WidgetUtils:
     class ScrollableListLabelsData:
 
         def __init__(self):
-
+            
+            self.base_frame = None
+            self.base_layout = None
             self.labels = []
         
         def update(self, 
@@ -622,7 +624,10 @@ class WidgetUtils:
         list_frame.setFrameShape(QFrame.StyledPanel)
         list_layout = QVBoxLayout(list_frame)
         list_layout.setContentsMargins(2, 2, 2, 2)
-
+        
+        data.base_frame = list_frame
+        data.base_layout = list_layout
+        
         plot_selector_title = QLabel(title)
         list_layout.addWidget(plot_selector_title, 
                                 alignment=Qt.AlignHCenter)
@@ -656,7 +661,9 @@ class WidgetUtils:
         
         list_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        parent_layout.addWidget(plot_selector_scroll_area)
+        if parent_layout is not None:
+
+            parent_layout.addWidget(plot_selector_scroll_area)
 
         return data
 
