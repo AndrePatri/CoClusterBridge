@@ -123,7 +123,7 @@ class ControlClusterSrvr(ABC):
 
                     raise Exception(exception)
                 
-            if len(self.isolated_cores) < self.cluster_size:
+            if len(self.isolated_cores) < self.cluster_size and self.use_isolated_cores:
                 
                 self.distribute_over_cores = True # instead of assigning each process to a separate core
                 # we distribute the controllers over the available ones
