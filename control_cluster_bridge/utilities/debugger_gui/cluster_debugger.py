@@ -255,6 +255,7 @@ class RtClusterDebugger(QMainWindow):
             self.env_index.terminate()
 
         if self.shared_sim_info is not None:
+
             self.shared_sim_info.close()
 
         # terminate shared data windows

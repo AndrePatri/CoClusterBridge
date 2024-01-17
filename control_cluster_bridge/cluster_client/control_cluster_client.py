@@ -28,10 +28,8 @@ from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 
 # from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 
-from control_cluster_bridge.utilities.defs import Journal
-
 from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
-from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
 
 import time
 
@@ -60,8 +58,6 @@ class ControlClusterClient(ABC):
             namespace = ""):
 
         self.namespace = namespace
-
-        self.journal = Journal()
         
         self.perf_timer = PerfSleep()
 
@@ -126,6 +122,9 @@ class ControlClusterClient(ABC):
         self.solution_counter = 0
         self.n_sim_step_per_cntrl = -1
 
+        self.trigger_counter = 0
+        self.wait_for_sol_counter = 0
+        self.n_steps_prints = 100
         # performs some initialization steps
         self._setup()
     
@@ -153,25 +152,46 @@ class ControlClusterClient(ABC):
         handshake_done = self.handshake_manager.handshake_done
 
         self.controllers_active = self.launch_controllers.all()
-    
+
+        n_clients = self.controller_status.trigger.get_n_clients()
+
         if not handshake_done or \
-            (self.controller_status.trigger.get_n_clients() != self.cluster_size):
+            (n_clients == 0):
+            
+            if self._verbose and \
+                    (self.trigger_counter+1) % self.n_steps_prints == 0: 
+                
+                Journal.log(self.__class__.__name__,
+                    "trigger_solution",
+                    "Waiting connection to ControlCluster server",
+                    LogType.INFO,
+                    throw_when_excep = False)
+
+        if n_clients < self.cluster_size and \
+                n_clients > 0 and \
+                (self.trigger_counter+1) % self.n_steps_prints == 0:
             
             if self._verbose: 
+                
+                msg = f"Not all clients are connected ({n_clients}) yet."
 
-                print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                    ": waiting connection to ControlCluster server")
+                Journal.log(self.__class__.__name__,
+                    "trigger_solution",
+                    msg,
+                    LogType.WARN,
+                    throw_when_excep = False)
 
         if self.controller_status.trigger.get_n_clients() > self.cluster_size:
             
-            exception = f"[{self.__class__.__name__}]"  + f"[{self.journal.exception}]" + \
-                        f": more than cluster size ({self.cluster_size}) clients registered." + \
-                        ". It's very likely a memory leak on the shared memory layer occurred." + \
-                        " You might need to reboot the system."
+            msg = "More than {self.cluster_size} clients registered." + \
+                ". It's very likely a memory leak on the shared memory layer occurred." + \
+                " You might need to reboot the system to clean the dangling memory."
 
-            self.close()
-
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                "trigger_solution",
+                msg,
+                LogType.EXCEP,
+                throw_when_excep = True)
             
         if self._is_first_control_step:
                 
@@ -227,7 +247,8 @@ class ControlClusterClient(ABC):
             
             else:
             
-                if self._verbose: 
+                if self._verbose and \
+                    (self.trigger_counter+1) % self.n_steps_prints == 0: 
 
                     # if not self.controllers_active and \
                     #     self.controllers_were_active:
@@ -235,15 +256,21 @@ class ControlClusterClient(ABC):
                     #     # upon controller deactivation we reset the commands so that they're safe
                     #     self._set_cmds_to_safe_vals()
 
-                    print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                        ": controllers waiting to be activated...")
-    
+                    Journal.log(self.__class__.__name__,
+                    "trigger_solution",
+                    "Controllers waiting to be activated...",
+                    LogType.INFO,
+                    throw_when_excep = False)
+
+        self.trigger_counter +=1
+
     def _on_failure(self):
 
         # checks failure status
         self.controller_status.fails.synch_all(read=True, 
                                     wait=True)
         
+        # writes failures to reset flags
         self.controller_status.resets.write_wait(self.controller_status.fails.torch_view,
                                     0, 0)
     
@@ -270,7 +297,8 @@ class ControlClusterClient(ABC):
             
             else:
             
-                if self._verbose: 
+                if self._verbose and \
+                    (self.wait_for_sol_counter+1) % self.n_steps_prints == 0: 
 
                     # if not self.controllers_active and \
                     #     self.controllers_were_active:
@@ -278,8 +306,11 @@ class ControlClusterClient(ABC):
                     #     # upon controller deactivation we reset the commands so that they're safe
                     #     self._set_cmds_to_safe_vals()
 
-                    print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                        ": controllers waiting to be activated...")
+                    Journal.log(self.__class__.__name__,
+                    "wait_for_solution",
+                    "Controllers waiting to be activated...",
+                    LogType.INFO,
+                    throw_when_excep = False)
 
             self.solution_counter += 1
 
@@ -294,6 +325,8 @@ class ControlClusterClient(ABC):
             #                             controllers_up = self.controllers_active) # we update the shared info
 
         self.controllers_were_active = self.controllers_active
+
+        self.wait_for_sol_counter +=1
 
     def close(self):
         
@@ -351,9 +384,12 @@ class ControlClusterClient(ABC):
                     thread):
         
         if thread.is_alive():
-                        
-            print(f"[{self.__class__.__name__}]"  + f"[{self.journal.info}]" + \
-                ": terminating child thread " + str(thread.name))
+            
+            Journal.log(self.__class__.__name__,
+                    "_close_thread",
+                    "Terminating child thread " + str(thread.name),
+                    LogType.INFO,
+                    throw_when_excep = False)
         
             thread.join() # wait for thread to join
 
@@ -398,8 +434,11 @@ class ControlClusterClient(ABC):
         
         self._handshake_thread.start()
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-            ": spawned _heartbeat thread")
+        Journal.log(self.__class__.__name__,
+                    "_spawn_handshake",
+                    "Spawned _heartbeat thread",
+                    LogType.INFO,
+                    throw_when_excep = False)
 
     def _init_shared_mem(self):
         
@@ -485,9 +524,12 @@ class ControlClusterClient(ABC):
     def _compute_n_control_actions(self):
 
         if self.cluster_dt < self.control_dt:
-
-            print(f"[{self.__class__.__name__}]"  + f"[{self.journal.warning}]" + \
-                ": cluster_dt has to be >= control_dt")
+            
+            Journal.log(self.__class__.__name__,
+                    "_compute_n_control_actions",
+                    "cluster_dt has to be >= control_dt",
+                    LogType.WARN,
+                    throw_when_excep = False)
 
             self.n_sim_step_per_cntrl = 1
         
@@ -496,18 +538,24 @@ class ControlClusterClient(ABC):
             self.n_sim_step_per_cntrl = round(self.cluster_dt / self.control_dt)
             self.cluster_dt = self.control_dt * self.n_sim_step_per_cntrl
 
-        message = f"[{self.__class__.__name__}]"  + f"[{self.journal.info}]" + \
-                ": the cluster controllers will run at a rate of " + \
+        message = "The cluster controllers will run at a rate of " + \
                 str(1.0 / self.cluster_dt) + " Hz"\
                 ", while the low level control will run at " + str(1.0 / self.control_dt) + "Hz.\n" + \
                 "Number of sim steps per control step: " + str(self.n_sim_step_per_cntrl)
 
-        print(message)
+        Journal.log(self.__class__.__name__,
+                "_compute_n_control_actions",
+                message,
+                LogType.INFO,
+                throw_when_excep = False)
     
     def _finalize_init(self):
         
-        print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                    ": connecting to server...")
+        Journal.log(self.__class__.__name__,
+                "_compute_n_control_actions",
+                "connecting to server...",
+                LogType.INFO,
+                throw_when_excep = False)
         
         # things to be done when everything is set but before starting to solve
 
@@ -532,5 +580,8 @@ class ControlClusterClient(ABC):
                                     dtype=self.torch_dtype)
         self.rhc_task_refs.start()
 
-        print(f"[{self.__class__.__name__}]"  + f"[{self.journal.status}]" + \
-                    ": connection achieved.")
+        Journal.log(self.__class__.__name__,
+                "_compute_n_control_actions",
+                "connection achieved.",
+                LogType.INFO,
+                throw_when_excep = False)

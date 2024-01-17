@@ -46,6 +46,10 @@ class SharedDataWindow():
         self.verbose = verbose
 
         self._reset()
+    
+    def __del__(self):
+
+        self.terminate()
         
     @abstractmethod
     def _initialize(self):
@@ -165,10 +169,10 @@ class SharedDataWindow():
                 self.rt_plotters[i].rt_plot_widget.dayshift()
 
     def terminate(self):
-
+        
         for i in range(0, len(self.shared_data_clients)):
-
-            self.shared_data_clients[i].terminate()
+                        
+            self.shared_data_clients[i].close()
         
         self._terminated = True
 
