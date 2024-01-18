@@ -157,21 +157,7 @@ class ControlClusterSrvr(ABC):
 
                 if self.use_isolated_cores:
                     
-                    if not self.distribute_over_cores:
-
-                        os.sched_setaffinity(process.pid, {self.isolated_cores[i]})
-                        
-                    else:
-                        
-                        # processes are distributed over all isolated cores (the scheduler takes
-                        # care of that)
-                        # os.sched_setaffinity(process.pid, self.isolated_cores)
-                        
-                        # processes are manually ditributed among available cores. For maximum
-                        # hardware saturation, the number of processes should be a multiple of the 
-                        # number of isolated cores
-
-                        os.sched_setaffinity(process.pid, {self._assign_process_to_core_idx(i, self.isolated_cores)})
+                    os.sched_setaffinity(process.pid, {self._assign_process_to_core_idx(i, self.isolated_cores)})
 
                     info = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
                             f": setting affinity ID {os.sched_getaffinity(process.pid) } for controller n.{i}." 

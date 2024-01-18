@@ -173,7 +173,7 @@ class ControlClusterClient(ABC):
             
             if self._verbose: 
                 
-                msg = f"Not all clients are connected ({n_clients}) yet."
+                msg = f"Not all clients are connected yet ({n_clients}/{self.cluster_size})."
 
                 Journal.log(self.__class__.__name__,
                     "trigger_solution",
