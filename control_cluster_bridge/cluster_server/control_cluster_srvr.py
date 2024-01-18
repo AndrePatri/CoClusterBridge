@@ -47,7 +47,6 @@ class ControlClusterSrvr(ABC):
 
         self.use_isolated_cores = use_isolated_cores # will spawn each controller
         # in a isolated core, if they fit
-        self.distribute_over_cores = False
 
         self.isolated_cores = []
 
@@ -125,7 +124,6 @@ class ControlClusterSrvr(ABC):
                 
             if len(self.isolated_cores) < self.cluster_size and self.use_isolated_cores:
                 
-                self.distribute_over_cores = True # instead of assigning each process to a separate core
                 # we distribute the controllers over the available ones
                 warning = f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + \
                     ": Not enough isolated cores available to distribute the controllers " + \
