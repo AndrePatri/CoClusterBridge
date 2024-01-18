@@ -40,7 +40,11 @@ class DynamicSimInfoNames:
                 "task_prephysics_step_dt", 
                 "world_stepping_dt",
                 "cluster_state_update_dt",
-                "cluster_sol_time"]
+                "cluster_sol_time",
+                "OmniJntImpCntrl:time_to_update_state",
+                "OmniJntImpCntrl:time_to_set_refs",
+                "OmniJntImpCntrl:time_to_apply_cmds",
+                "time_to_get_agent_data"]
         
         self.idx_dict = dict.fromkeys(self._keys, None)
 
@@ -91,7 +95,7 @@ class SharedSimInfo:
                     n_dims = len(self.param_keys), 
                     n_nodes = 1, 
                     verbose = True, 
-                    vlevel = VLevel.V1)
+                    vlevel = VLevel.V2)
         
         # names
         if self.is_server:
@@ -241,6 +245,11 @@ class SharedSimInfo:
 
         self.shared_sim_data.close()
         self.shared_sim_datanames.close()
+
+    def terminate(self):
+
+        # just an alias for legacy compatibility
+        self.close()
 
     def __del__(self):
         

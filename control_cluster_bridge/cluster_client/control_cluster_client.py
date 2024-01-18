@@ -117,8 +117,8 @@ class ControlClusterClient(ABC):
         self.n_contact_sensors = n_contact_sensors
         self.contact_linknames = contact_linknames
 
-        self.solution_time = -1.0
-        self.start_time = -1.0
+        self.solution_time = np.nan
+        self.start_time = np.nan
         self.solution_counter = 0
         self.n_sim_step_per_cntrl = -1
 
