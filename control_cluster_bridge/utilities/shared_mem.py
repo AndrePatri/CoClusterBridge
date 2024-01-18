@@ -1584,7 +1584,11 @@ class SharedDataView:
                     verbose = self.verbose, 
                     vlevel = self.vlevel,
                     dtype = self.dtype)
-        
+    
+    def __del__(self):
+
+        self.close()
+
     def _ensure2D(self, 
                 data: Union[np.ndarray, 
                             torch.Tensor]):
@@ -1691,6 +1695,16 @@ class SharedDataView:
             row_index: int, 
             col_index: int):
         
+        if not self.shared_mem.isRunning:
+
+            message = "You can only call write() if the run() method was previously called!"
+
+            Logger.log(self.__class__.__name__,
+                "write",
+                message,
+                LogType.EXCEP,
+                throw_when_excep = False)
+            
         if isinstance(data, (int, float, bool,
                             np.float32, np.float64)):  
 
@@ -1811,6 +1825,16 @@ class SharedDataView:
             col_index: int, 
             data: Union[np.ndarray, 
                         torch.Tensor] = None):
+        
+        if not self.shared_mem.isRunning:
+
+            message = "You can only call read() if the run() method was previously called!"
+
+            Logger.log(self.__class__.__name__,
+                "write",
+                message,
+                LogType.EXCEP,
+                throw_when_excep = False)
             
         if isinstance(data, torch.Tensor):  
             
