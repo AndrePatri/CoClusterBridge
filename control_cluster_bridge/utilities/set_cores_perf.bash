@@ -19,14 +19,35 @@ print_core_mode() {
     fi
 }
 
-# Function to set the CPU governor for a core
+# Function to set the CPU governor and frequency for a core
 set_core_mode() {
     core=$1
     mode=$2
     governor_path="/sys/devices/system/cpu/cpu$core/cpufreq/scaling_governor"
-    if [ -f "$governor_path" ]; then
+    max_freq_path="/sys/devices/system/cpu/cpu$core/cpufreq/cpuinfo_max_freq"
+    base_freq_path="/sys/devices/system/cpu/cpu$core/cpufreq/base_frequency"
+
+    if [ -f "$governor_path" ] && [ -f "$max_freq_path" ]; then
         echo "Setting core $core to $mode mode."
-        echo $mode | sudo tee $governor_path
+
+        # Print the actual maximum frequency before setting
+        actual_max_freq=$(cat "$max_freq_path")
+        echo "Actual maximum frequency for core $core: $actual_max_freq kHz"
+
+        echo $mode | sudo tee "$governor_path"
+
+        if [ "$mode" == "performance" ]; then
+            sudo cpufreq-set -c $core -g performance
+            echo "Setting maximum frequency for core $core to: $actual_max_freq kHz"
+        elif [ "$mode" == "powersave" ] && [ -f "$base_freq_path" ]; then
+            base_freq=$(cat "$base_freq_path")
+            sudo cpufreq-set -c $core -u $base_freq
+            echo "Setting frequency for core $core to: $base_freq kHz"
+        fi
+
+        # Verify the updated frequency
+        updated_freq=$(cat "$max_freq_path")
+        echo "Updated frequency for core $core: $updated_freq kHz"
     else
         echo "Core $core not found or not available for modification."
     fi
@@ -39,14 +60,21 @@ boost_core() {
     sudo cpufreq-set -c $core -g performance
 }
 
-# Read the list of isolated cores (default to all cores if not provided)
-read -p "Enter the list of isolated cores (separated by space, press Enter for all cores): " -a cores_array
+# Read the list of isolated cores (accept ranges in the form start_idx-end_idx)
+read -p "Enter the list of isolated cores (separated by space, press Enter for all cores): " cores_input
 
-# If no cores are provided, get all available cores
-if [ ${#cores_array[@]} -eq 0 ]; then
-    total_cores=$(nproc)
-    cores_array=($(seq 0 $((total_cores-1))))
-fi
+# Convert ranges to individual cores
+cores_array=()
+IFS=' ' read -ra core_ranges <<< "$cores_input"
+for range in "${core_ranges[@]}"; do
+    if [[ "$range" =~ ([0-9]+)-([0-9]+) ]]; then
+        start_idx="${BASH_REMATCH[1]}"
+        end_idx="${BASH_REMATCH[2]}"
+        cores_array+=($(seq "$start_idx" "$end_idx"))
+    else
+        cores_array+=("$range")
+    fi
+done
 
 # Print the current status of the cores before setting the mode
 for core in "${cores_array[@]}"; do
@@ -71,13 +99,14 @@ fi
 for core in "${cores_array[@]}"; do
     if is_number "$core"; then
         set_core_mode "$core" "$mode"
-        boost_core "$core"
+
+        # Boost only for performance mode
+        if [ "$mode" == "performance" ]; then
+            boost_core "$core"
+        fi
     else
         echo "Invalid core index: $core. Core indices should be numeric."
     fi
 done
 
 echo "Mode set and cores boosted for specified cores."
-
-
-
