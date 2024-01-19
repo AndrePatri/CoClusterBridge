@@ -1539,12 +1539,15 @@ class SharedDataView:
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             dtype: sharsor_dtype = sharsor_dtype.Float,
-            fill_value = None):
+            fill_value = None,
+            safe = True):
 
         self.basename = basename
         self.namespace = namespace
 
         self.fill_value = fill_value
+        
+        self.safe = safe
 
         self.verbose = verbose
         self.vlevel = vlevel
@@ -1574,7 +1577,8 @@ class SharedDataView:
                     vlevel = self.vlevel, 
                     force_reconnection = True, 
                     dtype = self.dtype,
-                    layout = self.layout)
+                    layout = self.layout,
+                    safe = self.safe)
 
         else:
             
@@ -1583,7 +1587,8 @@ class SharedDataView:
                     namespace = self.namespace, 
                     verbose = self.verbose, 
                     vlevel = self.vlevel,
-                    dtype = self.dtype)
+                    dtype = self.dtype,
+                    safe = self.safe)
     
     def __del__(self):
 
@@ -1693,8 +1698,7 @@ class SharedDataView:
                         np.ndarray, 
                         torch.Tensor], 
             row_index: int, 
-            col_index: int,
-            safe: bool = True):
+            col_index: int):
         
         if not self.shared_mem.isRunning:
 
@@ -1715,8 +1719,7 @@ class SharedDataView:
             # write to shared memory
             return self.shared_mem.write(self.numpy_view[row_index:row_index + 1, 
                                                         col_index:col_index + 1], 
-                                        row_index, col_index,
-                                        safe)
+                                        row_index, col_index)
 
         if isinstance(data, torch.Tensor):  
             
@@ -1826,8 +1829,7 @@ class SharedDataView:
             row_index: int, 
             col_index: int, 
             data: Union[np.ndarray, 
-                        torch.Tensor] = None,
-            safe: bool = True):
+                        torch.Tensor] = None):
         
         if not self.shared_mem.isRunning:
 
@@ -1870,8 +1872,7 @@ class SharedDataView:
 
             # update block of numpy view from shared memory
             success = self.shared_mem.read(self.numpy_view[row_index:row_index + input_rows, 
-                    col_index:col_index + input_cols], row_index, col_index, 
-                    safe)
+                    col_index:col_index + input_cols], row_index, col_index)
             
             if not success:
 
@@ -1914,8 +1915,7 @@ class SharedDataView:
 
             # update block of numpy view from shared memory
             success = self.shared_mem.read(self.numpy_view[row_index:row_index + input_rows, 
-                    col_index:col_index + input_cols], row_index, col_index,
-                    safe)
+                    col_index:col_index + input_cols], row_index, col_index)
             
             if not success:
 
@@ -1933,8 +1933,7 @@ class SharedDataView:
 
                 # we return a scalar reading of the underlying shared memory
                 success = self.shared_mem.read(self.numpy_view[row_index:row_index + 1, 
-                    col_index:col_index + 1], row_index, col_index,
-                    safe)
+                    col_index:col_index + 1], row_index, col_index)
                 
                 return self.numpy_view[row_index:row_index + 1, 
                     col_index:col_index + 1], success
@@ -1984,8 +1983,7 @@ class SharedDataView:
         col_index: int, 
         n_rows: int,
         n_cols: int,
-        read: bool = True,
-        safe: bool = True):
+        read: bool = True):
 
         # synchs a block of the internal views from shared memory
         # or vice-versa
@@ -2006,16 +2004,14 @@ class SharedDataView:
         if read:
             
             success = self.shared_mem.read(self.numpy_view[row_index:row_index + n_rows, 
-                    col_index:col_index + n_cols], row_index, col_index,
-                    safe)
+                    col_index:col_index + n_cols], row_index, col_index)
             
             return success
             
         else:
             
             success = self.shared_mem.write(self.numpy_view[row_index:row_index + n_rows, 
-                    col_index:col_index + n_cols], row_index, col_index,
-                    safe)
+                    col_index:col_index + n_cols], row_index, col_index)
             
             return success
     

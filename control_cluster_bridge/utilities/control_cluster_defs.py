@@ -1104,6 +1104,7 @@ class RHCStatus():
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
+                safe = False, 
                 dtype=dtype.Bool)
     
     class ResetFlagView(SharedDataView):
@@ -1124,6 +1125,7 @@ class RHCStatus():
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
+                safe = False, 
                 dtype=dtype.Bool)
     
     class TriggerFlagView(SharedDataView):
@@ -1144,6 +1146,7 @@ class RHCStatus():
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
+                safe = False, 
                 dtype=dtype.Bool)
             
     def __init__(self, 
