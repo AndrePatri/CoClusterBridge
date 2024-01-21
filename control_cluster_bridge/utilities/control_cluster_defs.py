@@ -24,7 +24,7 @@ from typing import List, Union
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr, SharedMemClient, SharedStringArray
 
-from control_cluster_bridge.utilities.shared_mem import SharedDataView
+from SharsorIPCpp.PySharsor.extensions.ros_bridge.wrappers.shared_data_view import SharedDataView
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal
 from SharsorIPCpp.PySharsorIPC import dtype
