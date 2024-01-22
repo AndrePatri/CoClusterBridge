@@ -29,6 +29,8 @@ from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 # from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 
 from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
+from control_cluster_bridge.utilities.shared_info import ClusterStats
+
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
 
 import time
@@ -106,6 +108,8 @@ class ControlClusterClient(ABC):
 
         self.controller_status = None
 
+        self.cluster_stats = None 
+        
         # flags
         self._was_cluster_ready = False
         self.is_cluster_ready = False
@@ -251,12 +255,6 @@ class ControlClusterClient(ABC):
                 if self._verbose and \
                     (self.trigger_counter+1) % self.n_steps_prints == 0: 
 
-                    # if not self.controllers_active and \
-                    #     self.controllers_were_active:
-
-                    #     # upon controller deactivation we reset the commands so that they're safe
-                    #     self._set_cmds_to_safe_vals()
-
                     Journal.log(self.__class__.__name__,
                     "trigger_solution",
                     "Controllers waiting to be activated...",
@@ -301,12 +299,6 @@ class ControlClusterClient(ABC):
                 if self._verbose and \
                     (self.wait_for_sol_counter+1) % self.n_steps_prints == 0: 
 
-                    # if not self.controllers_active and \
-                    #     self.controllers_were_active:
-
-                    #     # upon controller deactivation we reset the commands so that they're safe
-                    #     self._set_cmds_to_safe_vals()
-
                     Journal.log(self.__class__.__name__,
                     "wait_for_solution",
                     "Controllers waiting to be activated...",
@@ -325,6 +317,15 @@ class ControlClusterClient(ABC):
             # self.shared_cluster_info.update(solve_time=self.solution_time, 
             #                             controllers_up = self.controllers_active) # we update the shared info
 
+            self.cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
+                                        "cluster_rt_factor",
+                                        "cluster_ready",
+                                        "cluster_state_update_dt"],
+                        val=[self.solution_time,
+                            self.cluster_dt/self.solution_time,
+                            self.cluster_ready(),
+                            np.nan])
+    
         self.controllers_were_active = self.controllers_active
 
         self.wait_for_sol_counter +=1
@@ -355,21 +356,15 @@ class ControlClusterClient(ABC):
 
                 self.contact_states.terminate()
 
-            # if self.shared_cluster_info is not None:
-
-            #     self.shared_cluster_info.terminate()
-
             if self.controller_status is not None:
 
                 self.controller_status.close()
+            
+            if self.cluster_stats is not None:
+
+                self.cluster_stats.close()
 
         self._close_handshake()
-    
-    def _set_cmds_to_safe_vals(self):
-        
-        # to be implented
-
-        a = 3
 
     def _close_handshake(self):
 
@@ -479,9 +474,13 @@ class ControlClusterClient(ABC):
                                         verbose=self._verbose, 
                                         vlevel=VLevel.V2)
         
-        # debug info from the client
-
-        # self.shared_cluster_info = SharedClusterInfo(name=self.namespace)
+        
+        self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
+                                    is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self._verbose,
+                                    vlevel=VLevel.V2, 
+                                    safe=True)
 
     def _trigger_solution(self):
         
@@ -581,6 +580,15 @@ class ControlClusterClient(ABC):
                                     dtype=self.torch_dtype)
         self.rhc_task_refs.start()
 
+        # also start cluster debug data client
+
+        self.cluster_stats.run()
+        
+        self.cluster_stats.write_info(dyn_info_name=[
+                                        "cluster_nominal_dt"],
+                        val=[self.cluster_dt,
+                            ])
+        
         Journal.log(self.__class__.__name__,
                 "_compute_n_control_actions",
                 "connection achieved.",

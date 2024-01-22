@@ -324,7 +324,6 @@ class ControlClusterSrvr(ABC):
         
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
-        cluster_info_dict["controllers_count"] = self._controllers_count
 
         self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
                                         is_server=True, 

@@ -400,7 +400,8 @@ class DynamicClusterInfoNames:
         self._keys = ["cluster_rt_factor", 
                 "cluster_sol_time",
                 "cluster_state_update_dt",
-                "cluster_ready"]
+                "cluster_ready",
+                "cluster_nominal_dt"]
         
         self.idx_dict = dict.fromkeys(self._keys, None)
 
@@ -421,7 +422,7 @@ class DynamicClusterInfoNames:
 class ClusterStats:
                            
     def __init__(self, 
-                cluster_size: int,
+                cluster_size: int = 1,
                 is_server = False, 
                 param_dict: Dict = None,
                 name = "",
@@ -546,7 +547,7 @@ class ClusterStats:
                 raise Exception("Could not write shared sim names on shared memory!")
             
             # writing static information to memory
-
+            
         else:
             
             self.param_keys = [""] * self.shared_datanames.length()
@@ -563,7 +564,9 @@ class ClusterStats:
             self.rti_sol_time.synch_all(read=True, wait=True)
 
             self.solve_loop_dt.synch_all(read=True, wait=True)
-        
+
+            self.cluster_size = self.rti_sol_time.n_rows
+            
         self.param_values = np.full((len(self.param_keys), 1), 
                                 fill_value=np.nan, 
                                 dtype=toNumpyDType(sharsor_dtype.Float))

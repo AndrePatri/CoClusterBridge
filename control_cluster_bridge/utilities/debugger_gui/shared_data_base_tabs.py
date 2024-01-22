@@ -6,6 +6,7 @@ from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindo
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState, ContactState, RHCInternal
 from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
 from control_cluster_bridge.utilities.shared_info import SharedSimInfo
+from control_cluster_bridge.utilities.shared_info import ClusterStats
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedStringArray
@@ -781,7 +782,7 @@ class SimInfo(SharedDataWindow):
         namespace = "",
         parent: QWidget = None, 
         verbose = False,
-        add_settings_tab = True,
+        add_settings_tab = False,
         settings_title = " Latest values"
         ):
         
@@ -832,19 +833,21 @@ class SimInfo(SharedDataWindow):
 
     def _finalize_grid(self):
         
-        widget_utils = WidgetUtils()
+        if self.add_settings_tab:
 
-        settings_frames = []
+            widget_utils = WidgetUtils()
 
-        # sim_info_widget = widget_utils.create_scrollable_label_list(parent=None, 
-        #                                     parent_layout=None, 
-        #                                     list_names=self.shared_data_clients[0].param_keys,
-        #                                     title="RT SIMULATOR INFO", 
-        #                                     init=[np.nan] * len(self.shared_data_clients[0].param_keys))
-        
-        # settings_frames.append(sim_info_widget)
-        
-        self.grid.addToSettings(settings_frames)
+            settings_frames = []
+
+            # sim_info_widget = widget_utils.create_scrollable_label_list(parent=None, 
+            #                                     parent_layout=None, 
+            #                                     list_names=self.shared_data_clients[0].param_keys,
+            #                                     title="RT SIMULATOR INFO", 
+            #                                     init=[np.nan] * len(self.shared_data_clients[0].param_keys))
+            
+            # settings_frames.append(sim_info_widget)
+            
+            self.grid.addToSettings(settings_frames)
 
     def update(self,
             index: int):
@@ -860,4 +863,193 @@ class SimInfo(SharedDataWindow):
 
             # updates rt plot
             self.rt_plotters[0].rt_plot_widget.update(data)
-                      
+
+class ClusterInfo(SharedDataWindow):
+
+    def __init__(self, 
+        name: str,
+        update_data_dt: int,
+        update_plot_dt: int,
+        window_duration: int,
+        window_buffer_factor: int = 2,
+        namespace = "",
+        parent: QWidget = None, 
+        verbose = False,
+        add_settings_tab = False,
+        settings_title = " Latest values"
+        ):
+        
+        super().__init__(update_data_dt = update_data_dt,
+            update_plot_dt = update_plot_dt,
+            window_duration = window_duration,
+            window_buffer_factor = window_buffer_factor,
+            grid_n_rows = 1,
+            grid_n_cols = 1,
+            namespace = namespace,
+            name = name,
+            parent = parent, 
+            verbose = verbose,
+            add_settings_tab = add_settings_tab,
+            settings_title = settings_title
+            )
+
+    def _init_shared_data(self):
+        
+        is_server = False
+        
+        self.shared_data_clients.append(ClusterStats(is_server=is_server,
+                                            name=self.namespace, 
+                                            verbose=True, 
+                                            vlevel=VLevel.V2,
+                                            safe=True))
+        
+        self.shared_data_clients[0].run()
+
+    def _post_shared_init(self):
+        
+        self.grid_n_rows = 4
+
+        self.grid_n_cols = 2
+
+    def _initialize(self):
+        
+        cluster_size = self.shared_data_clients[0].cluster_size
+
+        cluster_idx_legend = [""] * cluster_size
+
+        for i in range(cluster_size):
+            
+            cluster_idx_legend[i] = str(i)
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=len(self.shared_data_clients[0].param_keys),
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Cluster cumulative data", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=self.shared_data_clients[0].param_keys, 
+                                    ylabel="[s]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Problem update dt", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[s]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Phases shift dt", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[s]"))
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Task ref. update dt", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[s]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rti solution time", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[s]"))
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Cumulative solve dt", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[s]"))
+        
+        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+        self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 0)
+        self.grid.addFrame(self.rt_plotters[5].base_frame, 2, 1)
+
+    def _finalize_grid(self):
+        
+        if self.add_settings_tab:
+
+            widget_utils = WidgetUtils()
+
+            settings_frames = []
+
+            # sim_info_widget = widget_utils.create_scrollable_label_list(parent=None, 
+            #                                     parent_layout=None, 
+            #                                     list_names=self.shared_data_clients[0].param_keys,
+            #                                     title="RT SIMULATOR INFO", 
+            #                                     init=[np.nan] * len(self.shared_data_clients[0].param_keys))
+            
+            # settings_frames.append(sim_info_widget)
+            
+            self.grid.addToSettings(settings_frames)
+
+    def update(self,
+            index: int):
+
+        # index not used here (no dependency on cluster index)
+
+        if not self._terminated:
+            
+            # get cumulative data
+            data = self.shared_data_clients[0].get_info().flatten()
+            self.rt_plotters[0].rt_plot_widget.update(data)
+
+            # prb update
+            self.shared_data_clients[0].prb_update_dt.synch_all(read = True, 
+                                                        wait=False)
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].prb_update_dt.numpy_view)
+            
+            # phase shift
+            self.shared_data_clients[0].phase_shift_dt.synch_all(read = True, 
+                                                        wait=False)
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].phase_shift_dt.numpy_view)
+
+            # task ref update
+            self.shared_data_clients[0].task_ref_update_dt.synch_all(read = True, 
+                                                        wait=False)
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].task_ref_update_dt.numpy_view)
+            
+            # rti sol time
+            self.shared_data_clients[0].rti_sol_time.synch_all(read = True, 
+                                                        wait=False)
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].rti_sol_time.numpy_view)
+
+            # whole solve loop
+            self.shared_data_clients[0].solve_loop_dt.synch_all(read = True, 
+                                                        wait=False)
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].solve_loop_dt.numpy_view)
+            
+            # updates side data
+            # self.grid.settings_widget_list[0].update(data)
+
+            
+            
