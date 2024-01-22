@@ -183,7 +183,8 @@ class ControlClusterClient(ABC):
 
         if self.controller_status.trigger.get_n_clients() > self.cluster_size:
             
-            msg = "More than {self.cluster_size} clients registered." + \
+            msg = f"More than {self.cluster_size} clients registered " + \
+                "(total of {self.controller_status.trigger.get_n_clients()})." + \
                 ". It's very likely a memory leak on the shared memory layer occurred." + \
                 " You might need to reboot the system to clean the dangling memory."
 

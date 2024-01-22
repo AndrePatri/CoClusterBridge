@@ -19,11 +19,17 @@ from abc import ABC
 
 from control_cluster_bridge.controllers.rhc import RHChild
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
-from control_cluster_bridge.utilities.defs import Journal
+
 from control_cluster_bridge.utilities.cpu_utils import get_isolated_cores
 
 from control_cluster_bridge.utilities.defs import jnt_names_rhc_name
 from control_cluster_bridge.utilities.shared_mem import SharedStringArray
+from control_cluster_bridge.utilities.shared_info import ClusterStats
+
+from SharsorIPCpp.PySharsorIPC import Journal, LogType
+from SharsorIPCpp.PySharsorIPC import VLevel
+
+import psutil
 
 from typing import List
 
@@ -37,24 +43,25 @@ ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterSrvr')
 class ControlClusterSrvr(ABC):
 
     def __init__(self, 
-            namespace = "",
+            namespace: str = "",
             processes_basename: str = "controller", 
-            use_isolated_cores = False,
+            isolated_cores_only: bool = False,
+            use_only_physical_cores: bool = False,
             verbose: bool = False):
 
         # ciao :D
         #        CR 
 
-        self.use_isolated_cores = use_isolated_cores # will spawn each controller
+        self.isolated_cores_only = isolated_cores_only # will spawn each controller
         # in a isolated core, if they fit
+
+        self.use_only_physical_cores = use_only_physical_cores
 
         self.isolated_cores = []
 
         self.namespace = namespace
         
         self.verbose = verbose
-
-        self.journal = Journal()
 
         self.processes_basename = processes_basename
 
@@ -74,11 +81,15 @@ class ControlClusterSrvr(ABC):
 
         self._is_cluster_ready = False
 
+        self.pre_init_done = False
+         
         self._controllers_count = 0
-
-        self.solution_time = -1.0
         
         self.jnt_names_rhc = None # publishes joint names from controller to shared mem
+
+        # shared memory 
+
+        self.cluster_stats = None
     
     def _close_processes(self):
     
@@ -92,93 +103,256 @@ class ControlClusterSrvr(ABC):
                 
                 process.terminate()  # Forcefully terminate the process
             
-            print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + ": terminating child process " + str(process.name))
+            Journal.log(self.__class__.__name__,
+                    "_close_processes",
+                    "Terminating child process " + str(process.name),
+                    LogType.STAT)
     
-    def _assign_process_to_core_idx(self, 
-                process_index: int, core_ids: List[int]):
+    def _close_shared_mem(self):
+
+        if self.cluster_stats is not None:
+
+            self.cluster_stats.close()
+
+    def _get_cores(self):
+
+        cores = None
+
+        if not self.isolated_cores_only and not self.use_only_physical_cores:
+
+            # distribute processes over all system cores and
+            # over both physical and virtual cores
+
+            cores = list(range(psutil.cpu_count()))
+
+        elif not self.isolated_cores_only and self.use_only_physical_cores:
+
+            # distribute processes over all physical cores
+
+            physical_cores_n = psutil.cpu_count(logical=False)
+
+            all_cores_n = psutil.cpu_count()
+
+            all_cores = list(range(all_cores_n))
+
+            core_ratio = all_cores_n/physical_cores_n
+
+            cores = []
+
+            for i in range(0, all_cores_n):
+                
+                if (i % core_ratio) == 0:
+
+                    cores.append(i)
+            
+        elif self.isolated_cores_only and not self.use_only_physical_cores:
+
+            # distribute processes over isolated cores only,
+            # both physical and virtual
+            cores = get_isolated_cores()[1]
+
+        elif self.isolated_cores_only and self.use_only_physical_cores:
+            # distribute processes over isolated and physical
+            # cores only
+
+            physical_cores_n = psutil.cpu_count(logical=False)
+            all_cores_n = psutil.cpu_count()
+            core_ratio = all_cores_n/physical_cores_n
+
+            isolated_cores = get_isolated_cores()[1]
+
+            isolated_cores_n = len(isolated_cores)
+
+            cores = []
+
+            for i in range(0, isolated_cores_n):
+                
+                if (i % core_ratio) == 0:
+
+                    cores.append(isolated_cores[i])
+
+        else:
+
+            Journal.log(self.__class__.__name__,
+                "_get_cores",
+                "Invalid combination of flags for core distribution",
+                LogType.EXCEP,
+                throw_when_excep = True)
+
+        return cores
+ 
+    def _debug_prints(self):
+        
+        if self.isolated_cores_only:
+
+            self.isolated_cores = get_isolated_cores()[1] # available isolated
+            # cores -> if possible we spawn a controller for each isolated 
+            # core
+
+            if not len(self.isolated_cores) > 0: 
+                
+                exception ="No isolated cores found on this machine. Either isolate some cores or " + \
+                    "deactivate the use_isolated_cores flag."
+                
+                Journal.log(self.__class__.__name__,
+                    "_debug_prints",
+                    exception,
+                    LogType.EXEP,
+                    throw_when_excep = True)
+
+                raise Exception(exception)
+                    
+            # we distribute the controllers over the available ones
+            warning = "Will distribute controllers over physical cores only"
+            
+            Journal.log(self.__class__.__name__,
+                        "_debug_prints",
+                        warning,
+                        LogType.WARN,
+                        throw_when_excep = True)
+            
+        if self.isolated_cores_only:
+            
+            # we distribute the controllers over the available ones
+            warning = "Will distribute controllers over isolated cores only"
+            
+            Journal.log(self.__class__.__name__,
+                        "_debug_prints",
+                        warning,
+                        LogType.WARN,
+                        throw_when_excep = True)
+            
+        if len(self.isolated_cores) < self.cluster_size and self.isolated_cores_only:
+            
+            # we distribute the controllers over the available ones
+            warning = "Not enough isolated cores available to distribute the controllers " + \
+                f"on them. N. available isolated cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}. "+ \
+                "Processes will be distributed among the available ones."
+            
+            Journal.log(self.__class__.__name__,
+                        "_debug_prints",
+                        warning,
+                        LogType.WARN,
+                        throw_when_excep = True)
+            
+        if len(self.isolated_cores) < self.cluster_size and self.isolated_cores_only:
+            
+            # we distribute the controllers over the available ones
+            warning = "Not enough isolated cores available to distribute the controllers " + \
+                f"on them. N. available isolated cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}. "+ \
+                "Processes will be distributed among the available ones."
+            
+            Journal.log(self.__class__.__name__,
+                        "_debug_prints",
+                        warning,
+                        LogType.WARN,
+                        throw_when_excep = True)
+            
+    def _get_process_affinity(self, 
+                        process_index: int, 
+                        core_ids: List[int]):
 
         num_cores = len(core_ids)
 
         return core_ids[process_index % num_cores]
 
     def _spawn_processes(self):
-
-        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
-            ": spawning processes...")
+        
+        Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        "spawning processes...",
+                        LogType.STAT,
+                        throw_when_excep = True)
 
         if self._controllers_count == self.cluster_size:
             
-            if self.use_isolated_cores:
+            self._debug_prints() # some debug prints
 
-                self.isolated_cores = get_isolated_cores()[1] # available isolated
-                # cores -> if possible we spawn a controller for each isolated 
-                # core
-
-                if not len(self.isolated_cores) > 0: 
-                    
-                    exception = "[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
-                        ": No isolated cores found on this machine. Either isolate some cores or " + \
-                        "deactivate the use_isolated_cores flag."
-
-                    raise Exception(exception)
-                
-            if len(self.isolated_cores) < self.cluster_size and self.use_isolated_cores:
-                
-                # we distribute the controllers over the available ones
-                warning = f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + \
-                    ": Not enough isolated cores available to distribute the controllers " + \
-                    f"on them. N. available cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}. "+ \
-                    "Processes will be distributed among the available ones."
-                
-                print(warning)
-
-                if not (self.cluster_size % len(self.isolated_cores) == 0):
-
-                    cores_not_saturated_warn = f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + \
-                        f": the number of cluster controllers {self.cluster_size} is not a multiple of "+ \
-                        f"the number of available isolated_cores "
-
-                    print(cores_not_saturated_warn)
-                
             for i in range(0, self.cluster_size):
 
-                process = mp.Process(target=self._controllers[i].solve, 
-                                    name = self.processes_basename + str(i))
-                
+                process = mp.Process(target=self._controllers[i].solve, name=self.processes_basename + str(i))
+
                 self._processes.append(process)
-                
-            # we start the processes and set affinity
+
+            core_ids = self._get_cores() # gets cores over which processes are to be distributed
+
             i = 0
             for process in self._processes:
 
                 process.start()
 
-                if self.use_isolated_cores:
-                    
-                    os.sched_setaffinity(process.pid, {self._assign_process_to_core_idx(i, self.isolated_cores)})
-
-                    info = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + \
-                            f": setting affinity ID {os.sched_getaffinity(process.pid) } for controller n.{i}." 
-                    
-                    print(info)
+                os.sched_setaffinity(process.pid, {self._get_process_affinity(i, core_ids=core_ids)})
                 
-                i = i + 1
+                info = f"Setting affinity ID {os.sched_getaffinity(process.pid)} for controller n.{i}."
+
+                Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
+                
+                i += 1
 
             self._is_cluster_ready = True
 
-            print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": processes spawned.")
-                
-        else:
+            self.cluster_stats.write_info(dyn_info_name="cluster_ready",
+                                        val=self._is_cluster_ready)
 
-            raise Exception(f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + \
-                    "You didn't finish to fill the cluster. Please call the add_controller() method to do so.")
+            Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        "Processes spawned.",
+                        LogType.STAT,
+                        throw_when_excep = True)
+                            
+        else:
+            
+            Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        "You didn't finish to fill the cluster. Please call the add_controller() method to do so.",
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+
+    def pre_init(self):
+        
+        # to be called before controllers are created/added
+
+        Journal.log(self.__class__.__name__,
+                        "pre_init",
+                        "Performing pre-initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+        
+        cluster_info_dict = {}
+        cluster_info_dict["cluster_size"] = self.cluster_size
+        cluster_info_dict["controllers_count"] = self._controllers_count
+
+        self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
+                                        is_server=True, 
+                                        name=self.namespace,
+                                        param_dict=cluster_info_dict,
+                                        verbose=self.verbose,
+                                        vlevel=VLevel.V2,
+                                        safe=True)
+        
+        self.cluster_stats.run()
+
+        self.pre_init_done = True
+
+        Journal.log(self.__class__.__name__,
+                        "pre_init",
+                        "Performing pre-initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
 
     def _finalize_init(self):
 
         # steps to be performed after the controllers are fully initialized 
 
-        print(f"[{self.__class__.__name__}]" + f"{self.journal.status}" + \
-            ": performing final initialization steps...")
+        Journal.log(self.__class__.__name__,
+                        "_finalize_init",
+                        "Performing final initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
         
         self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
                                     n_contacts=self._controllers[0].n_contacts)
@@ -203,11 +377,23 @@ class ControlClusterSrvr(ABC):
                                 is_server=True)
 
         self.jnt_names_rhc.start(init = self._controllers[0].get_server_side_jnt_names())
-
-        print(f"[{self.__class__.__name__}]" + f"[{self.journal.status}]" + ": final initialization steps completed.")
-
+        
+        Journal.log(self.__class__.__name__,
+                        "_finalize_init",
+                        "Final initialization steps completed.",
+                        LogType.STAT,
+                        throw_when_excep = True)
+        
     def add_controller(self, controller: RHChild):
+        
+        if not self.pre_init_done:
 
+            Journal.log(self.__class__.__name__,
+                        "add_controller",
+                        f"pre_init() method has not been called yet!",
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+        
         if self._controllers_count < self.cluster_size:
 
             self._controllers.append(controller)
@@ -221,9 +407,13 @@ class ControlClusterSrvr(ABC):
             return True
 
         if self._controllers_count > self.cluster_size:
-
-            print(f"[{self.__class__.__name__}]" + f"[{self.journal.warning}]" + ": cannot add any more controllers to the cluster. The cluster is full.")
-
+            
+            Journal.log(self.__class__.__name__,
+                        "_finalize_init",
+                        "The cluster is full. Cannot add any more controllers.",
+                        LogType.WARN,
+                        throw_when_excep = True)
+            
             return False
     
     def start(self):
@@ -232,10 +422,16 @@ class ControlClusterSrvr(ABC):
 
     def terminate(self):
         
-        print(f"[{self.__class__.__name__}]" + f"[{self.journal.info}]" + ": terminating cluster")
-
+        Journal.log(self.__class__.__name__,
+                        "_finalize_init",
+                        "terminating cluster...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+        
         if self.jnt_names_rhc is not None:
 
             self.jnt_names_rhc.terminate()
 
         self._close_processes() # we also terminate all the child processes
+
+        self._close_shared_mem()

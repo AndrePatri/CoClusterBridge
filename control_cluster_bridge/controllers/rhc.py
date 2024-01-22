@@ -28,11 +28,15 @@ from control_cluster_bridge.utilities.homing import RobotHomer
 from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
 from control_cluster_bridge.utilities.rhc_defs import RHCInternal
 
+from control_cluster_bridge.utilities.shared_info import ClusterStats
+
 from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import Journal, LogType
 
 from typing import List, TypeVar
 
 import torch
+import numpy as np
 
 from perf_sleep.pyperfsleep import PerfSleep
 
@@ -61,8 +65,6 @@ class RHController(ABC):
         
         self.namespace = namespace
         
-        self.journal = Journal()
-
         self.perf_timer = PerfSleep()
 
         self.controller_index = controller_index
@@ -71,9 +73,15 @@ class RHController(ABC):
 
         self._verbose = verbose
         self._debug = debug
-
         self._debug_sol = debug_sol
 
+        self._profiling_data_dict = {}
+        self._profiling_data_dict["full_solve_dt"] = np.nan
+        self._profiling_data_dict["rti_solve_dt"] = np.nan
+        self._profiling_data_dict["problem_update_dt"] = np.nan
+        self._profiling_data_dict["phases_shift_dt"] = np.nan
+        self._profiling_data_dict["task_ref_update"] = np.nan
+        
         self.cluster_size = cluster_size
 
         self.n_dofs = None
@@ -85,6 +93,7 @@ class RHController(ABC):
 
         self.controller_status = None
         self.rhc_internal = None
+        self.cluster_stats = None
 
         self.robot_cmds = None
         self.rhc_task_refs:RhcTaskRefsChild = None
@@ -113,6 +122,8 @@ class RHController(ABC):
         self.n_fails = 0
 
         self._n_nodes = n_nodes
+
+        self._start_time = time.perf_counter()
 
         self._homer: RobotHomer = None
 
@@ -143,6 +154,10 @@ class RHController(ABC):
         if self.rhc_internal is not None:
 
             self.rhc_internal.close()
+
+        if self.cluster_stats is not None:
+
+            self.cluster_stats.close()
 
     def _init(self):
 
@@ -192,9 +207,43 @@ class RHController(ABC):
             
             self.rhc_internal.run()
 
+            # statistical data
+
+            self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
+                                        is_server=False, 
+                                        name=self.namespace,
+                                        verbose=self._verbose,
+                                        vlevel=VLevel.V2,
+                                        safe=True)
+
+            self.cluster_stats.run()
+            
         self._homer = RobotHomer(self.srdf_path, 
                             self._server_side_jnt_names)
+    
+    def _update_profiling_data(self):
+
+        # updated debug data on shared memory
+        # with the latest info available
+        self.cluster_stats.solve_loop_dt.write_wait(self._profiling_data_dict["full_solve_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
         
+        self.cluster_stats.rti_sol_time.write_wait(self._profiling_data_dict["rti_solve_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.prb_update_dt.write_wait(self._profiling_data_dict["problem_update_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.phase_shift_dt.write_wait(self._profiling_data_dict["phases_shift_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.task_ref_update_dt.write_wait(self._profiling_data_dict["task_ref_update"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
     def init_rhc_task_cmds(self):
         
         self.rhc_task_refs = self._init_rhc_task_cmds()
@@ -242,28 +291,34 @@ class RHController(ABC):
     def solve(self):
         
         if not self._jnt_maps_created:
+            
+            exception = f"Jnt maps not initialized. Did you call the create_jnt_maps()?"
 
-            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.journal.exception}]" + f"[{self.solve.__name__}]" + \
-                                ":" + f"jnt maps not initialized. Did you call the create_jnt_maps()?"
-
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                    "solve",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
 
         if not self._states_initialized:
 
-            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.journal.exception}]" + f"[{self.solve.__name__}]" + \
-                                ":" + f"states not initialized. Did you call the init_states()?"
+            exception =f"States not initialized. Did you call the init_states()?"
 
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                    "solve",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
 
         if self.rhc_task_refs is None:
 
-            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                                f"[{self.journal.exception}]" + f"[{self.solve.__name__}]" + \
-                                ":" + f"RHC task references non initialized. Did you call init_rhc_task_cmds()?"
+            exception = f"RHC task references non initialized. Did you call init_rhc_task_cmds()?"
 
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                    "solve",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
         
         while True:
             
@@ -290,7 +345,7 @@ class RHController(ABC):
                     
                     if self._debug:
                         
-                        start = time.perf_counter()
+                        self._start_time = time.perf_counter()
 
                     # latest state is employed
                     success = self._solve() # solve actual TO
@@ -316,12 +371,17 @@ class RHController(ABC):
 
                     if self._debug:
                         
-                        duration = time.perf_counter() - start
+                        self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
+
+                        self._update_profiling_data() # updates all profiling data
 
                     if self._verbose and self._debug:
-
-                        print("[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                            f"[{self.journal.info}]" + ":" + f"solve loop execution time  -> " + str(duration))
+                        
+                        Journal.log(self.__class__.__name__,
+                            "solve",
+                            f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
+                            LogType.INFO,
+                            throw_when_excep = True)
                 
                 else:
                     
@@ -364,18 +424,24 @@ class RHController(ABC):
         self._check_jnt_names_compatibility() # will raise exception
 
         if not self._got_jnt_names_client:
+            
+            exception = f"Cannot run the solve(). assign_client_side_jnt_names() was not called!"
 
-            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                f"[{self.journal.exception}]" + ":" + f"Cannot run the solve().  assign_client_side_jnt_names() was not called!"
-
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                    "create_jnt_maps",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
         
         if not self._got_jnt_names_server:
 
-            exception = "[" + self.__class__.__name__ + str(self.controller_index) + "]"  + \
-                f"[{self.journal.exception}]" + ":" + f"Cannot run the solve().  _assign_server_side_jnt_names() was not called!"
+            exception =f"Cannot run the solve().  _assign_server_side_jnt_names() was not called!"
 
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                    "create_jnt_maps",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
         
         self._to_server = [self._client_side_jnt_names.index(element) for element in self._server_side_jnt_names]
 
@@ -413,10 +479,13 @@ class RHController(ABC):
 
         if not set_srvr == set_client:
 
-            exception = f"[{self.__class__.__name__}]" + f"{self.controller_index}" + f"{self.journal.exception}" + \
-                ": server-side and client-side joint names do not match!"
+            exception = "Server-side and client-side joint names do not match!"
 
-            raise Exception(exception)
+            Journal.log(self.__class__.__name__,
+                    "_check_jnt_names_compatibility",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
     
     def _get_cost_data(self):
         
