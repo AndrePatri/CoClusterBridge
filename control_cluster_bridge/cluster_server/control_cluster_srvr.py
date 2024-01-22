@@ -47,6 +47,7 @@ class ControlClusterSrvr(ABC):
             processes_basename: str = "controller", 
             isolated_cores_only: bool = False,
             use_only_physical_cores: bool = False,
+            core_ids_override_list: List[int] = None,
             verbose: bool = False):
 
         # ciao :D
@@ -56,6 +57,8 @@ class ControlClusterSrvr(ABC):
         # in a isolated core, if they fit
 
         self.use_only_physical_cores = use_only_physical_cores
+
+        self.core_ids_override_list = core_ids_override_list
 
         self.isolated_cores = []
 
@@ -182,45 +185,58 @@ class ControlClusterSrvr(ABC):
         return cores
  
     def _debug_prints(self):
-        
-        if self.isolated_cores_only:
+            
+        if self.core_ids_override_list is not None:
+            
+            # we distribute the controllers over the available ones
+            warning = "Custom core id list provided. Will distribute controllers over those idxs."
+            
+            Journal.log(self.__class__.__name__,
+                        "_debug_prints",
+                        warning,
+                        LogType.WARN,
+                        throw_when_excep = True)
+            
+        else:
 
-            self.isolated_cores = get_isolated_cores()[1] # available isolated
-            # cores -> if possible we spawn a controller for each isolated 
-            # core
+            if self.isolated_cores_only:
 
-            if not len(self.isolated_cores) > 0: 
-                
-                exception ="No isolated cores found on this machine. Either isolate some cores or " + \
-                    "deactivate the use_isolated_cores flag."
+                self.isolated_cores = get_isolated_cores()[1] # available isolated
+                # cores -> if possible we spawn a controller for each isolated 
+                # core
+
+                if not len(self.isolated_cores) > 0: 
+                    
+                    exception ="No isolated cores found on this machine. Either isolate some cores or " + \
+                        "deactivate the use_isolated_cores flag."
+                    
+                    Journal.log(self.__class__.__name__,
+                        "_debug_prints",
+                        exception,
+                        LogType.EXEP,
+                        throw_when_excep = True)
+
+                    raise Exception(exception)
+                        
+                # we distribute the controllers over the available ones
+                warning = "Will distribute controllers over physical cores only"
                 
                 Journal.log(self.__class__.__name__,
-                    "_debug_prints",
-                    exception,
-                    LogType.EXEP,
-                    throw_when_excep = True)
-
-                raise Exception(exception)
-                    
-            # we distribute the controllers over the available ones
-            warning = "Will distribute controllers over physical cores only"
-            
-            Journal.log(self.__class__.__name__,
-                        "_debug_prints",
-                        warning,
-                        LogType.WARN,
-                        throw_when_excep = True)
-            
-        if self.isolated_cores_only:
-            
-            # we distribute the controllers over the available ones
-            warning = "Will distribute controllers over isolated cores only"
-            
-            Journal.log(self.__class__.__name__,
-                        "_debug_prints",
-                        warning,
-                        LogType.WARN,
-                        throw_when_excep = True)
+                            "_debug_prints",
+                            warning,
+                            LogType.WARN,
+                            throw_when_excep = True)
+                
+            if self.isolated_cores_only:
+                
+                # we distribute the controllers over the available ones
+                warning = "Will distribute controllers over isolated cores only"
+                
+                Journal.log(self.__class__.__name__,
+                            "_debug_prints",
+                            warning,
+                            LogType.WARN,
+                            throw_when_excep = True)
             
         if len(self.isolated_cores) < self.cluster_size and self.isolated_cores_only:
             
@@ -273,8 +289,17 @@ class ControlClusterSrvr(ABC):
                 process = mp.Process(target=self._controllers[i].solve, name=self.processes_basename + str(i))
 
                 self._processes.append(process)
+            
+            core_ids = []
 
-            core_ids = self._get_cores() # gets cores over which processes are to be distributed
+            if self.core_ids_override_list is None:
+
+                core_ids = self._get_cores() # gets cores over which processes are to be distributed
+
+            else:
+                
+                # ini case user wants to set core ids manually
+                core_ids = self.core_ids_override_list
 
             i = 0
             for process in self._processes:
