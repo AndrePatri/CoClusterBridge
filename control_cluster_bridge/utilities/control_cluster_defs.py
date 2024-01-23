@@ -1199,10 +1199,10 @@ class RHCStatus():
         self.close()
 
     def run(self):
-    
-        self.fails.run()
+
         self.resets.run()
         self.trigger.run()
+        self.fails.run()
 
     def close(self):
         

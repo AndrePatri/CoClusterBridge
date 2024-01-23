@@ -472,7 +472,8 @@ class ControlClusterClient(ABC):
                                         cluster_size=self.cluster_size,
                                         namespace=self.namespace, 
                                         verbose=self._verbose, 
-                                        vlevel=VLevel.V2)
+                                        vlevel=VLevel.V2,
+                                        force_reconnection=False)
         
         
         self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
@@ -480,7 +481,8 @@ class ControlClusterClient(ABC):
                                     name=self.namespace,
                                     verbose=self._verbose,
                                     vlevel=VLevel.V2, 
-                                    safe=True)
+                                    safe=True,
+                                    force_reconnection=False)
 
     def _trigger_solution(self):
         
