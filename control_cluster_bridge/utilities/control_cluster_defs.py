@@ -1107,7 +1107,8 @@ class RHCStatus():
                 vlevel = vlevel,
                 safe = False, 
                 dtype=dtype.Bool,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                fill_value = False)
     
     class ResetFlagView(SharedDataView):
         
@@ -1130,7 +1131,8 @@ class RHCStatus():
                 vlevel = vlevel,
                 safe = False, 
                 dtype=dtype.Bool,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                fill_value = False)
     
     class TriggerFlagView(SharedDataView):
 
@@ -1153,7 +1155,8 @@ class RHCStatus():
                 vlevel = vlevel,
                 safe = False, 
                 dtype=dtype.Bool,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                fill_value = False)
             
     def __init__(self, 
             is_server = False, 
@@ -1480,8 +1483,7 @@ class JntImpCntrlData:
                                         basename = "SharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
-                                        vlevel = self.vlevel, 
-                                        force_reconnection = force_reconnection)
+                                        vlevel = self.vlevel)
 
         else:
 
@@ -1489,8 +1491,7 @@ class JntImpCntrlData:
                                         basename = "SharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
-                                        vlevel = self.vlevel,
-                                        force_reconnection=force_reconnection)
+                                        vlevel = self.vlevel)
 
         self.pos_err_view = self.PosErrView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
