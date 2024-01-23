@@ -60,24 +60,21 @@ boost_core() {
     sudo cpufreq-set -c $core -g performance
 }
 
-# Read the list of isolated cores (accept ranges in the form start_idx-end_idx)
-read -p "Enter the list of isolated cores (separated by space, press Enter for all cores): " cores_input
+# Read the core range (start_idx end_idx, press Enter for all cores)
+read -p "Enter the core range (start_idx end_idx, press Enter for all cores): " -a core_range
 
-# Convert ranges to individual cores
-cores_array=()
-IFS=' ' read -ra core_ranges <<< "$cores_input"
-for range in "${core_ranges[@]}"; do
-    if [[ "$range" =~ ([0-9]+)-([0-9]+) ]]; then
-        start_idx="${BASH_REMATCH[1]}"
-        end_idx="${BASH_REMATCH[2]}"
-        cores_array+=($(seq "$start_idx" "$end_idx"))
-    else
-        cores_array+=("$range")
-    fi
-done
+# If no cores are provided, get all available cores
+if [ ${#core_range[@]} -eq 0 ]; then
+    total_cores=$(nproc)
+    core_range=($(seq 0 $((total_cores-1))))
+fi
+
+# Parse the start and end indexes from the range
+start_idx=${core_range[0]}
+end_idx=${core_range[1]:-$start_idx}
 
 # Print the current status of the cores before setting the mode
-for core in "${cores_array[@]}"; do
+for ((core=start_idx; core<=end_idx; core++)); do
     if is_number "$core"; then
         print_core_mode "$core"
     else
@@ -96,7 +93,7 @@ if [[ "$mode" != "performance" ]] && [[ "$mode" != "powersave" ]]; then
 fi
 
 # Set the specified cores to the chosen mode and boost their maximum frequency
-for core in "${cores_array[@]}"; do
+for ((core=start_idx; core<=end_idx; core++)); do
     if is_number "$core"; then
         set_core_mode "$core" "$mode"
 
