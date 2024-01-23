@@ -1207,10 +1207,8 @@ class RHCStatus():
     def close(self):
         
         self.trigger.close()
-
-        # self.active.close()
-        # self.fails.close()
-        # self.resets.close()
+        self.resets.close()
+        self.fails.close()    
                     
 class JntImpCntrlData:
 
