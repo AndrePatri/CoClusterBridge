@@ -1093,7 +1093,8 @@ class RHCStatus():
                 is_server = False, 
                 cluster_size: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "ClusterFailFlag" # hardcoded
 
@@ -1105,7 +1106,8 @@ class RHCStatus():
                 verbose = verbose, 
                 vlevel = vlevel,
                 safe = False, 
-                dtype=dtype.Bool)
+                dtype=dtype.Bool,
+                force_reconnection=force_reconnection)
     
     class ResetFlagView(SharedDataView):
         
@@ -1114,7 +1116,8 @@ class RHCStatus():
                 is_server = False, 
                 cluster_size: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "ClusterResetFlag" # hardcoded
 
@@ -1126,7 +1129,8 @@ class RHCStatus():
                 verbose = verbose, 
                 vlevel = vlevel,
                 safe = False, 
-                dtype=dtype.Bool)
+                dtype=dtype.Bool,
+                force_reconnection=force_reconnection)
     
     class TriggerFlagView(SharedDataView):
 
@@ -1135,7 +1139,8 @@ class RHCStatus():
                 is_server = False, 
                 cluster_size: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "ClusterTriggerFlag" # hardcoded
 
@@ -1147,14 +1152,16 @@ class RHCStatus():
                 verbose = verbose, 
                 vlevel = vlevel,
                 safe = False, 
-                dtype=dtype.Bool)
+                dtype=dtype.Bool,
+                force_reconnection=force_reconnection)
             
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
             namespace = "", 
             verbose = False, 
-            vlevel: VLevel = VLevel.V0):
+            vlevel: VLevel = VLevel.V0,
+            force_reconnection: bool = False):
 
         self.is_server = is_server
 
@@ -1170,19 +1177,22 @@ class RHCStatus():
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
-                                vlevel=vlevel)
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
         
         self.resets = self.ResetFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
-                                vlevel=vlevel)
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
         
         self.trigger = self.TriggerFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
-                                vlevel=vlevel)
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
         
     def __del__(self):
 
@@ -1212,7 +1222,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "PosErr" # hardcoded
 
@@ -1222,7 +1233,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
     
     class VelErrView(SharedDataView):
 
@@ -1232,7 +1244,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "VelErr" # hardcoded
 
@@ -1242,7 +1255,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
     
     class PosGainsView(SharedDataView):
 
@@ -1252,7 +1266,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "PosGain" # hardcoded
 
@@ -1262,7 +1277,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
     
     class VelGainsView(SharedDataView):
 
@@ -1272,7 +1288,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "VelGain" # hardcoded
 
@@ -1282,7 +1299,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class PosView(SharedDataView):
 
@@ -1292,7 +1310,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "Pos" # hardcoded
 
@@ -1302,7 +1321,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class VelView(SharedDataView):
 
@@ -1312,7 +1332,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "Vel" # hardcoded
 
@@ -1322,7 +1343,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class EffView(SharedDataView):
 
@@ -1332,7 +1354,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "Eff" # hardcoded
 
@@ -1342,7 +1365,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class PosRefView(SharedDataView):
 
@@ -1352,7 +1376,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "PosRef" # hardcoded
 
@@ -1362,7 +1387,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class VelRefView(SharedDataView):
 
@@ -1372,7 +1398,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "VelRef" # hardcoded
 
@@ -1382,7 +1409,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class EffFFView(SharedDataView):
 
@@ -1392,7 +1420,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "EffFF" # hardcoded
 
@@ -1402,7 +1431,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     class ImpEffView(SharedDataView):
 
@@ -1412,7 +1442,8 @@ class JntImpCntrlData:
                 n_envs: int = -1, 
                 n_jnts: int = -1, 
                 verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0):
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
             
             basename = "ImpEff" # hardcoded
 
@@ -1422,7 +1453,8 @@ class JntImpCntrlData:
                 n_rows = n_envs, 
                 n_cols = n_jnts, 
                 verbose = verbose, 
-                vlevel = vlevel)
+                vlevel = vlevel,
+                force_reconnection=force_reconnection)
 
     def __init__(self, 
             is_server = False, 
@@ -1431,7 +1463,8 @@ class JntImpCntrlData:
             jnt_names: List[str] = [""],
             namespace = "", 
             verbose = False, 
-            vlevel: VLevel = VLevel.V0):
+            vlevel: VLevel = VLevel.V0,
+            force_reconnection: bool = False):
 
         self.is_server = is_server
 
@@ -1450,7 +1483,7 @@ class JntImpCntrlData:
                                         name_space = namespace,
                                         verbose = self.verbose, 
                                         vlevel = self.vlevel, 
-                                        force_reconnection = True)
+                                        force_reconnection = force_reconnection)
 
         else:
 
@@ -1458,84 +1491,96 @@ class JntImpCntrlData:
                                         basename = "SharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
-                                        vlevel = self.vlevel)
+                                        vlevel = self.vlevel,
+                                        force_reconnection=force_reconnection)
 
         self.pos_err_view = self.PosErrView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
         
         self.vel_err_view = self.VelErrView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
         
         self.pos_gains_view = self.PosGainsView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.vel_gains_view = self.VelGainsView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.eff_ff_view = self.EffFFView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.pos_view = self.PosView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
         
         self.pos_ref_view = self.PosRefView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.vel_view = self.VelView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.vel_ref_view = self.VelRefView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.eff_view = self.EffView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
         self.imp_eff_view = self.ImpEffView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
                                     namespace = namespace, 
                                     verbose = self.verbose, 
-                                    vlevel = self.vlevel)
+                                    vlevel = self.vlevel,
+                                    force_reconnection=force_reconnection)
 
     def __del__(self):
 

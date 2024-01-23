@@ -94,6 +94,10 @@ class ControlClusterSrvr(ABC):
 
         self.cluster_stats = None
     
+    def __del__(self):
+
+        self.terminate()
+        
     def _close_processes(self):
     
         # Wait for each process to exit gracefully or terminate forcefully

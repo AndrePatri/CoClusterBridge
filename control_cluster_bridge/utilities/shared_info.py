@@ -15,7 +15,8 @@ class SimData(SharedDataView):
         is_server = False, 
         n_dims: int = -1, 
         verbose: bool = False, 
-        vlevel: VLevel = VLevel.V0):
+        vlevel: VLevel = VLevel.V0,
+        force_reconnection: bool = False):
 
         basename = "SharedSimData" 
 
@@ -28,7 +29,8 @@ class SimData(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = True)
+            safe = True,
+            force_reconnection=force_reconnection)
 
 class DynamicSimInfoNames:
 
@@ -263,7 +265,8 @@ class ClusterCumulativeData(SharedDataView):
         is_server = False, 
         n_dims: int = -1, 
         verbose: bool = False, 
-        vlevel: VLevel = VLevel.V0):
+        vlevel: VLevel = VLevel.V0,
+        force_reconnection: bool = False):
 
         basename = "ClusterCumulativeData" 
 
@@ -276,7 +279,8 @@ class ClusterCumulativeData(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = True)
+            safe = True,
+            force_reconnection=force_reconnection)
         
 class RtiSolTime(SharedDataView):
                  
@@ -286,7 +290,8 @@ class RtiSolTime(SharedDataView):
         is_server = False, 
         verbose: bool = False, 
         vlevel: VLevel = VLevel.V0,
-        safe: bool = True):
+        safe: bool = True,
+        force_reconnection: bool = False):
 
         basename = "RtiSolTime" 
 
@@ -299,7 +304,8 @@ class RtiSolTime(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = safe)
+            safe = safe,
+            force_reconnection=force_reconnection)
 
 class SolveLoopDt(SharedDataView):
                  
@@ -309,7 +315,8 @@ class SolveLoopDt(SharedDataView):
         is_server = False, 
         verbose: bool = False, 
         vlevel: VLevel = VLevel.V0,
-        safe: bool = True):
+        safe: bool = True,
+        force_reconnection: bool = False):
 
         basename = "SolveLoopDt" 
 
@@ -322,7 +329,8 @@ class SolveLoopDt(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = safe)
+            safe = safe,
+            force_reconnection=force_reconnection)
      
 class PrbUpdateDt(SharedDataView):
                  
@@ -332,7 +340,8 @@ class PrbUpdateDt(SharedDataView):
         is_server = False, 
         verbose: bool = False, 
         vlevel: VLevel = VLevel.V0,
-        safe: bool = True):
+        safe: bool = True,
+        force_reconnection: bool = False):
 
         basename = "PrbUpdateDt" 
 
@@ -345,7 +354,8 @@ class PrbUpdateDt(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = safe)
+            safe = safe,
+            force_reconnection=force_reconnection)
 
 class PhasesShiftDt(SharedDataView):
                  
@@ -355,7 +365,8 @@ class PhasesShiftDt(SharedDataView):
         is_server = False, 
         verbose: bool = False, 
         vlevel: VLevel = VLevel.V0,
-        safe: bool = True):
+        safe: bool = True,
+        force_reconnection: bool = False):
 
         basename = "PhasesShiftDt" 
 
@@ -368,7 +379,8 @@ class PhasesShiftDt(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = safe)
+            safe = safe,
+            force_reconnection=force_reconnection)
 
 class TaskRefUpdateDt(SharedDataView):
                  
@@ -378,7 +390,8 @@ class TaskRefUpdateDt(SharedDataView):
         is_server = False, 
         verbose: bool = False, 
         vlevel: VLevel = VLevel.V0,
-        safe: bool = True):
+        safe: bool = True,
+        force_reconnection: bool = False):
 
         basename = "TaskRefUpdateDt" 
 
@@ -391,7 +404,8 @@ class TaskRefUpdateDt(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = safe)
+            safe = safe,
+            force_reconnection=force_reconnection)
         
 class DynamicClusterInfoNames:
 
@@ -428,7 +442,8 @@ class ClusterStats:
                 name = "",
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V2,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
         
         self.cluster_size = cluster_size
         
@@ -463,42 +478,48 @@ class ClusterStats:
                             is_server = is_server, 
                             n_dims = len(self.param_keys),
                             verbose = verbose, 
-                            vlevel = vlevel)
+                            vlevel = vlevel,
+                            force_reconnection=force_reconnection)
 
         self.rti_sol_time = RtiSolTime(cluster_size= cluster_size, 
                             namespace = self.namespace,
                             is_server = is_server, 
                             verbose = verbose, 
                             vlevel = vlevel,
-                            safe=False)
+                            safe=False,
+                            force_reconnection=force_reconnection)
         
         self.solve_loop_dt = SolveLoopDt(cluster_size= cluster_size, 
                             namespace = self.namespace,
                             is_server = is_server, 
                             verbose = verbose, 
                             vlevel = vlevel,
-                            safe=False)
+                            safe=False,
+                            force_reconnection=force_reconnection)
         
         self.prb_update_dt = PrbUpdateDt(cluster_size= cluster_size, 
                             namespace = self.namespace,
                             is_server = is_server, 
                             verbose = verbose, 
                             vlevel = vlevel,
-                            safe=False)
+                            safe=False,
+                            force_reconnection=force_reconnection)
 
         self.phase_shift_dt = PhasesShiftDt(cluster_size= cluster_size, 
                             namespace = self.namespace,
                             is_server = is_server, 
                             verbose = verbose, 
                             vlevel = vlevel,
-                            safe=False)
+                            safe=False,
+                            force_reconnection=force_reconnection)
 
         self.task_ref_update_dt = TaskRefUpdateDt(cluster_size= cluster_size, 
                             namespace = self.namespace,
                             is_server = is_server, 
                             verbose = verbose, 
                             vlevel = vlevel,
-                            safe=False)
+                            safe=False,
+                            force_reconnection=force_reconnection)
         
         # names
         if self.is_server:
@@ -508,7 +529,7 @@ class ClusterStats:
                                         name_space = self.namespace,
                                         verbose = verbose, 
                                         vlevel = vlevel, 
-                                        force_reconnection = True)
+                                        force_reconnection = force_reconnection)
 
         else:
 

@@ -131,7 +131,11 @@ class ControlClusterClient(ABC):
         self.n_steps_prints = 100
         # performs some initialization steps
         self._setup()
-    
+
+    def __del__(self):
+                
+        self.close()
+
     def is_cluster_instant(self, 
                         control_index: int):
         
@@ -388,10 +392,6 @@ class ControlClusterClient(ABC):
                     throw_when_excep = False)
         
             thread.join() # wait for thread to join
-
-    def __del__(self):
-                
-        self.close()
 
     def _setup(self):
 

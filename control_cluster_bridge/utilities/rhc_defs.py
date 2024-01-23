@@ -1221,7 +1221,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "q" # configuration vector
 
@@ -1233,7 +1234,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
     
     class V(SharedDataView):
 
@@ -1245,7 +1247,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "q" # velocity vector
 
@@ -1257,7 +1260,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
     
     class A(SharedDataView):
 
@@ -1269,7 +1273,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "A" # acceleration vector
 
@@ -1281,7 +1286,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
     
     class ADot(SharedDataView):
 
@@ -1293,7 +1299,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "a_dot" # jerk vector
 
@@ -1305,7 +1312,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
     
     class F(SharedDataView):
 
@@ -1317,7 +1325,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "f" # cartesian force vector
 
@@ -1329,7 +1338,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
             
     class FDot(SharedDataView):
 
@@ -1341,7 +1351,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "f_dot" # yank vector
 
@@ -1353,7 +1364,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
             
     class Eff(SharedDataView):
 
@@ -1365,7 +1377,8 @@ class RHCInternal():
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 fill_value: float = np.nan,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "v" # hardcoded
 
@@ -1377,7 +1390,8 @@ class RHCInternal():
                 verbose = verbose, 
                 vlevel = vlevel,
                 fill_value = fill_value, 
-                safe = safe)
+                safe = safe,
+                force_reconnection=force_reconnection)
 
     class RHCosts(SharedTensorDict):
 
@@ -1389,7 +1403,8 @@ class RHCInternal():
                 is_server = False, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "rhc_costs"
 
@@ -1400,7 +1415,8 @@ class RHCInternal():
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    safe = safe) 
+                    safe = safe,
+                    force_reconnection = force_reconnection) 
     
     class RHConstr(SharedTensorDict):
 
@@ -1412,7 +1428,8 @@ class RHCInternal():
                 is_server = False, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = False):
             
             basename = "rhc_constraints"
 
@@ -1423,7 +1440,8 @@ class RHCInternal():
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    safe = safe) 
+                    safe = safe,
+                    force_reconnection = force_reconnection) 
     
     class Config():
 
@@ -1544,7 +1562,8 @@ class RHCInternal():
             n_contacts: int = -1,
             n_jnts: int = -1,
             verbose: bool = False, 
-            vlevel: VLevel = VLevel.V0):
+            vlevel: VLevel = VLevel.V0,
+            force_reconnection: bool = False):
 
         self.rhc_index = rhc_index
 
@@ -1579,7 +1598,8 @@ class RHCInternal():
                     n_dims = 3 + 4 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
         
         if self.config.enable_v:
 
@@ -1588,7 +1608,8 @@ class RHCInternal():
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
         
         if self.config.enable_a:
 
@@ -1597,7 +1618,8 @@ class RHCInternal():
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
         
         if self.config.enable_a_dot:
 
@@ -1606,7 +1628,8 @@ class RHCInternal():
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
         
         if self.config.enable_f:
 
@@ -1615,7 +1638,8 @@ class RHCInternal():
                     n_dims = 6 * n_contacts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
             
         if self.config.enable_f_dot:
 
@@ -1624,7 +1648,8 @@ class RHCInternal():
                     n_dims = 6 * n_contacts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
         
         if self.config.enable_eff:
 
@@ -1633,7 +1658,8 @@ class RHCInternal():
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
             
         if self.config.enable_costs:
 
@@ -1643,7 +1669,8 @@ class RHCInternal():
                     namespace = self.namespace,
                     is_server = is_server, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
         
         if self.config.enable_constr:
 
@@ -1653,7 +1680,8 @@ class RHCInternal():
                     namespace = self.namespace,
                     is_server = is_server, 
                     verbose = verbose, 
-                    vlevel = vlevel)
+                    vlevel = vlevel,
+                    force_reconnection=force_reconnection)
     
     def run(self):
 
