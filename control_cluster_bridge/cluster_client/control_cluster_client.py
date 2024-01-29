@@ -23,12 +23,14 @@ from control_cluster_bridge.utilities.control_cluster_defs import RobotClusterSt
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlClient
 from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
 
+from control_cluster_bridge.utilities.data import RobotState
+
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 
 # from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
 
-from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
+from control_cluster_bridge.utilities.data import RHCStatus
 from control_cluster_bridge.utilities.shared_info import ClusterStats
 
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
@@ -239,7 +241,7 @@ class ControlClusterClient(ABC):
         if self.robot_states is not None:
             
             # updates shared tensor on CPU with latest data from states on GPU
-            self.robot_states.synch() 
+            self.robot_states.synch_cpu_mirror() 
 
         if self.contact_states is not None:
             
@@ -342,7 +344,7 @@ class ControlClusterClient(ABC):
             
             if self.robot_states is not None:
                 
-                self.robot_states.terminate()
+                self.robot_states.close()
 
             if self.launch_controllers is not None:
 
@@ -404,7 +406,7 @@ class ControlClusterClient(ABC):
 
     def _start_shared_mem(self):
 
-        self.robot_states.start()
+        self.robot_states.run()
 
         if self.contact_states is not None:
 
@@ -438,12 +440,22 @@ class ControlClusterClient(ABC):
 
     def _init_shared_mem(self):
         
-        self.robot_states = RobotClusterState(n_dofs=self.n_dofs, 
-                                            cluster_size=self.cluster_size, 
-                                            namespace=self.namespace,
-                                            backend=self._backend, 
-                                            device=self._device, 
-                                            dtype=self.torch_dtype) # from robot to controllers
+        self.robot_states = RobotState(namespace=self.namespace,
+                                is_server=True,
+                                n_robots=self.cluster_size,
+                                dtype=self.torch_dtype,
+                                with_gpu_mirror=True,
+                                force_reconnection=False,
+                                verbose=True,
+                                vlevel=VLevel.V2,
+                                safe=False)
+
+        # self.robot_states = RobotClusterState(n_dofs=self.n_dofs, 
+        #                                     cluster_size=self.cluster_size, 
+        #                                     namespace=self.namespace,
+        #                                     backend=self._backend, 
+        #                                     device=self._device, 
+        #                                     dtype=self.torch_dtype) # from robot to controllers
 
         if not self.n_contact_sensors < 0:
             self.contact_states = RobotClusterContactState(cluster_size=self.cluster_size,

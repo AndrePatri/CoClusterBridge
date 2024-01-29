@@ -19,14 +19,18 @@ from abc import ABC, abstractmethod
 
 import time 
 
-from control_cluster_bridge.utilities.rhc_defs import RobotCmds, RobotState, ContactState
+from control_cluster_bridge.utilities.rhc_defs import RobotCmds, ContactState
+# from control_cluster_bridge.utilities.rhc_defs import RobotState
+
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
+
+from control_cluster_bridge.utilities.data import RobotState
 
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
 
-from control_cluster_bridge.utilities.control_cluster_defs import RHCStatus
-from control_cluster_bridge.utilities.rhc_defs import RHCInternal
+from control_cluster_bridge.utilities.data import RHCStatus
+from control_cluster_bridge.utilities.data import RHCInternal
 
 from control_cluster_bridge.utilities.shared_info import ClusterStats
 
@@ -251,13 +255,12 @@ class RHController(ABC):
     def init_states(self):
 
         # to be called after n_dofs is known
-        self.robot_state = RobotState(n_dofs=self.n_dofs, 
-                                index=self.controller_index,
-                                dtype=self.array_dtype,
-                                jnt_remapping=self._to_server, # remapping from client (i.e. simulator ) jnt ordering to server (i.e. control cluster)
-                                q_remapping=self._quat_remap, 
-                                namespace=self.namespace,
-                                verbose = self._verbose) 
+        self.robot_state = RobotState(namespace=self.namespace,
+                                is_server=False,
+                                with_gpu_mirror=False,
+                                safe=False,
+                                verbose=self._verbose,
+                                vlevel=VLevel.V2) 
         
         self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
                                 index=self.controller_index,
@@ -346,6 +349,8 @@ class RHController(ABC):
                     if self._debug:
                         
                         self._start_time = time.perf_counter()
+
+                    self.robot_state.synch_from_shared_mem() # updates robot state
 
                     # latest state is employed
                     success = self._solve() # solve actual TO
