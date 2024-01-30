@@ -1387,6 +1387,7 @@ class JntsState(SharedDataView):
             is_server = False, 
             n_robots: int = None, 
             n_jnts: int = None,
+            jnt_names: List[str] = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             fill_value: float = 0.0,
@@ -1404,7 +1405,24 @@ class JntsState(SharedDataView):
 
         self.n_jnts = n_jnts
         self.n_robots = n_robots
+        self.jnt_names = jnt_names
 
+        if is_server:
+
+            self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
+                                        basename = basename + "Names", 
+                                        name_space = namespace,
+                                        verbose = verbose, 
+                                        vlevel = vlevel)
+
+        else:
+
+            self.shared_jnt_names = StringTensorClient(
+                                        basename = basename + "Names", 
+                                        name_space = namespace,
+                                        verbose = verbose, 
+                                        vlevel = vlevel)
+            
         super().__init__(namespace = namespace,
             basename = basename,
             is_server = is_server, 
@@ -1439,6 +1457,27 @@ class JntsState(SharedDataView):
 
         self._init_views()
 
+        # retrieving joint names
+        self.shared_jnt_names.run()
+
+        if self.is_server:
+
+            jnt_names_written = self.shared_jnt_names.write_vec(self.jnt_names, 0)
+
+            if not jnt_names_written:
+
+                raise Exception("Could not write joint names on shared memory!")
+        
+        else:
+            
+            self.jnt_names = [""] * self.n_jnts
+
+            jnt_names_read = self.shared_jnt_names.read_vec(self.jnt_names, 0)
+
+            if not jnt_names_read:
+
+                raise Exception("Could not read joint names on shared memory!")
+            
     def _check_running(self,
                 calling_method: str):
 
@@ -1729,6 +1768,7 @@ class RobotState():
             is_server: bool,
             n_robots: int = None,
             n_jnts: int = None,
+            jnt_names: List[str] = None,
             with_gpu_mirror: bool = True,
             force_reconnection: bool = False,
             safe: bool = True,
@@ -1747,29 +1787,32 @@ class RobotState():
 
         self._n_robots = n_robots
         self._n_jnts = n_jnts
+        self._jnt_names = jnt_names
+
         self._safe = safe
         self._force_reconnection = force_reconnection
         
         self._with_gpu_mirror = with_gpu_mirror
 
         self.root_state = RootState(namespace=self._namespace, 
-                                is_server=self._is_server,
-                                n_robots=self._n_robots,
-                                verbose=self._verbose,
-                                vlevel=self._vlevel,
-                                safe=self._safe,
-                                force_reconnection=self._force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
-        
+                            is_server=self._is_server,
+                            n_robots=self._n_robots,
+                            verbose=self._verbose,
+                            vlevel=self._vlevel,
+                            safe=self._safe,
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror)
+    
         self.jnts_state = JntsState(namespace=self._namespace, 
-                                is_server=self._is_server,
-                                n_robots=self._n_robots,
-                                n_jnts=self._n_jnts,
-                                verbose=self._verbose,
-                                vlevel=self._vlevel,
-                                safe=self._safe,
-                                force_reconnection=self._force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                            is_server=self._is_server,
+                            n_robots=self._n_robots,
+                            n_jnts=self._n_jnts,
+                            jnt_names=self._jnt_names,
+                            verbose=self._verbose,
+                            vlevel=self._vlevel,
+                            safe=self._safe,
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror)
     
     def __del__(self):
 
@@ -1794,6 +1837,10 @@ class RobotState():
 
         return self._n_jnts
     
+    def jnt_names(self):
+
+        return self._jnt_names
+    
     def run(self):
 
         self.root_state.run()
@@ -1805,6 +1852,8 @@ class RobotState():
             self._n_robots = self.jnts_state.n_rows
 
             self._n_jnts = int(self.jnts_state.n_cols / 2)
+
+            self._jnt_names = self.jnts_state.jnt_names
         
         self._init_gpu_mirror()
     

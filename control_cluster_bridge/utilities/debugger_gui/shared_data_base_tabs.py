@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import QWidget
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, RobotState, ContactState
+from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, ContactState
+from control_cluster_bridge.utilities.data import RobotState
 from control_cluster_bridge.utilities.data import RHCInternal
 from control_cluster_bridge.utilities.data import RHCStatus
 from control_cluster_bridge.utilities.shared_info import SharedSimInfo
@@ -299,160 +300,6 @@ class RhcCmdsWindow(SharedDataWindow):
             self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 2].jnt_cmd.eff.numpy().flatten())
             self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 2].slvr_state.info.numpy().flatten())
 
-class RhcStateWindow(SharedDataWindow):
-
-    def __init__(self, 
-            update_data_dt: int,
-            update_plot_dt: int,
-            window_duration: int,
-            window_buffer_factor: int = 2,
-            namespace = "",
-            parent: QWidget = None, 
-            verbose = False):
-        
-        self.cluster_size = -1 
-
-        super().__init__(update_data_dt = update_data_dt,
-            update_plot_dt = update_plot_dt,
-            window_duration = window_duration,
-            grid_n_rows = 2,
-            grid_n_cols = 3,
-            window_buffer_factor = window_buffer_factor,
-            namespace = namespace,
-            name = "RhcStateWindow",
-            parent = parent, 
-            verbose = verbose)
-
-    def _initialize(self):
-
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].root_state.p.shape[1],
-                    n_data = 1,
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Root position", 
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=["p_x", "p_y", "p_z"], 
-                    ylabel="[m]"))
-        
-        self.rt_plotters.append(RtPlotWindow(
-                    data_dim=self.shared_data_clients[1].root_state.q.shape[1],
-                    n_data = 1,
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Root orientation", 
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=["q_w", "q_i", "q_j", "q_k"]))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].root_state.v.shape[1],
-                    n_data = 1,
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt, 
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Base linear vel.", 
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=["v_x", "v_y", "v_z"], 
-                    ylabel="[m/s]"))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].root_state.omega.shape[1],
-                    n_data = 1, 
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt, 
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Base angular vel.",
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=["omega_x", "omega_y", "omega_z"], 
-                    ylabel="[rad/s]"))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].jnt_state.n_dofs,
-                    n_data = 1,
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Joints q",
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=self.jnt_names, 
-                    ylabel="[rad]"))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[1].jnt_state.n_dofs,
-                    n_data = 1, 
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Joints v",
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=self.jnt_names, 
-                    ylabel="[rad/s]"))
-        
-        # root state
-        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
-        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
-        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
-        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
-        
-        # joint state
-        self.grid.addFrame(self.rt_plotters[4].base_frame, 0, 2)
-        self.grid.addFrame(self.rt_plotters[5].base_frame, 1, 2)
-
-    def _init_shared_data(self):
-        
-        self.shared_data_clients.append(SharedStringArray(length=-1, 
-                                    name=jnt_names_client_name(), 
-                                    namespace=self.namespace, 
-                                    is_server=False, 
-                                    verbose=self.verbose))
-        self.shared_data_clients[0].start()
-
-        self.jnt_names = self.shared_data_clients[0].read()
-
-        self.shared_data_clients.append(RobotState(n_dofs=len(self.jnt_names), 
-                                    index=0, 
-                                    jnt_remapping=None, 
-                                    q_remapping=None, 
-                                    namespace=self.namespace,
-                                    dtype=torch.float32, 
-                                    verbose=self.verbose))
-        self.cluster_size = self.shared_data_clients[1].shared_memman.n_rows
-
-        # now we know how big the cluster is
-
-        # view of remaining RobotState
-        for i in range(1, self.cluster_size):
-
-            self.shared_data_clients.append(RobotState(n_dofs=len(self.jnt_names), 
-                                    index=i, 
-                                    jnt_remapping=None, 
-                                    q_remapping=None, 
-                                    namespace=self.namespace,
-                                    dtype=torch.float32, 
-                                    verbose=self.verbose))
-            
-    def _post_shared_init(self):
-
-        pass
-
-    def update(self,
-            index: int):
-
-        if not self._terminated:
-            
-            # root state
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.p.numpy().flatten())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.q.numpy().flatten())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.v.numpy().flatten())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[index + 1].root_state.omega.numpy().flatten())
-
-            # joint state
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.q.numpy().flatten())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[index + 1].jnt_state.v.numpy().flatten())
-
 class RhcContactStatesWindow(SharedDataWindow):
 
     def __init__(self, 
@@ -555,6 +402,138 @@ class RhcContactStatesWindow(SharedDataWindow):
                 
                 # cluster index is updated manually
                 self.rt_plotters[i].rt_plot_widget.update(self.shared_data_clients[index].contact_state.get(self.contact_names[i]).numpy().flatten())
+
+class RobotStateWindow(SharedDataWindow):
+
+    def __init__(self, 
+            update_data_dt: int,
+            update_plot_dt: int,
+            window_duration: int,
+            window_buffer_factor: int = 2,
+            namespace = "",
+            parent: QWidget = None, 
+            verbose = False):
+        
+        super().__init__(update_data_dt = update_data_dt,
+            update_plot_dt = update_plot_dt,
+            window_duration = window_duration,
+            grid_n_rows = 2,
+            grid_n_cols = 3,
+            window_buffer_factor = window_buffer_factor,
+            namespace = namespace,
+            name = "RobotStateWindow",
+            parent = parent, 
+            verbose = verbose)
+
+    def _initialize(self):
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get_p().shape[1],
+                    n_data = 1,
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Root position", 
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=["p_x", "p_y", "p_z"], 
+                    ylabel="[m]"))
+        
+        self.rt_plotters.append(RtPlotWindow(
+                    data_dim=self.shared_data_clients[0].root_state.get_q().shape[1],
+                    n_data = 1,
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Root orientation", 
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=["q_w", "q_i", "q_j", "q_k"]))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get_v().shape[1],
+                    n_data = 1,
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt, 
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Base linear vel.", 
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=["v_x", "v_y", "v_z"], 
+                    ylabel="[m/s]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get_omega().shape[1],
+                    n_data = 1, 
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt, 
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Base angular vel.",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=["omega_x", "omega_y", "omega_z"], 
+                    ylabel="[rad/s]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].n_jnts(),
+                    n_data = 1,
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Joints q",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=self.shared_data_clients[0].jnt_names(), 
+                    ylabel="[rad]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].n_jnts(),
+                    n_data = 1, 
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Joints v",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=self.shared_data_clients[0].jnt_names(), 
+                    ylabel="[rad/s]"))
+        
+        # root state
+        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+        
+        # joint state
+        self.grid.addFrame(self.rt_plotters[4].base_frame, 0, 2)
+        self.grid.addFrame(self.rt_plotters[5].base_frame, 1, 2)
+
+    def _init_shared_data(self):
+        
+        self.shared_data_clients.append(RobotState(namespace=self.namespace,
+                                            is_server=False, 
+                                            with_gpu_mirror=False, 
+                                            safe=False,
+                                            verbose=self.verbose,
+                                            vlevel=VLevel.V2))
+        self.shared_data_clients[0].run()
+            
+    def _post_shared_init(self):
+
+        pass
+
+    def update(self,
+            index: int):
+
+        if not self._terminated:
+            
+            # update from shared mem
+            self.shared_data_clients[0].synch_from_shared_mem()
+
+            # root state
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_p(robot_idx=index).numpy().flatten())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_q(robot_idx=index).numpy().flatten())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_v(robot_idx=index).numpy().flatten())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_omega(robot_idx=index).numpy().flatten())
+
+            # joint state
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_q(robot_idx=index).numpy().flatten())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_v(robot_idx=index).numpy().flatten())
 
 class RhcInternalData(SharedDataWindow):
 

@@ -444,6 +444,7 @@ class ControlClusterClient(ABC):
                                 is_server=True,
                                 n_robots=self.cluster_size,
                                 n_jnts=self.n_dofs,
+                                jnt_names=self.jnt_names,
                                 with_gpu_mirror=True,
                                 force_reconnection=False,
                                 verbose=True,
