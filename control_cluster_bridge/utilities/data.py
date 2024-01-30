@@ -1385,8 +1385,8 @@ class JntsState(SharedDataView):
     def __init__(self,
             namespace = "",
             is_server = False, 
-            n_robots: int = -1, 
-            n_jnts: int = -1,
+            n_robots: int = None, 
+            n_jnts: int = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             fill_value: float = 0.0,
@@ -1396,7 +1396,11 @@ class JntsState(SharedDataView):
         
         basename = "JntsState" 
 
-        n_cols = 2 * n_jnts # jnts config. and vel.
+        n_cols = None
+
+        if n_jnts is not None:
+
+            n_cols = 2 * n_jnts # jnts config. and vel.
 
         self.n_jnts = n_jnts
         self.n_robots = n_robots
@@ -1427,6 +1431,12 @@ class JntsState(SharedDataView):
 
         super().run()
         
+        if not self.is_server:
+
+            self.n_robots = self.n_rows
+            
+            self.n_jnts = int(self.n_cols / 2)
+
         self._init_views()
 
     def _check_running(self,
@@ -1445,7 +1455,7 @@ class JntsState(SharedDataView):
 
     def _init_views(self):
 
-        self._check_running()
+        self._check_running("_init_views")
 
         # jnts
         self._q = self.torch_view[:, 0:self.n_jnts].view(self.n_robots, self.n_jnts)
@@ -1482,11 +1492,11 @@ class JntsState(SharedDataView):
             
             else:
 
-                return self._q[robot_idx, :]
+                return self._q[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw()
+            self._check_mirror_of_throw("get_q")
 
             if robot_idx is None:
 
@@ -1494,7 +1504,7 @@ class JntsState(SharedDataView):
             
             else:
 
-                return self._q_gpu[robot_idx, :]
+                return self._q_gpu[robot_idx, :].view(1, -1)
 
     def get_v(self,
             robot_idx: int = None,
@@ -1508,11 +1518,11 @@ class JntsState(SharedDataView):
             
             else:
 
-                return self._v[robot_idx, :]
+                return self._v[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw()
+            self._check_mirror_of_throw("get_v")
 
             if robot_idx is None:
 
@@ -1520,14 +1530,14 @@ class JntsState(SharedDataView):
             
             else:
 
-                return self._v_gpu[robot_idx, :]
+                return self._v_gpu[robot_idx, :].view(1, -1)
             
 class RootState(SharedDataView):
 
     def __init__(self,
             namespace = "",
             is_server = False, 
-            n_robots: int = -1, 
+            n_robots: int = None, 
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
@@ -1573,6 +1583,10 @@ class RootState(SharedDataView):
 
         super().run()
         
+        if not self.is_server:
+
+            self.n_robots = self.n_rows
+
         self._init_views()
 
     def _init_views(self):
@@ -1603,7 +1617,7 @@ class RootState(SharedDataView):
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
-                
+
     def get_p(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -1616,11 +1630,11 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._p[robot_idx, :]
+                return self._p[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw()
+            self._check_mirror_of_throw("get_p")
 
             if robot_idx is None:
 
@@ -1628,7 +1642,7 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._p_gpu[robot_idx, :]
+                return self._p_gpu[robot_idx, :].view(1, -1)
             
     def get_q(self,
             robot_idx: int = None,
@@ -1642,11 +1656,11 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._q[robot_idx, :]
+                return self._q[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw()
+            self._check_mirror_of_throw("get_q")
 
             if robot_idx is None:
 
@@ -1654,7 +1668,7 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._q_gpu[robot_idx, :]
+                return self._q_gpu[robot_idx, :].view(1, -1)
     
     def get_v(self,
             robot_idx: int = None,
@@ -1668,11 +1682,11 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._v[robot_idx, :]
+                return self._v[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw()
+            self._check_mirror_of_throw("get_v")
 
             if robot_idx is None:
 
@@ -1680,7 +1694,7 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._v_gpu[robot_idx, :]
+                return self._v_gpu[robot_idx, :].view(1, -1)
     
     def get_omega(self,
             robot_idx: int = None,
@@ -1694,11 +1708,11 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._omega[robot_idx, :]
+                return self._omega[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw()
+            self._check_mirror_of_throw("get_omega")
 
             if robot_idx is None:
 
@@ -1706,7 +1720,7 @@ class RootState(SharedDataView):
             
             else:
 
-                return self._omega_gpu[robot_idx, :]
+                return self._omega_gpu[robot_idx, :].view(1, -1)
     
 class RobotState():
 
