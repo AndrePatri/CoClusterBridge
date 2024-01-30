@@ -1391,7 +1391,8 @@ class JntsState(SharedDataView):
             vlevel: VLevel = VLevel.V0,
             fill_value: float = 0.0,
             safe: bool = True,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            with_gpu_mirror: bool = True):
         
         basename = "JntsState" 
 
@@ -1410,11 +1411,15 @@ class JntsState(SharedDataView):
             vlevel = vlevel,
             fill_value = fill_value, 
             safe = safe,
-            force_reconnection=force_reconnection)
+            force_reconnection=force_reconnection,
+            with_gpu_mirror=with_gpu_mirror)
 
         # jnts
         self._q = None
         self._v = None
+
+        self._q_gpu = None
+        self._v_gpu = None
     
     def run(self):
         
@@ -1446,14 +1451,77 @@ class JntsState(SharedDataView):
         self._q = self.torch_view[:, 0:self.n_jnts].view(self.n_robots, self.n_jnts)
         self._v = self.torch_view[:, self.n_jnts:2 * self.n_jnts].view(self.n_robots, self.n_jnts)
 
-    def get_q(self):
+        if self.gpu_mirror_exists():
 
-        return self._q[:, :]
-    
-    def get_v(self):
+            # gpu views
+            self._q_gpu = self._gpu_mirror[:, 0:self.n_jnts].view(self.n_robots, self.n_jnts)
+            self._v_gpu = self._gpu_mirror[:, self.n_jnts:2 * self.n_jnts].view(self.n_robots, self.n_jnts)
 
-        return self._v[:, :]
-    
+    def _check_mirror_of_throw(self,
+                        name: str):
+
+        if not self.gpu_mirror_exists():
+
+            exception = f"GPU mirror is not available!"
+
+            Logger.log(self.__class__.__name__,
+                name,
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        
+    def get_q(self,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idx is None:
+
+                return self._q[:, :]
+            
+            else:
+
+                return self._q[robot_idx, :]
+        
+        else:
+
+            self._check_mirror_of_throw()
+
+            if robot_idx is None:
+
+                return self._q_gpu[:, :]
+            
+            else:
+
+                return self._q_gpu[robot_idx, :]
+
+    def get_v(self,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idx is None:
+
+                return self._v[:, :]
+            
+            else:
+
+                return self._v[robot_idx, :]
+        
+        else:
+
+            self._check_mirror_of_throw()
+
+            if robot_idx is None:
+
+                return self._v_gpu[:, :]
+            
+            else:
+
+                return self._v_gpu[robot_idx, :]
+            
 class RootState(SharedDataView):
 
     def __init__(self,
@@ -1463,7 +1531,8 @@ class RootState(SharedDataView):
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            with_gpu_mirror: bool = True):
         
         basename = "RootState" 
 
@@ -1481,7 +1550,8 @@ class RootState(SharedDataView):
             vlevel = vlevel,
             fill_value = 0, 
             safe = safe,
-            force_reconnection=force_reconnection)
+            force_reconnection=force_reconnection,
+            with_gpu_mirror=with_gpu_mirror)
 
         # views of the underlying memory view of the 
         # actual shared memory (crazy, eh?)
@@ -1491,7 +1561,12 @@ class RootState(SharedDataView):
         self._q = None
         self._v = None
         self._omega = None
-    
+
+        self._p_gpu = None
+        self._q_gpu = None
+        self._v_gpu = None
+        self._omega_gpu = None
+        
     def run(self):
         
         # overriding parent 
@@ -1507,22 +1582,131 @@ class RootState(SharedDataView):
         self._q = self.torch_view[:, 3:7].view(self.n_robots, 4)
         self._v = self.torch_view[:, 7:10].view(self.n_robots, 3)
         self._omega = self.torch_view[:, 10:13].view(self.n_robots, 3)
-    
-    def _get_p(self):
 
-        return self._p[:, :]
-    
-    def _get_q(self):
+        if self.gpu_mirror_exists():
 
-        return self._q[:, :]
+            # gpu views
+            self._p_gpu = self._gpu_mirror[:, 0:3].view(self.n_robots, 3)
+            self._q_gpu = self._gpu_mirror[:, 3:7].view(self.n_robots, 4)
+            self._v_gpu = self._gpu_mirror[:, 7:10].view(self.n_robots, 3)
+            self._omega_gpu = self._gpu_mirror[:, 10:13].view(self.n_robots, 3)
     
-    def _get_v(self):
+    def _check_mirror_of_throw(self,
+                        name: str):
 
-        return self._v[:, :]
+        if not self.gpu_mirror_exists():
+
+            exception = f"GPU mirror is not available!"
+
+            Logger.log(self.__class__.__name__,
+                name,
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+                
+    def get_p(self,
+            robot_idx: int = None,
+            gpu: bool = False):
+        
+        if not gpu:
+            
+            if robot_idx is None:
+
+                return self._p[:, :]
+            
+            else:
+
+                return self._p[robot_idx, :]
+        
+        else:
+
+            self._check_mirror_of_throw()
+
+            if robot_idx is None:
+
+                return self._p_gpu[:, :]
+            
+            else:
+
+                return self._p_gpu[robot_idx, :]
+            
+    def get_q(self,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idx is None:
+
+                return self._q[:, :]
+            
+            else:
+
+                return self._q[robot_idx, :]
+        
+        else:
+
+            self._check_mirror_of_throw()
+
+            if robot_idx is None:
+
+                return self._q_gpu[:, :]
+            
+            else:
+
+                return self._q_gpu[robot_idx, :]
     
-    def _get_omega(self):
+    def get_v(self,
+            robot_idx: int = None,
+            gpu: bool = False):
 
-        return self._omega[:, :]
+        if not gpu:
+            
+            if robot_idx is None:
+
+                return self._v[:, :]
+            
+            else:
+
+                return self._v[robot_idx, :]
+        
+        else:
+
+            self._check_mirror_of_throw()
+
+            if robot_idx is None:
+
+                return self._v_gpu[:, :]
+            
+            else:
+
+                return self._v_gpu[robot_idx, :]
+    
+    def get_omega(self,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idx is None:
+
+                return self._omega[:, :]
+            
+            else:
+
+                return self._omega[robot_idx, :]
+        
+        else:
+
+            self._check_mirror_of_throw()
+
+            if robot_idx is None:
+
+                return self._omega_gpu[:, :]
+            
+            else:
+
+                return self._omega_gpu[robot_idx, :]
     
 class RobotState():
 
@@ -1552,7 +1736,6 @@ class RobotState():
         self._safe = safe
         self._force_reconnection = force_reconnection
         
-        self.gpu_mirror = None
         self._with_gpu_mirror = with_gpu_mirror
 
         self.root_state = RootState(namespace=self._namespace, 
@@ -1561,7 +1744,8 @@ class RobotState():
                                 verbose=self._verbose,
                                 vlevel=self._vlevel,
                                 safe=self._safe,
-                                force_reconnection=self._force_reconnection)
+                                force_reconnection=self._force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.jnts_state = JntsState(namespace=self._namespace, 
                                 is_server=self._is_server,
@@ -1570,7 +1754,8 @@ class RobotState():
                                 verbose=self._verbose,
                                 vlevel=self._vlevel,
                                 safe=self._safe,
-                                force_reconnection=self._force_reconnection)
+                                force_reconnection=self._force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
     
     def __del__(self):
 
@@ -1609,24 +1794,30 @@ class RobotState():
         
         self._init_gpu_mirror()
     
-    def synch_cpu_mirror(self):
+    def synch_mirror(self,
+                from_gpu: bool):
 
-        if self.gpu_mirror is not None:
-
-            # synchs root_state and jnt_state (which will normally live on GPU)
-            # with the shared state data using the aggregate view (normally on CPU)
-
-            # this requires a (not so nice) COPY FROM GPU TO CPU
+        if self._with_gpu_mirror:
             
-            cpu_copy = self.gpu_mirror.cpu()
+            if from_gpu:
+                
+                # synchs root_state and jnt_state (which will normally live on GPU)
+                # with the shared state data using the aggregate view (normally on CPU)
 
-            # root state
-            self.root_state.torch_view[:, :] = cpu_copy[:, 0:self.root_state.n_cols]
-            
-            # jnts state
-            self.jnts_state.torch_view[:, :] = cpu_copy[:, self.root_state.n_cols:(self.root_state.n_cols + self.jnts_state.n_cols)]
+                # this requires a couple of (not so nice) COPIES FROM GPU TO CPU
+                
+                self.root_state.synch_mirror(from_gpu=True)
+                self.jnts_state.synch_mirror(from_gpu=True)
 
-            self.synch_to_shared_mem()
+                self.synch_to_shared_mem()
+
+            else:
+                
+                self.synch_from_shared_mem()
+
+                # copy from CPU to GPU
+                self.root_state.synch_mirror(from_gpu=False)
+                self.jnts_state.synch_mirror(from_gpu=False)
 
             torch.cuda.synchronize() # this way we ensure that after this the state on GPU
             # is fully updated

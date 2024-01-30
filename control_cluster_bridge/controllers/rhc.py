@@ -350,7 +350,8 @@ class RHController(ABC):
                         
                         self._start_time = time.perf_counter()
 
-                    self.robot_state.synch_from_shared_mem() # updates robot state
+                    self.robot_state.synch_from_shared_mem() # updates robot state with
+                    # latest data on shared mem
 
                     # latest state is employed
                     success = self._solve() # solve actual TO

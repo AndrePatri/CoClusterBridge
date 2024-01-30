@@ -241,7 +241,7 @@ class ControlClusterClient(ABC):
         if self.robot_states is not None:
             
             # updates shared tensor on CPU with latest data from states on GPU
-            self.robot_states.synch_cpu_mirror() 
+            self.robot_states.synch_mirror(from_gpu=True) 
 
         if self.contact_states is not None:
             
@@ -443,7 +443,7 @@ class ControlClusterClient(ABC):
         self.robot_states = RobotState(namespace=self.namespace,
                                 is_server=True,
                                 n_robots=self.cluster_size,
-                                dtype=self.torch_dtype,
+                                n_jnts=self.n_dofs,
                                 with_gpu_mirror=True,
                                 force_reconnection=False,
                                 verbose=True,
