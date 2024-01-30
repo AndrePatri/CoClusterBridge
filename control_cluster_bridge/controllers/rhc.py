@@ -145,7 +145,7 @@ class RHController(ABC):
         
         if self.robot_state is not None:
             
-            self.robot_state.terminate()
+            self.robot_state.close()
         
         if self.contact_state is not None:
 
@@ -257,6 +257,8 @@ class RHController(ABC):
         # to be called after n_dofs is known
         self.robot_state = RobotState(namespace=self.namespace,
                                 is_server=False,
+                                jnts_remapping=self._to_server, # remapping from environment to controller
+                                q_remapping=self._quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
                                 safe=False,
                                 verbose=self._verbose,

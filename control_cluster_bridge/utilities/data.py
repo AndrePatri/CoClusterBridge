@@ -1388,6 +1388,7 @@ class JntsState(SharedDataView):
             n_robots: int = None, 
             n_jnts: int = None,
             jnt_names: List[str] = None,
+            jnts_remapping: List[int] = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             fill_value: float = 0.0,
@@ -1406,6 +1407,10 @@ class JntsState(SharedDataView):
         self.n_jnts = n_jnts
         self.n_robots = n_robots
         self.jnt_names = jnt_names
+
+        self._jnts_remapping = None
+        if jnts_remapping is not None:
+            self._jnts_remapping = torch.tensor(jnts_remapping)
 
         if is_server:
 
@@ -1518,58 +1523,110 @@ class JntsState(SharedDataView):
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
-        
+
     def get_q(self,
             robot_idx: int = None,
             gpu: bool = False):
 
-        if not gpu:
-            
-            if robot_idx is None:
+        if self._jnts_remapping is None:
 
-                return self._q[:, :]
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    return self._q[:, :]
+                
+                else:
+
+                    return self._q[robot_idx, :].view(1, -1)
             
             else:
 
-                return self._q[robot_idx, :].view(1, -1)
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    return self._q_gpu[:, :]
+                
+                else:
+
+                    return self._q_gpu[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw("get_q")
+            if not gpu:
+                
+                if robot_idx is None:
 
-            if robot_idx is None:
+                    return self._q[:, self._jnts_remapping]
+                
+                else:
 
-                return self._q_gpu[:, :]
+                    return self._q[robot_idx, self._jnts_remapping].view(1, -1)
             
             else:
 
-                return self._q_gpu[robot_idx, :].view(1, -1)
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    return self._q_gpu[:, self._jnts_remapping]
+                
+                else:
+
+                    return self._q_gpu[robot_idx, self._jnts_remapping].view(1, -1)
 
     def get_v(self,
             robot_idx: int = None,
             gpu: bool = False):
 
-        if not gpu:
-            
-            if robot_idx is None:
+        if self._jnts_remapping is None:
 
-                return self._v[:, :]
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    return self._v[:, :]
+                
+                else:
+
+                    return self._v[robot_idx, :].view(1, -1)
             
             else:
 
-                return self._v[robot_idx, :].view(1, -1)
+                self._check_mirror_of_throw("get_v")
+
+                if robot_idx is None:
+
+                    return self._v_gpu[:, :]
+                
+                else:
+
+                    return self._v_gpu[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw("get_v")
+            if not gpu:
+                
+                if robot_idx is None:
 
-            if robot_idx is None:
+                    return self._v[:, self._jnts_remapping]
+                
+                else:
 
-                return self._v_gpu[:, :]
+                    return self._v[robot_idx, self._jnts_remapping].view(1, -1)
             
             else:
 
-                return self._v_gpu[robot_idx, :].view(1, -1)
+                self._check_mirror_of_throw("get_v")
+
+                if robot_idx is None:
+
+                    return self._v_gpu[:, self._jnts_remapping]
+                
+                else:
+
+                    return self._v_gpu[robot_idx, self._jnts_remapping].view(1, -1)
             
 class RootState(SharedDataView):
 
@@ -1577,6 +1634,7 @@ class RootState(SharedDataView):
             namespace = "",
             is_server = False, 
             n_robots: int = None, 
+            q_remapping: List[int] = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
@@ -1588,6 +1646,10 @@ class RootState(SharedDataView):
         n_cols = 13 # p, q, v, omega + 
 
         self.n_robots = n_robots
+
+        self._q_remapping = None
+        if q_remapping is not None:
+            self._q_remapping = torch.tensor(q_remapping)
 
         super().__init__(namespace = namespace,
             basename = basename,
@@ -1656,7 +1718,7 @@ class RootState(SharedDataView):
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
-
+    
     def get_p(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -1687,28 +1749,54 @@ class RootState(SharedDataView):
             robot_idx: int = None,
             gpu: bool = False):
 
-        if not gpu:
-            
-            if robot_idx is None:
+        if self._q_remapping is None:
 
-                return self._q[:, :]
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    return self._q[:, :]
+                
+                else:
+
+                    return self._q[robot_idx, :].view(1, -1)
             
             else:
 
-                return self._q[robot_idx, :].view(1, -1)
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    return self._q_gpu[:, :]
+                
+                else:
+
+                    return self._q_gpu[robot_idx, :].view(1, -1)
         
         else:
 
-            self._check_mirror_of_throw("get_q")
+            if not gpu:
+                
+                if robot_idx is None:
 
-            if robot_idx is None:
+                    return self._q[:, self._q_remapping]
+                
+                else:
 
-                return self._q_gpu[:, :]
+                    return self._q[robot_idx, self._q_remapping].view(1, -1)
             
             else:
 
-                return self._q_gpu[robot_idx, :].view(1, -1)
-    
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    return self._q_gpu[:, self._q_remapping]
+                
+                else:
+
+                    return self._q_gpu[robot_idx, self._q_remapping].view(1, -1)
+                
     def get_v(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -1769,6 +1857,8 @@ class RobotState():
             n_robots: int = None,
             n_jnts: int = None,
             jnt_names: List[str] = None,
+            jnts_remapping: List[int] = None,
+            q_remapping: List[int] = None,
             with_gpu_mirror: bool = True,
             force_reconnection: bool = False,
             safe: bool = True,
@@ -1789,6 +1879,9 @@ class RobotState():
         self._n_jnts = n_jnts
         self._jnt_names = jnt_names
 
+        self._jnts_remapping = jnts_remapping
+        self._q_remapping = q_remapping
+
         self._safe = safe
         self._force_reconnection = force_reconnection
         
@@ -1797,6 +1890,7 @@ class RobotState():
         self.root_state = RootState(namespace=self._namespace, 
                             is_server=self._is_server,
                             n_robots=self._n_robots,
+                            q_remapping=self._q_remapping,
                             verbose=self._verbose,
                             vlevel=self._vlevel,
                             safe=self._safe,
@@ -1808,6 +1902,7 @@ class RobotState():
                             n_robots=self._n_robots,
                             n_jnts=self._n_jnts,
                             jnt_names=self._jnt_names,
+                            jnts_remapping=self._jnts_remapping,
                             verbose=self._verbose,
                             vlevel=self._vlevel,
                             safe=self._safe,
