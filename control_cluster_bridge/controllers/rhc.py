@@ -24,7 +24,7 @@ from control_cluster_bridge.utilities.rhc_defs import RobotCmds, ContactState
 
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
 
-from control_cluster_bridge.utilities.data import RobotState
+from control_cluster_bridge.utilities.data import RobotState, RhcCmds
 
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
@@ -141,7 +141,7 @@ class RHController(ABC):
 
         if self.robot_cmds is not None:
             
-            self.robot_cmds.terminate()
+            self.robot_cmds.close()
         
         if self.robot_state is not None:
             
@@ -265,14 +265,16 @@ class RHController(ABC):
                                 vlevel=VLevel.V2) 
         self.robot_state.run()
         
-        self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
-                                index=self.controller_index,
-                                add_info_size=2, 
-                                dtype=self.array_dtype, 
-                                namespace=self.namespace,
-                                jnt_remapping=self._to_client,
-                                verbose=self._verbose) 
-
+        self.robot_cmds = RhcCmds(namespace=self.namespace,
+                                is_server=False,
+                                jnts_remapping=self._to_server, # remapping from environment to controller
+                                q_remapping=self._quat_remap, # remapping from environment to controller
+                                with_gpu_mirror=False,
+                                safe=False,
+                                verbose=self._verbose,
+                                vlevel=VLevel.V2) 
+        self.robot_cmds.run()
+        
         self.contact_state = ContactState(index=self.controller_index,
                                     dtype=self.array_dtype,
                                     namespace=self.namespace, 
@@ -281,18 +283,15 @@ class RHController(ABC):
         self._states_initialized = True
     
     def set_cmds_to_homing(self):
-        
-        self.robot_cmds.jnt_cmd.set_q(torch.tensor(self._homer.get_homing()).reshape(1, 
-                            self.robot_cmds.jnt_cmd.q.shape[1]))
 
-        self.robot_cmds.jnt_cmd.set_v(torch.zeros((1, self.robot_cmds.jnt_cmd.v.shape[1]), 
-                        dtype=self.array_dtype))
+        self.robot_cmds.jnts_state.get_q(robot_idx=self.controller_index)[:, :] = torch.tensor(self._homer.get_homing()).reshape(1, 
+                            self.robot_cmds.n_jnts())
 
-        self.robot_cmds.jnt_cmd.set_eff(torch.zeros((1, self.robot_cmds.jnt_cmd.eff.shape[1]), 
-                        dtype=self.array_dtype))
+        self.robot_cmds.jnts_state.get_v(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
+                        dtype=self.array_dtype)
 
-        self.robot_cmds.slvr_state.set_info(torch.zeros((1, self.add_data_lenght), 
-                        dtype=self.array_dtype))
+        self.robot_cmds.jnts_state.get_eff(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
+                        dtype=self.array_dtype)
         
     def solve(self):
         
@@ -461,14 +460,15 @@ class RHController(ABC):
     def _fill_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
-        
-        self.robot_cmds.jnt_cmd.set_q(self._get_cmd_jnt_q_from_sol())
+    
+        self.robot_cmds.jnts_state.get_q(robot_idx=self.controller_index)[:, :] = torch.tensor(self._homer.get_homing()).reshape(1, 
+                            self.robot_cmds.n_jnts())
 
-        self.robot_cmds.jnt_cmd.set_v(self._get_cmd_jnt_v_from_sol())
+        self.robot_cmds.jnts_state.get_v(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
+                        dtype=self.array_dtype)
 
-        self.robot_cmds.jnt_cmd.set_eff(self._get_cmd_jnt_eff_from_sol())
-
-        self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
+        self.robot_cmds.jnts_state.get_eff(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
+                        dtype=self.array_dtype)
 
     def get_server_side_jnt_names(self):
 

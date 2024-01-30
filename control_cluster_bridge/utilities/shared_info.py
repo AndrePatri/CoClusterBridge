@@ -2,6 +2,8 @@ from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype, toNumpyDType
+from SharsorIPCpp.PySharsorIPC import Journal
+from SharsorIPCpp.PySharsorIPC import LogType
 
 from typing import Dict, Union, List
 import numpy as np
@@ -161,11 +163,15 @@ class SharedSimInfo:
             names_written = self.shared_sim_datanames.write_vec(self.param_keys, 0)
 
             if not names_written:
+                
+                exception = "Could not write shared sim names on shared memory!"
 
-                raise Exception("Could not write shared sim names on shared memory!")
-            
-            # writing static information to memory
-
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+                            
         else:
             
             self.param_keys = [""] * self.shared_sim_datanames.length()
@@ -174,7 +180,13 @@ class SharedSimInfo:
 
             if not names_read:
 
-                raise Exception("Could not read shared sim names on shared memory!")
+                exception = "Could not read shared sim names on shared memory!"
+
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
             
             self.shared_sim_data.synch_all(read=True, wait=True)
         
@@ -208,12 +220,24 @@ class SharedSimInfo:
             
             if not isinstance(val, list):
 
-                raise Exception("The provided val should be a list of values!")
-            
+                exception = "The provided val should be a list of values!"
+
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+                            
             if len(val) != len(dyn_info_name):
+                
+                exception = "Name list and values length mismatch!"
 
-                raise Exception("Name list and values length mismatch!")
-
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+                
             for i in range(len(val)):
                 
                 idx = self.dynamic_info.get_idx(dyn_info_name[i])
@@ -565,10 +589,14 @@ class ClusterStats:
 
             if not names_written:
 
-                raise Exception("Could not write shared sim names on shared memory!")
-            
-            # writing static information to memory
-            
+                exception = "Could not write shared sim names on shared memory!"
+
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+                                        
         else:
             
             self.param_keys = [""] * self.shared_datanames.length()
@@ -576,8 +604,14 @@ class ClusterStats:
             names_read = self.shared_datanames.read_vec(self.param_keys, 0)
 
             if not names_read:
+                
+                exception = "Could not read shared sim names on shared memory!"
 
-                raise Exception("Could not read shared sim names on shared memory!")
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
             
             self.shared_data.synch_all(read=True, wait=True)
             
@@ -617,12 +651,24 @@ class ClusterStats:
         if isinstance(dyn_info_name, list):
             
             if not isinstance(val, list):
+                
+                exception = "The provided val should be a list of values!"
 
-                raise Exception("The provided val should be a list of values!")
-            
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+                            
             if len(val) != len(dyn_info_name):
 
-                raise Exception("Name list and values length mismatch!")
+                exception = "Name list and values length mismatch!"
+
+                Logger.log(self.__class__.__name__,
+                    name,
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
 
             for i in range(len(val)):
                 

@@ -19,11 +19,11 @@ import torch
 
 from abc import ABC
 
-from control_cluster_bridge.utilities.control_cluster_defs import RobotClusterState, RobotClusterCmd, RobotClusterContactState
+from control_cluster_bridge.utilities.control_cluster_defs import RobotClusterContactState
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlClient
 from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
 
-from control_cluster_bridge.utilities.data import RobotState
+from control_cluster_bridge.utilities.data import RobotState, RhcCmds
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import launch_controllers_flagname
@@ -101,7 +101,7 @@ class ControlClusterClient(ABC):
         self._handshake_thread = None
         
         self.robot_states = None
-        self.controllers_cmds = None
+        self.rhc_cmds = None
 
         self.launch_controllers = None
         self.rhc_task_refs = None
@@ -298,7 +298,7 @@ class ControlClusterClient(ABC):
 
                 # at this point all controllers are done -> we synchronize the control commands on GPU
                 # with the ones written by each controller on CPU
-                self.controllers_cmds.synch()
+                self.rhc_cmds.synch_from_shared_mem()
             
             else:
             
@@ -346,13 +346,13 @@ class ControlClusterClient(ABC):
                 
                 self.robot_states.close()
 
+            if self.rhc_cmds is not None:
+                
+                self.rhc_cmds.close()
+
             if self.launch_controllers is not None:
 
                 self.launch_controllers.terminate()
-
-            if self.controllers_cmds is not None:
-                
-                self.controllers_cmds.terminate()
 
             if self.rhc_task_refs is not None:
 
@@ -408,6 +408,8 @@ class ControlClusterClient(ABC):
 
         self.robot_states.run()
 
+        self.rhc_cmds.run()
+
         if self.contact_states is not None:
 
             self.contact_states.start()
@@ -444,19 +446,27 @@ class ControlClusterClient(ABC):
                                 is_server=True,
                                 n_robots=self.cluster_size,
                                 n_jnts=self.n_dofs,
+                                n_contacts=self.n_contact_sensors,
                                 jnt_names=self.jnt_names,
+                                contact_names=self.contact_linknames,
                                 with_gpu_mirror=True,
                                 force_reconnection=False,
                                 verbose=True,
                                 vlevel=VLevel.V2,
                                 safe=False)
 
-        # self.robot_states = RobotClusterState(n_dofs=self.n_dofs, 
-        #                                     cluster_size=self.cluster_size, 
-        #                                     namespace=self.namespace,
-        #                                     backend=self._backend, 
-        #                                     device=self._device, 
-        #                                     dtype=self.torch_dtype) # from robot to controllers
+        self.rhc_cmds = RhcCmds(namespace=self.namespace,
+                                is_server=True,
+                                n_robots=self.cluster_size,
+                                n_jnts=self.n_dofs,
+                                n_contacts=self.n_contact_sensors,
+                                jnt_names=self.jnt_names,
+                                contact_names=self.contact_linknames,
+                                with_gpu_mirror=True,
+                                force_reconnection=False,
+                                verbose=True,
+                                vlevel=VLevel.V2,
+                                safe=False)
 
         if not self.n_contact_sensors < 0:
             self.contact_states = RobotClusterContactState(cluster_size=self.cluster_size,
@@ -574,18 +584,7 @@ class ControlClusterClient(ABC):
         
         # things to be done when everything is set but before starting to solve
 
-        add_data_length_from_server = self.handshake_manager.add_data_length.tensor_view[0, 0].item()
         n_contacts_from_server = self.handshake_manager.n_contacts.tensor_view[0, 0].item()
-
-        self.controllers_cmds = RobotClusterCmd(n_dofs=self.n_dofs, 
-                                            cluster_size=self.cluster_size,
-                                            namespace=self.namespace,
-                                            add_data_size = add_data_length_from_server, 
-                                            backend=self._backend, 
-                                            device=self._device, 
-                                            dtype=self.torch_dtype) # now that we know add_data_size
-        # we can initialize the control commands
-        self.controllers_cmds.start()
 
         self.rhc_task_refs = RhcClusterTaskRefs(n_contacts=n_contacts_from_server, 
                                     cluster_size=self.cluster_size, 
