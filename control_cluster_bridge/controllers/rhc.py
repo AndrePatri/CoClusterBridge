@@ -261,6 +261,7 @@ class RHController(ABC):
                                 safe=False,
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
+        self.robot_state.run()
         
         self.robot_cmds = RobotCmds(n_dofs=self.n_dofs, 
                                 index=self.controller_index,
