@@ -20,7 +20,8 @@ class SimData(SharedDataView):
         n_dims: int = -1, 
         verbose: bool = False, 
         vlevel: VLevel = VLevel.V0,
-        force_reconnection: bool = False):
+        force_reconnection: bool = False,
+        safe: bool = True):
 
         basename = "SharedSimData" 
 
@@ -33,7 +34,7 @@ class SimData(SharedDataView):
             vlevel = vlevel,
             dtype=sharsor_dtype.Float,
             fill_value=np.nan,
-            safe = True,
+            safe = safe,
             force_reconnection=force_reconnection)
 
 class DynamicSimInfoNames:
@@ -72,7 +73,8 @@ class SharedSimInfo(SharedDataBase):
                            
     def __init__(self, 
                 is_server = False, 
-                sim_params_dict: Dict = None):
+                sim_params_dict: Dict = None,
+                safe: bool = True):
         
         self.namespace = "SharedSimInfo"
 
@@ -100,7 +102,8 @@ class SharedSimInfo(SharedDataBase):
                     is_server = is_server, 
                     n_dims = len(self.param_keys), 
                     verbose = True, 
-                    vlevel = VLevel.V2)
+                    vlevel = VLevel.V2,
+                    safe = safe)
         
         # names
         if self.is_server:

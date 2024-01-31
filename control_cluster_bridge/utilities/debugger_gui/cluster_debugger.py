@@ -28,7 +28,7 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcInternalData
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcProfiling
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCProfiling
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcStatus
 
@@ -176,7 +176,7 @@ class RtClusterDebugger(QMainWindow):
                         parent=None, 
                         verbose=self.verbose)
         
-        cluster_info = RhcProfiling(name="RhcProfiling",
+        cluster_info = RHCProfiling(name="RhcProfiling",
                         update_data_dt=self.data_update_dt, 
                         update_plot_dt=self.plot_update_dt,
                         window_duration=self.window_length, 

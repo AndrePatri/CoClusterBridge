@@ -767,7 +767,8 @@ class SimInfo(SharedDataWindow):
         
         is_server = False
         
-        self.shared_data_clients.append(SharedSimInfo(is_server=is_server))
+        self.shared_data_clients.append(SharedSimInfo(is_server=is_server,
+                                            safe=False))
         
         self.shared_data_clients[0].run()
 
@@ -827,7 +828,7 @@ class SimInfo(SharedDataWindow):
             # updates rt plot
             self.rt_plotters[0].rt_plot_widget.update(data)
 
-class RhcProfiling(SharedDataWindow):
+class RHCProfiling(SharedDataWindow):
 
     def __init__(self, 
         name: str,
