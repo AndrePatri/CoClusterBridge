@@ -26,12 +26,12 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcInternalData
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import ClusterInfo
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcProfiling
 
 from typing import List
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
 
-from control_cluster_bridge.utilities.shared_info import SharedSimInfo
+from control_cluster_bridge.utilities.shared_data.sim_data import SharedSimInfo
 
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr
@@ -178,7 +178,7 @@ class RtClusterDebugger(QMainWindow):
                         parent=None, 
                         verbose=self.verbose)
         
-        cluster_info = ClusterInfo(name="ClusterInfo",
+        cluster_info = RhcProfiling(name="RhcProfiling",
                         update_data_dt=self.data_update_dt, 
                         update_plot_dt=self.plot_update_dt,
                         window_duration=self.window_length, 

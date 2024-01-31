@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 
 import time 
 
-from control_cluster_bridge.utilities.rhc_defs import RobotCmds, ContactState
+from control_cluster_bridge.utilities.rhc_defs import ContactState
 # from control_cluster_bridge.utilities.rhc_defs import RobotState
 
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
@@ -32,7 +32,7 @@ from control_cluster_bridge.utilities.homing import RobotHomer
 from control_cluster_bridge.utilities.data import RHCStatus
 from control_cluster_bridge.utilities.data import RHCInternal
 
-from control_cluster_bridge.utilities.shared_info import ClusterStats
+from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
@@ -93,9 +93,8 @@ class RHController(ABC):
         
         # shared mem
         self.robot_state = None 
-        self.contact_state = None 
 
-        self.controller_status = None
+        self.rhc_status = None
         self.rhc_internal = None
         self.cluster_stats = None
 
@@ -147,13 +146,14 @@ class RHController(ABC):
             
             self.robot_state.close()
         
-        if self.contact_state is not None:
-
-            self.contact_state.terminate()
-        
-        if self.controller_status is not None:
-
-            self.controller_status.close()
+        if self.rhc_status is not None:
+            
+            # signal controller deactivation over shared mem
+            self.rhc_status.activation_state.write_wait(False, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+            
+            self.rhc_status.close()
         
         if self.rhc_internal is not None:
 
@@ -167,12 +167,18 @@ class RHController(ABC):
 
         self._init_problem() # we call the child's initialization method
 
-        self.controller_status = RHCStatus(is_server=False,
+        self.rhc_status = RHCStatus(is_server=False,
                                     namespace=self.namespace, 
                                     verbose=True, 
                                     vlevel=VLevel.V2)
 
-        self.controller_status.run()
+        self.rhc_status.run()
+        self.rhc_status.resets.read_wait(row_index=self.controller_index,
+                                            col_index=0)
+        
+        self.rhc_status.activation_state.write_wait(True, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
         
         if self._debug_sol:
             
@@ -213,7 +219,7 @@ class RHController(ABC):
 
             # statistical data
 
-            self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
+            self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
                                         is_server=False, 
                                         name=self.namespace,
                                         verbose=self._verbose,
@@ -248,6 +254,7 @@ class RHController(ABC):
         self.cluster_stats.task_ref_update_dt.write_wait(self._profiling_data_dict["task_ref_update"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
+        
     def init_rhc_task_cmds(self):
         
         self.rhc_task_refs = self._init_rhc_task_cmds()
@@ -274,12 +281,7 @@ class RHController(ABC):
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
         self.robot_cmds.run()
-        
-        self.contact_state = ContactState(index=self.controller_index,
-                                    dtype=self.array_dtype,
-                                    namespace=self.namespace, 
-                                    verbose=self._verbose) 
-        
+                
         self._states_initialized = True
     
     def set_cmds_to_homing(self):
@@ -333,19 +335,19 @@ class RHController(ABC):
             try:
                 
                 # checks for reset requests
-                if self.controller_status.resets.read_wait(row_index=self.controller_index,
+                if self.rhc_status.resets.read_wait(row_index=self.controller_index,
                                             col_index=0)[0]:
 
                     self.reset()
 
                     self.fail_n = 0 # resets number of fails
 
-                    self.controller_status.resets.write_wait(False, 
+                    self.rhc_status.resets.write_wait(False, 
                                                     row_index=self.controller_index,
                                                     col_index=0)
 
                 # checks for trigger requests
-                if self.controller_status.trigger.read_wait(row_index=self.controller_index,
+                if self.rhc_status.trigger.read_wait(row_index=self.controller_index,
                                                     col_index=0)[0]:
                     
                     if self._debug:
@@ -373,7 +375,7 @@ class RHController(ABC):
 
                     # we signal the client this controller has finished its job by
                     # resetting the flag
-                    self.controller_status.trigger.write_wait(False, 
+                    self.rhc_status.trigger.write_wait(False, 
                                                     row_index=self.controller_index,
                                                     col_index=0)
 
@@ -408,7 +410,7 @@ class RHController(ABC):
 
         # self.reset() # resets controller (this has to be defined by the user)
 
-        self.controller_status.fails.write_wait(True, 
+        self.rhc_status.fails.write_wait(True, 
                                         row_index=self.controller_index,
                                         col_index=0)
         

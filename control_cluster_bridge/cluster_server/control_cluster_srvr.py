@@ -20,11 +20,12 @@ from abc import ABC
 from control_cluster_bridge.controllers.rhc import RHChild
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
 
-from control_cluster_bridge.utilities.cpu_utils import get_isolated_cores
+from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
 
 from control_cluster_bridge.utilities.defs import jnt_names_rhc_name
 from control_cluster_bridge.utilities.shared_mem import SharedStringArray
-from control_cluster_bridge.utilities.shared_info import ClusterStats
+
+from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import VLevel
@@ -354,7 +355,7 @@ class ControlClusterSrvr(ABC):
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
 
-        self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
+        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
                                         is_server=True, 
                                         name=self.namespace,
                                         param_dict=cluster_info_dict,

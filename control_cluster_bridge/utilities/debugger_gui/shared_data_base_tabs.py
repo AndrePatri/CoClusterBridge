@@ -3,20 +3,18 @@ from PyQt5.QtWidgets import QWidget
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, RobotCmds, ContactState
-from control_cluster_bridge.utilities.data import RobotState, RhcCmds
-from control_cluster_bridge.utilities.data import RHCInternal
-from control_cluster_bridge.utilities.data import RHCStatus
-from control_cluster_bridge.utilities.shared_info import SharedSimInfo
-from control_cluster_bridge.utilities.shared_info import ClusterStats
+from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, ContactState
+from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds
+from control_cluster_bridge.utilities.shared_data.rhc_data import RHCInternal
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
+from control_cluster_bridge.utilities.shared_data.sim_data import SharedSimInfo
+from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from SharsorIPCpp.PySharsorIPC import VLevel
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedStringArray
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient
 
 import torch
 
-from control_cluster_bridge.utilities.defs import jnt_names_client_name
-from control_cluster_bridge.utilities.defs import additional_data_name
 from control_cluster_bridge.utilities.defs import n_contacts_name
 
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
@@ -568,7 +566,7 @@ class RhcInternalData(SharedDataWindow):
         
         is_server = False
         
-        self.rhc_status_info = RHCStatus(is_server=is_server,
+        self.rhc_status_info = RhcStatus(is_server=is_server,
                             namespace=self.namespace, 
                             verbose=self.verbose,
                             vlevel=VLevel.V1)
@@ -829,7 +827,7 @@ class SimInfo(SharedDataWindow):
             # updates rt plot
             self.rt_plotters[0].rt_plot_widget.update(data)
 
-class ClusterInfo(SharedDataWindow):
+class RhcProfiling(SharedDataWindow):
 
     def __init__(self, 
         name: str,
@@ -862,7 +860,7 @@ class ClusterInfo(SharedDataWindow):
         
         is_server = False
         
-        self.shared_data_clients.append(ClusterStats(is_server=is_server,
+        self.shared_data_clients.append(RhcProfiling(is_server=is_server,
                                             name=self.namespace, 
                                             verbose=True, 
                                             vlevel=VLevel.V2,

@@ -178,7 +178,7 @@ SharedDataWindowChild = TypeVar('SharedDataWindowChild', bound='SharedDataWindow
 
 # Example of extension
 
-from control_cluster_bridge.utilities.data import JntImpCntrlData
+from control_cluster_bridge.utilities.shared_data.jnt_imp_control import JntImpCntrlData
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 

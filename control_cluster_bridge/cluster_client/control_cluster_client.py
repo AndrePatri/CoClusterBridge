@@ -19,19 +19,14 @@ import torch
 
 from abc import ABC
 
-from control_cluster_bridge.utilities.control_cluster_defs import RobotClusterContactState
 from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlClient
 from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
 
-from control_cluster_bridge.utilities.data import RobotState, RhcCmds
-
-from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
-from control_cluster_bridge.utilities.defs import launch_controllers_flagname
-
-# from control_cluster_bridge.utilities.shared_cluster_info import SharedClusterInfo
-
-from control_cluster_bridge.utilities.data import RHCStatus
-from control_cluster_bridge.utilities.shared_info import ClusterStats
+from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState 
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
+from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
+from control_cluster_bridge.utilities.shared_data.handshaking import HandShaker
 
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
 
@@ -102,25 +97,26 @@ class ControlClusterClient(ABC):
         # shared mem objects
         self.handshake_manager = None
         self._handshake_thread = None
+
+        self._handshaker = None
+        self._handshake_thread2 = None
         
         self.robot_states = None
         self.rhc_cmds = None
 
-        self.launch_controllers = None
         self.rhc_task_refs = None
-        self.contact_states = None
         # self.shared_cluster_info = None
 
-        self.controller_status = None
-
+        self.rhc_status = None
         self.cluster_stats = None 
         
         # flags
         self._was_cluster_ready = False
         self.is_cluster_ready = False
         self._is_first_control_step = False
-        self.controllers_active = False
-        self.controllers_were_active = False
+
+        self.controllers_were_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
+
         # other data
         self.add_data_length = 0
         self.n_contact_sensors = n_contact_sensors
@@ -158,54 +154,52 @@ class ControlClusterClient(ABC):
 
         return self._is_first_control_step
     
+    def _sporadic_log(self,
+                calling_methd: str,
+                msg: str,
+                logtype: LogType = LogType.INFO):
+
+        if self._verbose and \
+            (self.trigger_counter+1) % self.n_steps_prints == 0: 
+            
+            Journal.log(self.__class__.__name__,
+                calling_methd,
+                msg,
+                logtype,
+                throw_when_excep = True)
+                
     def trigger_solution(self):
 
         # performs checks and triggers cluster solution
 
         handshake_done = self.handshake_manager.handshake_done
 
-        self.controllers_active = self.launch_controllers.all()
-
-        n_clients = self.controller_status.trigger.get_n_clients()
+        n_clients = self.rhc_status.activation_state.get_n_clients()
 
         if not handshake_done or \
             (n_clients == 0):
             
-            if self._verbose and \
-                    (self.trigger_counter+1) % self.n_steps_prints == 0: 
-                
-                Journal.log(self.__class__.__name__,
-                    "trigger_solution",
-                    "Waiting connection to ControlCluster server",
-                    LogType.INFO,
-                    throw_when_excep = False)
+            self._sporadic_log(calling_methd="trigger_solution",
+                        msg = "waiting connection to ControlCluster server")
 
         if n_clients < self.cluster_size and \
                 n_clients > 0 and \
                 (self.trigger_counter+1) % self.n_steps_prints == 0:
-            
-            if self._verbose: 
-                
-                msg = f"Not all clients are connected yet ({n_clients}/{self.cluster_size})."
+                                            
+            self._sporadic_log(calling_methd="trigger_solution",
+                    msg = f"Not all clients are connected yet ({n_clients}/{self.cluster_size}).",
+                    logtype=LogType.WARN)
 
-                Journal.log(self.__class__.__name__,
-                    "trigger_solution",
-                    msg,
-                    LogType.WARN,
-                    throw_when_excep = False)
-
-        if self.controller_status.trigger.get_n_clients() > self.cluster_size:
+        if self.rhc_status.activation_state.get_n_clients() > self.cluster_size:
             
             msg = f"More than {self.cluster_size} clients registered " + \
-                "(total of {self.controller_status.trigger.get_n_clients()})." + \
+                f"(total of {self.rhc_status.activation_state.get_n_clients()})." + \
                 ". It's very likely a memory leak on the shared memory layer occurred." + \
                 " You might need to reboot the system to clean the dangling memory."
 
-            Journal.log(self.__class__.__name__,
-                "trigger_solution",
-                msg,
-                LogType.EXCEP,
-                throw_when_excep = True)
+            self._sporadic_log(calling_methd="trigger_solution",
+                        msg = msg,
+                        logtype=LogType.EXCEP)
             
         if self._is_first_control_step:
                 
@@ -254,61 +248,48 @@ class ControlClusterClient(ABC):
                 # only write to shared mem (gpu mirror is not used)
                 self.robot_states.synch_to_shared_mem()
 
-        if self.contact_states is not None:
-            
-            # updates shared tensor on CPU with latest contact data from the simulator
-            # (possibly on GPU)
-            self.contact_states.synch() 
-
         if self.is_cluster_ready:
+                            
+            self._trigger_solution() # actually triggers solution of all controllers in the cluster 
+            # which are active using the latest available state
             
-            if self.controllers_active:
+            if not self.rhc_status.activation_state.torch_view.all():
                 
-                self._trigger_solution() # actually triggers solution of all controllers in the cluster 
-                # using latest state
-            
-            else:
-            
-                if self._verbose and \
-                    (self.trigger_counter+1) % self.n_steps_prints == 0: 
-
-                    Journal.log(self.__class__.__name__,
-                    "trigger_solution",
-                    "Controllers waiting to be activated...",
-                    LogType.INFO,
-                    throw_when_excep = False)
+                msg = f"Controllers waiting to be activated... (" + \
+                    f"{self.rhc_status.activation_state.torch_view.sum().item()}/{self.cluster_size})"
+                
+                self._sporadic_log(calling_methd="trigger_solution",
+                            msg = msg,
+                            logtype=LogType.INFO)
 
         self.trigger_counter +=1
 
     def _on_failure(self):
 
         # checks failure status
-        self.controller_status.fails.synch_all(read=True, 
+        self.rhc_status.fails.synch_all(read=True, 
                                     wait=True)
         
         # writes failures to reset flags
-        self.controller_status.resets.write_wait(self.controller_status.fails.torch_view,
+        self.rhc_status.resets.write_wait(self.rhc_status.fails.torch_view,
                                     0, 0)
     
     def wait_for_solution(self):
 
-        # will only return True after the solution signal from the cluster is received
-        # or, if the cluster is inactive, will simply return False
-
         if self.is_cluster_ready:
             
-            if self.controllers_active:
+            # we wait for all controllers to finish      
+            done = self._wait_for_solution() # this is blocking if at least a controller
+            # is active
+            
+            # we handle controller fails, if any
+            self._on_failure()
 
-                # we wait for all controllers to finish      
-                self._wait_for_solution() # this is blocking (but no busy wait)
-                
-                # at this point we are sure solutions and controllers status are updated
+            # at this point all controllers are done -> we synchronize the control commands on GPU
+            # with the ones written by each controller on CPU
 
-                # we handle controller fails
-                self._on_failure()
+            if done:
 
-                # at this point all controllers are done -> we synchronize the control commands on GPU
-                # with the ones written by each controller on CPU
                 if self.using_gpu:
                     
                     # first reads cmds from shared memory and then synchs gpu mirror with the read data
@@ -319,18 +300,7 @@ class ControlClusterClient(ABC):
                     # only read cmds from shared mem
                     self.rhc_cmds.synch_from_shared_mem()
 
-            else:
-            
-                if self._verbose and \
-                    (self.wait_for_sol_counter+1) % self.n_steps_prints == 0: 
-
-                    Journal.log(self.__class__.__name__,
-                    "wait_for_solution",
-                    "Controllers waiting to be activated...",
-                    LogType.INFO,
-                    throw_when_excep = False)
-
-            self.solution_counter += 1
+                self.solution_counter += 1
 
         if self._debug and self.is_cluster_ready:
             
@@ -342,16 +312,16 @@ class ControlClusterClient(ABC):
             # self.shared_cluster_info.update(solve_time=self.solution_time, 
             #                             controllers_up = self.controllers_active) # we update the shared info
 
-            self.cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
-                                        "cluster_rt_factor",
-                                        "cluster_ready",
-                                        "cluster_state_update_dt"],
-                        val=[self.solution_time,
-                            self.cluster_dt/self.solution_time,
-                            self.cluster_ready(),
-                            np.nan])
+            # self.cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
+            #                             "cluster_rt_factor",
+            #                             "cluster_ready",
+            #                             "cluster_state_update_dt"],
+            #             val=[self.solution_time,
+            #                 self.cluster_dt/self.solution_time,
+            #                 self.cluster_ready(),
+            #                 np.nan])
     
-        self.controllers_were_active = self.controllers_active
+        self.controllers_were_active[:, :] = self.rhc_status.activation_state.torch_view
 
         self.wait_for_sol_counter +=1
 
@@ -369,21 +339,13 @@ class ControlClusterClient(ABC):
                 
                 self.rhc_cmds.close()
 
-            if self.launch_controllers is not None:
-
-                self.launch_controllers.terminate()
-
             if self.rhc_task_refs is not None:
 
                 self.rhc_task_refs.terminate()
 
-            if self.contact_states is not None:
+            if self.rhc_status is not None:
 
-                self.contact_states.terminate()
-
-            if self.controller_status is not None:
-
-                self.controller_status.close()
+                self.rhc_status.close()
             
             if self.cluster_stats is not None:
 
@@ -400,6 +362,14 @@ class ControlClusterClient(ABC):
         if self._handshake_thread is not None:
                 
             self._close_thread(self._handshake_thread) # we first wait for thread to exit, if still alive
+        
+        if self._handshaker is not None:
+
+            self._handshaker.close()
+
+        if self._handshake_thread2 is not None:
+
+            self._close_thread(self._handshake_thread2)
 
     def _close_thread(self, 
                     thread):
@@ -429,16 +399,9 @@ class ControlClusterClient(ABC):
 
         self.rhc_cmds.run()
 
-        if self.contact_states is not None:
-
-            self.contact_states.start()
-
-        self.launch_controllers.start()
-        self.launch_controllers.reset_bool(False)
-
         # self.shared_cluster_info.start()
 
-        self.controller_status.run()
+        self.rhc_status.run()
 
         self._spawn_handshake() # we launch all the child processes
 
@@ -447,11 +410,17 @@ class ControlClusterClient(ABC):
         # we spawn the heartbeat() to another process, 
         # so that it's not blocking wrt the simulator
 
-        self._handshake_thread =  threading.Thread(target=self.handshake_manager.start, 
+        self._handshake_thread = threading.Thread(target=self.handshake_manager.start, 
                                 args=(self.cluster_size, self.jnt_names, ), 
                                 kwargs={})
         
         self._handshake_thread.start()
+
+        self._handshake_thread2 = threading.Thread(target=self._handshaker.run, 
+                                args=(), 
+                                kwargs={})
+        
+        self._handshake_thread2.start()
 
         Journal.log(self.__class__.__name__,
                     "_spawn_handshake",
@@ -460,7 +429,7 @@ class ControlClusterClient(ABC):
                     throw_when_excep = False)
 
     def _init_shared_mem(self):
-        
+                
         self.robot_states = RobotState(namespace=self.namespace,
                                 is_server=True,
                                 n_robots=self.cluster_size,
@@ -486,16 +455,6 @@ class ControlClusterClient(ABC):
                                 verbose=True,
                                 vlevel=VLevel.V2,
                                 safe=False)
-
-        if not self.n_contact_sensors < 0:
-            self.contact_states = RobotClusterContactState(cluster_size=self.cluster_size,
-                                        n_contacts=self.n_contact_sensors, 
-                                        contact_names=self.contact_linknames, 
-                                        namespace=self.namespace,
-                                        backend=self._backend, 
-                                        device=self._device, 
-                                        dtype=self.torch_dtype, 
-                                        verbose=self._verbose)
                                             
         self.handshake_manager = HanshakeDataCntrlClient(n_jnts=self.n_dofs, 
                                                     namespace=self.namespace) # handles handshake process
@@ -503,38 +462,39 @@ class ControlClusterClient(ABC):
 
         dtype = torch.bool # using a boolean type shared data, 
         # exposes low-latency boolean writing and reading methods
-        
-        self.launch_controllers = SharedMemSrvr(n_rows=1, 
-                                    n_cols=1, 
-                                    name=launch_controllers_flagname(), 
-                                    namespace=self.namespace,
-                                    dtype=dtype) 
 
-        self.controller_status = RHCStatus(is_server=True,
-                                        cluster_size=self.cluster_size,
-                                        namespace=self.namespace, 
-                                        verbose=self._verbose, 
-                                        vlevel=VLevel.V2,
-                                        force_reconnection=False)
+        self.rhc_status = RhcStatus(is_server=True,
+                            cluster_size=self.cluster_size,
+                            namespace=self.namespace, 
+                            verbose=self._verbose, 
+                            vlevel=VLevel.V2,
+                            force_reconnection=False)
         
-        
-        self.cluster_stats = ClusterStats(cluster_size=self.cluster_size,
+        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
                                     is_server=False, 
                                     name=self.namespace,
                                     verbose=self._verbose,
                                     vlevel=VLevel.V2, 
                                     safe=True,
                                     force_reconnection=False)
+        
+        # giving to handshaker all things which need to run in background
+        self._handshaker = HandShaker([self.cluster_stats])
 
     def _trigger_solution(self):
         
-        # fills view to trigger controllers
-        self.controller_status.trigger.fill_with(True)
-
-        # writes whole internal view to shared memory
-        self.controller_status.trigger.synch_all(read=False, 
-                                        wait=True) # wait for synch to succeed
-            
+        # # triggers all controllers
+        # self.rhc_status.trigger.fill_with(True)
+        # # writes whole internal view to shared memory
+        # self.rhc_status.trigger.synch_all(read=False, 
+        #                                 wait=True) # wait for synch to succeed
+        
+        # only trigger active controllers
+        self.rhc_status.activation_state.synch_all(read=True, 
+                                        wait=True)
+        self.rhc_status.trigger.write_wait(self.rhc_status.activation_state.torch_view,
+                                    0, 0)
+        
     def _wait_for_solution(self):
 
         solved = False
@@ -542,28 +502,34 @@ class ControlClusterClient(ABC):
         while not solved: 
             
             # fills views reading from shared memory
-            self.controller_status.trigger.synch_all(read=True, 
+            self.rhc_status.activation_state.synch_all(read=True, 
+                                        wait=True)
+            self.rhc_status.trigger.synch_all(read=True, 
                                         wait=True) # wait for synch to succeed
             
-            solved = (~self.controller_status.trigger.torch_view).all()
+            # only wait solution from active controllers
+            solved_and_active = ~(self.rhc_status.trigger.torch_view[self.rhc_status.activation_state.torch_view])
 
             if (not self._terminate) and \
-                (self.controller_status.trigger.get_n_clients() == self.cluster_size):
+                (solved_and_active.shape[0] == 1 
+                ):
                 
+                solved = (solved_and_active).all()
+
                 self.perf_timer.clock_sleep(1000) # nanoseconds (but this
                 # accuracy cannot be reached on a non-rt system)
                 # on a modern laptop, this sleeps for about 5e-5s, but it does
                 # so in a CPU-cheap manner
 
                 continue
-            
+
             else:
-                
-                solved = False
+
+                # if no controller is active or the cluster is terminated we exit 
 
                 break
         
-        return
+        return solved
                 
     def _compute_n_control_actions(self):
 
@@ -615,12 +581,12 @@ class ControlClusterClient(ABC):
 
         # also start cluster debug data client
 
-        self.cluster_stats.run()
+        # self.cluster_stats.run()
         
-        self.cluster_stats.write_info(dyn_info_name=[
-                                        "cluster_nominal_dt"],
-                        val=[self.cluster_dt,
-                            ])
+        # self.cluster_stats.write_info(dyn_info_name=[
+        #                                 "cluster_nominal_dt"],
+        #                 val=[self.cluster_dt,
+        #                     ])
         
         Journal.log(self.__class__.__name__,
                 "_compute_n_control_actions",
