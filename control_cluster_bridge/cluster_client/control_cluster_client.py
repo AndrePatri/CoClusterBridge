@@ -19,7 +19,6 @@ import torch
 
 from abc import ABC
 
-from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlClient
 from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState 
@@ -95,9 +94,6 @@ class ControlClusterClient(ABC):
             self.using_gpu = True
 
         # shared mem objects
-        self.handshake_manager = None
-        self._handshake_thread = None
-
         self._handshaker = None
         self._handshake_thread2 = None
         
@@ -172,12 +168,9 @@ class ControlClusterClient(ABC):
 
         # performs checks and triggers cluster solution
 
-        handshake_done = self.handshake_manager.handshake_done
-
         n_clients = self.rhc_status.activation_state.get_n_clients()
 
-        if not handshake_done or \
-            (n_clients == 0):
+        if n_clients == 0:
             
             self._sporadic_log(calling_methd="trigger_solution",
                         msg = "waiting connection to ControlCluster server")
@@ -205,7 +198,7 @@ class ControlClusterClient(ABC):
                 
             self._is_first_control_step = False
                 
-        if (not self._was_cluster_ready) and handshake_done:
+        if (not self._was_cluster_ready):
             
             # first time the cluster is ready 
 
@@ -351,17 +344,9 @@ class ControlClusterClient(ABC):
 
                 self.cluster_stats.close()
 
-        self._close_handshake()
+        # self._close_handshake()
 
     def _close_handshake(self):
-
-        if self.handshake_manager is not None:
-                
-                self.handshake_manager.terminate() # will close/detach all shared memory 
-                
-        if self._handshake_thread is not None:
-                
-            self._close_thread(self._handshake_thread) # we first wait for thread to exit, if still alive
         
         if self._handshaker is not None:
 
@@ -403,18 +388,12 @@ class ControlClusterClient(ABC):
 
         self.rhc_status.run()
 
-        self._spawn_handshake() # we launch all the child processes
+        # self._spawn_handshake() # we launch all the child processes
 
     def _spawn_handshake(self):
         
         # we spawn the heartbeat() to another process, 
         # so that it's not blocking wrt the simulator
-
-        self._handshake_thread = threading.Thread(target=self.handshake_manager.start, 
-                                args=(self.cluster_size, self.jnt_names, ), 
-                                kwargs={})
-        
-        self._handshake_thread.start()
 
         self._handshake_thread2 = threading.Thread(target=self._handshaker.run, 
                                 args=(), 
@@ -456,8 +435,6 @@ class ControlClusterClient(ABC):
                                 vlevel=VLevel.V2,
                                 safe=False)
                                             
-        self.handshake_manager = HanshakeDataCntrlClient(n_jnts=self.n_dofs, 
-                                                    namespace=self.namespace) # handles handshake process
         # between client and server
 
         dtype = torch.bool # using a boolean type shared data, 
@@ -569,9 +546,7 @@ class ControlClusterClient(ABC):
         
         # things to be done when everything is set but before starting to solve
 
-        n_contacts_from_server = self.handshake_manager.n_contacts.tensor_view[0, 0].item()
-
-        self.rhc_task_refs = RhcClusterTaskRefs(n_contacts=n_contacts_from_server, 
+        self.rhc_task_refs = RhcClusterTaskRefs(n_contacts=4, 
                                     cluster_size=self.cluster_size, 
                                     namespace=self.namespace,
                                     device=self._device, 
