@@ -19,20 +19,14 @@ from abc import ABC, abstractmethod
 
 import time 
 
-from control_cluster_bridge.utilities.rhc_defs import ContactState
-# from control_cluster_bridge.utilities.rhc_defs import RobotState
-
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefsChild
-
-from control_cluster_bridge.utilities.data import RobotState, RhcCmds
+from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
+from control_cluster_bridge.utilities.shared_data.rhc_data import RHCInternal
+from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
-
-from control_cluster_bridge.utilities.data import RHCStatus
-from control_cluster_bridge.utilities.data import RHCInternal
-
-from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
@@ -99,18 +93,17 @@ class RHController(ABC):
         self.cluster_stats = None
 
         self.robot_cmds = None
-        self.rhc_task_refs:RhcTaskRefsChild = None
+        self.rhc_task_refs = None
 
         # jnt names
-        self._client_side_jnt_names = []
-        self._server_side_jnt_names = []
-        self._got_jnt_names_client = False
-        self._got_jnt_names_server = False
+        self._env_side_jnt_names = []
+        self._controller_side_jnt_names = []
+
+        self._got_jnt_names_from_controllers = False
 
         # data maps
-        self._to_server = []
-        self._to_client = []
-        self._quat_remap = [1, 2, 3, 0] # mapping from robot quat. to Horizon's quaternion convention
+        self._to_controller = []
+        self._quat_remap = [0, 1, 2, 3] # defaults to no remap (to be overridden)
         self._jnt_maps_created = False
         
         self._states_initialized = False
@@ -167,7 +160,7 @@ class RHController(ABC):
 
         self._init_problem() # we call the child's initialization method
 
-        self.rhc_status = RHCStatus(is_server=False,
+        self.rhc_status = RhcStatus(is_server=False,
                                     namespace=self.namespace, 
                                     verbose=True, 
                                     vlevel=VLevel.V2)
@@ -229,7 +222,7 @@ class RHController(ABC):
             self.cluster_stats.run()
             
         self._homer = RobotHomer(self.srdf_path, 
-                            self._server_side_jnt_names)
+                            self._controller_side_jnt_names)
     
     def _update_profiling_data(self):
 
@@ -264,7 +257,6 @@ class RHController(ABC):
         # to be called after n_dofs is known
         self.robot_state = RobotState(namespace=self.namespace,
                                 is_server=False,
-                                jnts_remapping=self._to_server, # remapping from environment to controller
                                 q_remapping=self._quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
                                 safe=False,
@@ -274,7 +266,6 @@ class RHController(ABC):
         
         self.robot_cmds = RhcCmds(namespace=self.namespace,
                                 is_server=False,
-                                jnts_remapping=self._to_server, # remapping from environment to controller
                                 q_remapping=self._quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
                                 safe=False,
@@ -422,20 +413,16 @@ class RHController(ABC):
 
         self.n_resets += 1
 
-    def assign_client_side_jnt_names(self, 
-                        jnt_names: List[str]):
-
-        self._client_side_jnt_names = jnt_names
-        
-        self._got_jnt_names_client = True
-
     def create_jnt_maps(self):
+        
+        # retrieve env-side joint names from shared mem
+        self._env_side_jnt_names = self.robot_state.jnt_names()
 
         self._check_jnt_names_compatibility() # will raise exception
 
-        if not self._got_jnt_names_client:
+        if not self._got_jnt_names_from_controllers:
             
-            exception = f"Cannot run the solve(). assign_client_side_jnt_names() was not called!"
+            exception = f"Cannot run the solve(). assign_env_side_jnt_names() was not called!"
 
             Journal.log(self.__class__.__name__,
                     "create_jnt_maps",
@@ -443,20 +430,12 @@ class RHController(ABC):
                     LogType.EXCEP,
                     throw_when_excep = True)
         
-        if not self._got_jnt_names_server:
-
-            exception =f"Cannot run the solve().  _assign_server_side_jnt_names() was not called!"
-
-            Journal.log(self.__class__.__name__,
-                    "create_jnt_maps",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+        self._to_controller = [self._env_side_jnt_names.index(element) for element in self._controller_side_jnt_names]
         
-        self._to_server = [self._client_side_jnt_names.index(element) for element in self._server_side_jnt_names]
+        # set remappings for shared data
+        self.robot_state.set_jnts_remapping(jnts_remapping=self._to_controller)
+        self.robot_cmds.set_jnts_remapping(jnts_remapping=self._to_controller)
 
-        self._to_client = [self._server_side_jnt_names.index(element) for element in self._client_side_jnt_names]
-        
         self._jnt_maps_created = True
 
     def _fill_cmds_from_sol(self):
@@ -472,21 +451,17 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.get_eff(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
                         dtype=self.array_dtype)
 
-    def get_server_side_jnt_names(self):
-
-        return self._server_side_jnt_names
-        
-    def _assign_server_side_jnt_names(self, 
+    def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):
 
-        self._server_side_jnt_names = jnt_names
+        self._controller_side_jnt_names = jnt_names
 
-        self._got_jnt_names_server = True
+        self._got_jnt_names_from_controllers = True
 
     def _check_jnt_names_compatibility(self):
 
-        set_srvr = set(self._server_side_jnt_names)
-        set_client  = set(self._client_side_jnt_names)
+        set_srvr = set(self._controller_side_jnt_names)
+        set_client  = set(self._env_side_jnt_names)
 
         if not set_srvr == set_client:
 
@@ -614,7 +589,7 @@ class RHController(ABC):
         pass
 
     @abstractmethod
-    def _init_rhc_task_cmds(self) -> RhcTaskRefsChild:
+    def _init_rhc_task_cmds(self):
 
         pass
 

@@ -18,14 +18,12 @@
 from abc import ABC
 
 from control_cluster_bridge.controllers.rhc import RHChild
-from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
+# from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
 
 from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
 
-from control_cluster_bridge.utilities.defs import jnt_names_rhc_name
-from control_cluster_bridge.utilities.shared_mem import SharedStringArray
-
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
+from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import VLevel
@@ -44,8 +42,9 @@ ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterSrvr')
 class ControlClusterSrvr(ABC):
 
     def __init__(self, 
-            namespace: str = "",
-            processes_basename: str = "controller", 
+            namespace: str,
+            cluster_size: int,
+            processes_basename: str = "Controller", 
             isolated_cores_only: bool = False,
             use_only_physical_cores: bool = False,
             core_ids_override_list: List[int] = None,
@@ -69,18 +68,16 @@ class ControlClusterSrvr(ABC):
 
         self.processes_basename = processes_basename
 
-        self.cluster_size = -1
+        self.cluster_size = cluster_size
 
         self._device = "cpu"
 
         self._controllers: List[RHChild] = [] # list of controllers (must inherit from
         # RHController)
 
-        self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
-                                        namespace=self.namespace)
-        self.handshake_srvr.handshake()
-        self.cluster_size = self.handshake_srvr.cluster_size.tensor_view[0, 0].item()
-
+        # self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
+        #                                 namespace=self.namespace)
+        # self.handshake_srvr.handshake()
         self._processes: List[mp.Process] = [] 
 
         self._is_cluster_ready = False
@@ -365,6 +362,8 @@ class ControlClusterSrvr(ABC):
         
         self.cluster_stats.run()
 
+
+
         self.pre_init_done = True
 
         Journal.log(self.__class__.__name__,
@@ -383,29 +382,17 @@ class ControlClusterSrvr(ABC):
                         LogType.STAT,
                         throw_when_excep = True)
         
-        self.handshake_srvr.finalize_init(add_data_length=self._controllers[0].add_data_lenght, 
-                                    n_contacts=self._controllers[0].n_contacts)
-        
         for i in range(0, self.cluster_size):
 
             # we assign the client-side joint names to each controller (used for mapping purposes)
-            self._controllers[i].assign_client_side_jnt_names(self.handshake_srvr.jnt_names_client.read())
-
-            self._controllers[i].create_jnt_maps()
 
             self._controllers[i].init_states() # initializes states
+
+            self._controllers[i].create_jnt_maps()
 
             self._controllers[i].set_cmds_to_homing() # safe cmds
 
             self._controllers[i].init_rhc_task_cmds() # initializes rhc commands
-
-        # publishing joint names on shared memory for external use
-        self.jnt_names_rhc = SharedStringArray(length=len(self._controllers[0].get_server_side_jnt_names()), 
-                                name=jnt_names_rhc_name(), 
-                                namespace=self.namespace,
-                                is_server=True)
-
-        self.jnt_names_rhc.start(init = self._controllers[0].get_server_side_jnt_names())
         
         Journal.log(self.__class__.__name__,
                         "_finalize_init",

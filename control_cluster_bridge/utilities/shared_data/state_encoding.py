@@ -23,7 +23,6 @@ class JntsState(SharedDataView):
             n_robots: int = None, 
             n_jnts: int = None,
             jnt_names: List[str] = None,
-            jnts_remapping: List[int] = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             fill_value: float = 0.0,
@@ -44,9 +43,7 @@ class JntsState(SharedDataView):
         self.jnt_names = jnt_names
 
         self._jnts_remapping = None
-        if jnts_remapping is not None:
-            self._jnts_remapping = torch.tensor(jnts_remapping)
-
+        
         if is_server:
 
             self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
@@ -87,7 +84,8 @@ class JntsState(SharedDataView):
         self._a_gpu = None
         self._eff_gpu = None
     
-    def run(self):
+    def run(self,
+            jnts_remapping: List[int] = None):
         
         # overriding parent 
 
@@ -150,7 +148,27 @@ class JntsState(SharedDataView):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-                            
+        
+        self.set_jnts_remapping(jnts_remapping=jnts_remapping)
+
+    def set_jnts_remapping(self, 
+                jnts_remapping: List[int] = None):
+        
+        if jnts_remapping is not None:
+
+            if not len(jnts_remapping) == self.n_jnts:
+
+                exception = f"Provided jnt remapping length {len(jnts_remapping)}" + \
+                    f"does not match n. joints {self.n_jnts}"
+
+                Journal.log(self.__class__.__name__,
+                    "update_jnts_remapping",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+
+            self._jnts_remapping = torch.tensor(jnts_remapping)
+        
     def _check_running(self,
                 calling_method: str):
 
@@ -988,7 +1006,6 @@ class FullRobState(SharedDataBase):
             n_jnts: int = None,
             n_contacts: int = 1,
             jnt_names: List[str] = None,
-            jnts_remapping: List[int] = None,
             contact_names: List[str] = None,
             q_remapping: List[int] = None,
             contact_remapping: List[int] = None, 
@@ -1015,7 +1032,7 @@ class FullRobState(SharedDataBase):
         self._jnt_names = jnt_names
         self._contact_names = contact_names
         
-        self._jnts_remapping = jnts_remapping
+        self._jnts_remapping = None
         self._q_remapping = q_remapping
         self._contact_remapping = contact_remapping
 
@@ -1039,7 +1056,6 @@ class FullRobState(SharedDataBase):
                             n_robots=self._n_robots,
                             n_jnts=self._n_jnts,
                             jnt_names=self._jnt_names,
-                            jnts_remapping=self._jnts_remapping,
                             verbose=self._verbose,
                             vlevel=self._vlevel,
                             safe=self._safe,
@@ -1088,7 +1104,13 @@ class FullRobState(SharedDataBase):
 
         return self._is_running
     
-    def run(self):
+    def set_jnts_remapping(self,
+                jnts_remapping: List[int] = None):
+
+        self.jnts_state.set_jnts_remapping(jnts_remapping=jnts_remapping)
+
+    def run(self,
+        jnts_remapping: List[int] = None):
 
         self.root_state.run()
 
@@ -1108,8 +1130,10 @@ class FullRobState(SharedDataBase):
 
             self._contact_names = self.contact_wrenches.contact_names
 
+        self.set_jnts_remapping(jnts_remapping)
+
         self._is_running = True
-            
+        
     def synch_mirror(self,
                 from_gpu: bool):
 
