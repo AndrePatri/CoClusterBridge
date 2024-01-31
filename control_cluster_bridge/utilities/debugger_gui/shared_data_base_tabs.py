@@ -392,12 +392,15 @@ class FullRobStateWindow(SharedDataWindow):
 
         for i in range(self.shared_data_clients[0].n_contacts()):
 
-            contact_wrench_legend[i * 6] = "f_x - " + contact_names[i]
-            contact_wrench_legend[i * 6 + 1] = "f_y - " + contact_names[i]
-            contact_wrench_legend[i * 6 + 2] = "f_z - " + contact_names[i]
-            contact_wrench_legend[i * 6 + 3] = "t_x - " + contact_names[i]
-            contact_wrench_legend[i * 6 + 4] = "t_y - " + contact_names[i]
-            contact_wrench_legend[i * 6 + 5] = "t_z - " + contact_names[i]
+            contact_wrench_legend[i * 3] = "f_x - " + contact_names[i]
+            contact_wrench_legend[i * 3 + 1] = "f_y - " + contact_names[i]
+            contact_wrench_legend[i * 3 + 2] = "f_z - " + contact_names[i]
+
+        for i in range(self.shared_data_clients[0].n_contacts()):
+
+            contact_wrench_legend[i * 3 + 3 * len(contact_names)] = "t_x - " + contact_names[i]
+            contact_wrench_legend[i * 3 + 1 + 3 * len(contact_names)] = "t_y - " + contact_names[i]
+            contact_wrench_legend[i * 3 + 2 + 3 * len(contact_names)] = "t_z - " + contact_names[i]
 
         self.rt_plotters.append(RtPlotWindow(data_dim=len(contact_wrench_legend),
                     n_data = 1, 

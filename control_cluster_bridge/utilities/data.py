@@ -1312,6 +1312,50 @@ class ContactWrenches(SharedDataView):
 
                     return self._t_gpu[robot_idx, self._contact_remapping].view(1, -1)
     
+    def get_f_contact(self,
+            contact_name: str,
+            robot_idx: int = None,
+            gpu: bool = False):
+        
+        if not contact_name in self.contact_names:
+            
+            contact_list = "\t".join(self.contact_names)
+
+            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+
+            Journal.log(self.__class__.__name__,
+                "get_f_contact",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        
+        index = self.contact_names.index(contact_name)
+
+        return self.get_f(robot_idx=robot_idx,
+                    gpu=gpu)[:, (index * 3):((index+1) * 3)]
+
+    def get_t_contact(self,
+            contact_name: str,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if not contact_name in self.contact_names:
+            
+            contact_list = "\t".join(self.contact_names)
+
+            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+
+            Journal.log(self.__class__.__name__,
+                "get_t_contact",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        
+        index = self.contact_names.index(contact_name)
+
+        return self.get_t(robot_idx=robot_idx,
+                    gpu=gpu)[:, (index * 3):((index+1) * 3)]
+
     def get_w(self,
         robot_idx: int = None,
         gpu: bool = False):
@@ -1543,7 +1587,7 @@ class FullRobState():
         # write to shared mem
         self.root_state.synch_all(read = False, wait = True)
         self.jnts_state.synch_all(read = False, wait = True)
-        self.contact_wrenches.synch_all(read = True, wait = True)
+        self.contact_wrenches.synch_all(read = False, wait = True)
         
     def close(self):
 

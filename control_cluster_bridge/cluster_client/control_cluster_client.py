@@ -95,6 +95,9 @@ class ControlClusterClient(ABC):
 
         self._backend = backend
         self._device = device
+        self.using_gpu = False
+        if self._device == torch.device("cuda"):
+            self.using_gpu = True
 
         # shared mem objects
         self.handshake_manager = None
@@ -240,8 +243,16 @@ class ControlClusterClient(ABC):
 
         if self.robot_states is not None:
             
-            # updates shared tensor on CPU with latest data from states on GPU
-            self.robot_states.synch_mirror(from_gpu=True) 
+            if self.using_gpu:
+
+                # updates shared tensor on CPU with latest data from states on GPU
+                # and writes to shared mem
+                self.robot_states.synch_mirror(from_gpu=True)
+            
+            else:
+                
+                # only write to shared mem (gpu mirror is not used)
+                self.robot_states.synch_to_shared_mem()
 
         if self.contact_states is not None:
             
@@ -298,8 +309,16 @@ class ControlClusterClient(ABC):
 
                 # at this point all controllers are done -> we synchronize the control commands on GPU
                 # with the ones written by each controller on CPU
-                self.rhc_cmds.synch_from_shared_mem()
-            
+                if self.using_gpu:
+                    
+                    # first reads cmds from shared memory and then synchs gpu mirror with the read data
+                    self.rhc_cmds.synch_mirror(from_gpu=False) 
+
+                else:
+                    
+                    # only read cmds from shared mem
+                    self.rhc_cmds.synch_from_shared_mem()
+
             else:
             
                 if self._verbose and \
