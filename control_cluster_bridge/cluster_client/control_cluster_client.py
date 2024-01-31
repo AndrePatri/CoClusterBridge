@@ -168,8 +168,10 @@ class ControlClusterClient(ABC):
 
         # performs checks and triggers cluster solution
 
-        n_clients = self.rhc_status.activation_state.get_n_clients()
-
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = True)
+        n_clients = self.rhc_status.controllers_counter.torch_view[0, 0]
+        
         if n_clients == 0:
             
             self._sporadic_log(calling_methd="trigger_solution",
@@ -183,10 +185,10 @@ class ControlClusterClient(ABC):
                     msg = f"Not all clients are connected yet ({n_clients}/{self.cluster_size}).",
                     logtype=LogType.WARN)
 
-        if self.rhc_status.activation_state.get_n_clients() > self.cluster_size:
+        if n_clients > self.cluster_size:
             
-            msg = f"More than {self.cluster_size} clients registered " + \
-                f"(total of {self.rhc_status.activation_state.get_n_clients()})." + \
+            msg = f"More than {self.cluster_size} controllers registered " + \
+                f"(total of {n_clients})." + \
                 ". It's very likely a memory leak on the shared memory layer occurred." + \
                 " You might need to reboot the system to clean the dangling memory."
 

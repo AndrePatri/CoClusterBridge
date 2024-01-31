@@ -43,6 +43,8 @@ class SharedDataWindow():
 
         self.verbose = verbose
 
+        self.base_frame = None
+
         self._reset()
     
     def __del__(self):

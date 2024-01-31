@@ -187,6 +187,29 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = False)
+    
+    class ControllersCounterView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
+            
+            basename = "ControllersCounterView" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = 1, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, 
+                dtype=dtype.Int,
+                force_reconnection=force_reconnection,
+                fill_value = 0)
 
     def __init__(self, 
             is_server = False, 
@@ -234,6 +257,12 @@ class RhcStatus(SharedDataBase):
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection)
         
+        self.controllers_counter = self.ControllersCounterView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
+        
         self._is_runnning = False
         
     def __del__(self):
@@ -250,7 +279,12 @@ class RhcStatus(SharedDataBase):
         self.trigger.run()
         self.fails.run()
         self.activation_state.run()
+        self.controllers_counter.run()
 
+        if not self.is_server:
+    
+            self.cluster_size = self.trigger.n_rows
+        
         self._is_runnning = True
 
     def close(self):
@@ -259,6 +293,7 @@ class RhcStatus(SharedDataBase):
         self.resets.close()
         self.fails.close()    
         self.activation_state.close()
+        self.controllers_counter.close()
 
 class RHCInternal(SharedDataBase):
 
@@ -892,13 +927,15 @@ class RHCInternal(SharedDataBase):
     def _check_fin_or_throw(self,
                         name: str):
 
-        exception = "RHCInternal not initialized. Did you call the run()?"
+        if not self.finalized:
+        
+            exception = "RHCInternal not initialized. Did you call the run()?"
 
-        Journal.log(self.__class__.__name__,
-            name,
-            exception,
-            LogType.EXCEP,
-            throw_when_excep = True)
+            Journal.log(self.__class__.__name__,
+                name,
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
         
     def write_q(self, 
                 data: np.ndarray = None,

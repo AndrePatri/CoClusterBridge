@@ -146,6 +146,13 @@ class RHController(ABC):
                                     row_index=self.controller_index,
                                     col_index=0)
             
+            # decrementing controllers counter
+            self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = True)
+            self.rhc_status.controllers_counter.torch_view -= 1 
+            self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = False)
+        
             self.rhc_status.close()
         
         if self.rhc_internal is not None:
@@ -166,12 +173,13 @@ class RHController(ABC):
                                     vlevel=VLevel.V2)
 
         self.rhc_status.run()
-        self.rhc_status.resets.read_wait(row_index=self.controller_index,
-                                            col_index=0)
-        
-        self.rhc_status.activation_state.write_wait(True, 
-                                    row_index=self.controller_index,
-                                    col_index=0)
+
+        # incrementing controllers counter
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = True)
+        self.rhc_status.controllers_counter.torch_view += 1 
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = False)
         
         if self._debug_sol:
             
@@ -209,7 +217,7 @@ class RHController(ABC):
                                     vlevel=VLevel.V2)
             
             self.rhc_internal.run()
-
+            
             # statistical data
 
             self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
