@@ -30,14 +30,13 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCProfiling
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcStatus
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 
 from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr
 
-from control_cluster_bridge.utilities.defs import launch_controllers_flagname
 from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
 from control_cluster_bridge.utilities.defs import env_selector_name
 from control_cluster_bridge.utilities.sysutils import PathsGetter
@@ -144,7 +143,6 @@ class RtClusterDebugger(QMainWindow):
 
         self._terminated = False
 
-        self._controllers_triggered = False
         self._keyboard_cmds_triggered = False
 
         self.window_length = window_length 
@@ -364,7 +362,7 @@ class RtClusterDebugger(QMainWindow):
                             icon="stop_controllers", 
                             icon_triggered="launch_controllers",
                             callback=self._toggle_controllers, 
-                            descr="launch/stop controllers", 
+                            descr="launch/stop controller", 
                             size_x = 80, 
                             size_y = 50)
         
@@ -579,15 +577,22 @@ class RtClusterDebugger(QMainWindow):
 
     def _toggle_controllers(self):
         
-        self._controllers_triggered = not self._controllers_triggered
+        self.rhc_status.activation_state.synch_all(read=True, wait=True)
             
-        self.launch_controllers.set_bool(self._controllers_triggered)
+        controller_active = self.rhc_status.activation_state.torch_view[self.cluster_index, 0].item()
 
-        if self._controllers_triggered:
+        controller_active = not controller_active # flipping activation state
+
+        self.rhc_status.activation_state.torch_view[self.cluster_index, 0] = controller_active
+
+        self.rhc_status.activation_state.synch_all(read=False, wait=True)
+
+        # we switch the icon
+        if controller_active:
             
             self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.triggered_icone_button)
 
-        if not self._controllers_triggered:
+        else:
 
             self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.icone_button)
     
