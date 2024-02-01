@@ -170,8 +170,8 @@ class ControlClusterClient(ABC):
 
         self.rhc_status.controllers_counter.synch_all(wait = True,
                                                     read = True)
-        n_clients = self.rhc_status.controllers_counter.torch_view[0, 0]
-        
+        n_clients = self.rhc_status.controllers_counter.torch_view[0, 0].item()
+
         if n_clients == 0:
             
             self._sporadic_log(calling_methd="trigger_solution",
