@@ -5,7 +5,7 @@ from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindo
 
 from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, ContactState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds
-from control_cluster_bridge.utilities.shared_data.rhc_data import RHCInternal
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.sim_data import SharedSimInfo
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
@@ -485,7 +485,7 @@ class RhcInternalData(SharedDataWindow):
             
             enable_constr = True
 
-        config = RHCInternal.Config(is_server=is_server, 
+        config = RhcInternal.Config(is_server=is_server, 
                         enable_q=False, 
                         enable_v=False, 
                         enable_a=False, 
@@ -499,7 +499,7 @@ class RhcInternalData(SharedDataWindow):
         # view of rhc internal data
         for i in range(0, self.cluster_size):
 
-            self.shared_data_clients.append(RHCInternal(config=config,
+            self.shared_data_clients.append(RhcInternal(config=config,
                                             namespace=self.namespace,
                                             rhc_index = i,
                                             is_server=is_server,

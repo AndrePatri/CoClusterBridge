@@ -25,7 +25,13 @@ from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
 from control_cluster_bridge.utilities.defs import cluster_size_name
 from control_cluster_bridge.utilities.defs import n_contacts_name
 from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
-from control_cluster_bridge.utilities.defs import env_selector_name
+
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import Journal
+from SharsorIPCpp.PySharsorIPC import dtype
+
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 
 from control_cluster_bridge.utilities.math_utils import incremental_rotate
 
@@ -55,29 +61,20 @@ class RhcRefsFromKeyboard:
         self.cluster_size = -1
         self.n_contacts = -1
 
-        self.cluster_size_clnt = None
-
         self.rhc_task_refs = []
 
         self._init_shared_data()
 
     def _init_shared_data(self):
 
-        wait_amount = 0.05
-        
-        self.cluster_size_clnt = SharedMemClient(name=cluster_size_name(), 
-                                    namespace=self.namespace,
-                                    dtype=torch.int64, 
-                                    wait_amount=wait_amount, 
-                                    verbose=self._verbose)
-        self.cluster_size_clnt.attach()
-        
-        self.n_contacts_clnt = SharedMemClient(name=n_contacts_name(), 
-                                    namespace=self.namespace, 
-                                    dtype=torch.int64, 
-                                    wait_amount=wait_amount, 
-                                    verbose=self._verbose)
-        self.n_contacts_clnt.attach()
+        self.rhc_cmds = RhcCmds(namespace=self.namespace,
+                            is_server=False, 
+                            with_gpu_mirror=False, 
+                            verbose=True, 
+                            vlevel=VLevel.V2)
+        self.rhc_cmds.run()
+        self.cluster_size = self.rhc_cmds.n_robots()
+        self.n_contacts = self.rhc_cmds.n_contacts()
 
         self.launch_keyboard_cmds = SharedMemSrvr(n_rows=1, 
                                         n_cols=1, 
@@ -87,23 +84,15 @@ class RhcRefsFromKeyboard:
         self.launch_keyboard_cmds.start()
         self.launch_keyboard_cmds.reset_bool(False)
 
-        self.env_index = SharedMemClient(name=env_selector_name(), 
-                                        namespace=self.namespace, 
-                                        dtype=torch.int64, 
-                                        wait_amount=wait_amount, 
-                                        verbose=self._verbose)
-        self.env_index.attach()
-        self.env_index.tensor_view[0, 0] = 0 # inizialize to 1st environment
-
-        # while self.launch_keyboard_cmds.get_clients_count() != 1:
-
-        #     print("[RhcRefsFromKeyboard]" + self._init_shared_data.__name__ + ":"\
-        #         " waiting for exactly one client to connect")
-
-        self.cluster_size = self.cluster_size_clnt.tensor_view[0, 0].item()
-        self.n_contacts = self.n_contacts_clnt.tensor_view[0, 0].item()
+        self.env_index = SharedDataView(namespace = self.namespace,
+                basename = "EnvSelector",
+                is_server = False, 
+                verbose = True, 
+                vlevel = VLevel.V2,
+                safe = False,
+                dtype=dtype.Int)
         
-        # self.cluster_idx = self.env_index.tensor_view[0, 0]
+        self.env_index.run()
         
         self.contacts = torch.tensor([[True] * self.n_contacts], 
                         dtype=torch.float32)
@@ -136,8 +125,10 @@ class RhcRefsFromKeyboard:
         self.__del__()
     
     def _update(self):
+        
+        self.env_index.synch_all(read=True, wait=True)
 
-        self.cluster_idx = self.env_index.tensor_view[0, 0].item()
+        self.cluster_idx = self.env_index.torch_view[0, 0].item()
 
     def _set_cmds(self):
 

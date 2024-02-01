@@ -3,7 +3,7 @@ from SharsorIPCpp.PySharsor.wrappers.shared_data_view import *
 
 from SharsorIPCpp.PySharsorIPC import *
 
-from control_cluster_bridge.utilities.data import RHCInternal
+from control_cluster_bridge.utilities.data import RhcInternal
 # from control_cluster_bridge.utilities.rhc_defs import RHCState
 
 import os   
@@ -20,7 +20,7 @@ order = 'C'
 
 namespace = "kyon0"
 
-config = RHCInternal.Config(is_server=False, 
+config = RhcInternal.Config(is_server=False, 
                         enable_q= True, 
                         enable_v=False, 
                         enable_a=False, 
@@ -30,7 +30,7 @@ config = RHCInternal.Config(is_server=False,
                         enable_eff=False
                         )
 
-rhc_internal = RHCInternal(config=config, 
+rhc_internal = RhcInternal(config=config, 
                         namespace=namespace,
                         rhc_index = 0,
                         is_server=False,

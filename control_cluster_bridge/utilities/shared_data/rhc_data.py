@@ -295,7 +295,7 @@ class RhcStatus(SharedDataBase):
         self.activation_state.close()
         self.controllers_counter.close()
 
-class RHCInternal(SharedDataBase):
+class RhcInternal(SharedDataBase):
 
     # class for sharing internal data of a 
     # receding-horizon controller
@@ -929,7 +929,7 @@ class RHCInternal(SharedDataBase):
 
         if not self.finalized:
         
-            exception = "RHCInternal not initialized. Did you call the run()?"
+            exception = "RhcInternal not initialized. Did you call the run()?"
 
             Journal.log(self.__class__.__name__,
                 name,
@@ -1122,7 +1122,7 @@ class RHCInternal(SharedDataBase):
                 LogType.EXCEP,
                 throw_when_excep = True)
             
-class RHCRefs(SharedDataBase):
+class RhcRefs(SharedDataBase):
 
     def __init__(self):
 

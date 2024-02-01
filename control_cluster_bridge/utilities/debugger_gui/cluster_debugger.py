@@ -25,17 +25,21 @@ from SharsorIPCpp.PySharsorIPC import VLevel
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcTaskRefWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcCmdsWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RobotStateWindow
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcContactStatesWindow
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcInternalData
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCProfiling
+
+from SharsorIPCpp.PySharsorIPC import dtype
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import Journal
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient, SharedMemSrvr
+from control_cluster_bridge.utilities.shared_mem import SharedMemClient
 
 from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
 from control_cluster_bridge.utilities.defs import env_selector_name
@@ -204,13 +208,6 @@ class RtClusterDebugger(QMainWindow):
                             namespace=self.namespace,
                             parent=None, 
                             verbose = self.verbose)
-        rhc_contact_state = RhcContactStatesWindow(update_data_dt=self.data_update_dt, 
-                                update_plot_dt=self.plot_update_dt,
-                                window_duration=self.window_length, 
-                                window_buffer_factor=self.window_buffer_factor, 
-                                namespace=self.namespace,
-                                parent=None, 
-                                verbose = self.verbose)
         rhc_internal_costs = RhcInternalData(name = "RhcInternalCosts",
                                 update_data_dt=self.data_update_dt, 
                                 update_plot_dt=self.plot_update_dt,
@@ -234,7 +231,6 @@ class RtClusterDebugger(QMainWindow):
         self.base_spawnable_tabs = [sim_info, cluster_info, 
                             rhc_task_ref, rhc_cms, 
                             robot_state, 
-                            rhc_contact_state, 
                             rhc_internal_costs,
                             rhc_internal_constr]
 
@@ -456,12 +452,19 @@ class RtClusterDebugger(QMainWindow):
         self.rhc_status.run()
         self.cluster_size = self.rhc_status.cluster_size
 
-        self.env_index = SharedMemSrvr(n_rows=1, n_cols=1, 
-                                name=env_selector_name(), 
-                                namespace=self.namespace, 
-                                dtype=torch.int64)
-        self.env_index.start()
-        self.env_index.tensor_view[0, 0] = 0 # inizialize to 1st environment
+        self.env_index = SharedDataView(namespace = self.namespace,
+                basename = "EnvSelector",
+                is_server = True, 
+                n_rows = 1, 
+                n_cols = 1, 
+                verbose = True, 
+                vlevel = VLevel.V2,
+                safe = False,
+                dtype=dtype.Int,
+                force_reconnection=True,
+                fill_value = 0)
+        
+        self.env_index.run()
             
     def _spawn_shared_data_tabs(self, 
                     label: str):
@@ -560,12 +563,26 @@ class RtClusterDebugger(QMainWindow):
 
                     self.shared_data_window[i].update(index = self.cluster_index)
 
+            # activation state
+            
+            self.rhc_status.activation_state.synch_all(read=True, wait=True)
+
+            # we switch the icon
+            if self.rhc_status.activation_state.torch_view[self.cluster_index, 0].item():
+                
+                self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.triggered_icone_button)
+
+            else:
+
+                self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.icone_button)
+
     def _update_cluster_idx(self, 
                         idx: int):
 
         self.cluster_idx_slider.current_val.setText(f'{idx}')
 
-        self.env_index.tensor_view[0, 0] = idx
+        self.env_index.torch_view[0, 0] = idx
+        self.env_index.synch_all(read=False, wait = True)
 
         self.cluster_index = idx
 
@@ -586,15 +603,6 @@ class RtClusterDebugger(QMainWindow):
         self.rhc_status.activation_state.torch_view[self.cluster_index, 0] = controller_active
 
         self.rhc_status.activation_state.synch_all(read=False, wait=True)
-
-        # we switch the icon
-        if controller_active:
-            
-            self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.triggered_icone_button)
-
-        else:
-
-            self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.icone_button)
     
     def _connect_to_keyboard_cmds(self):
 

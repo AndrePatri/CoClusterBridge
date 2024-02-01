@@ -22,7 +22,7 @@ import time
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
-from control_cluster_bridge.utilities.shared_data.rhc_data import RHCInternal
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from control_cluster_bridge.utilities.defs import Journal
@@ -192,7 +192,7 @@ class RHController(ABC):
             cost_data = self._get_cost_data()
             constr_data = self._get_constr_data()
 
-            config = RHCInternal.Config(is_server=True, 
+            config = RhcInternal.Config(is_server=True, 
                         enable_q= True, 
                         enable_v=False, 
                         enable_a=False, 
@@ -206,7 +206,7 @@ class RHController(ABC):
                         constr_dims=constr_data[1],
                         )
             
-            self.rhc_internal = RHCInternal(config=config, 
+            self.rhc_internal = RhcInternal(config=config, 
                                     namespace=self.namespace,
                                     rhc_index = self.controller_index,
                                     is_server=True, 
