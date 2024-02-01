@@ -282,17 +282,6 @@ class RHController(ABC):
         self.robot_cmds.run()
                 
         self._states_initialized = True
-    
-    def set_cmds_to_homing(self):
-
-        self.robot_cmds.jnts_state.get_q(robot_idx=self.controller_index)[:, :] = torch.tensor(self._homer.get_homing()).reshape(1, 
-                            self.robot_cmds.n_jnts())
-
-        self.robot_cmds.jnts_state.get_v(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
-                        dtype=self.array_dtype)
-
-        self.robot_cmds.jnts_state.get_eff(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
-                        dtype=self.array_dtype)
         
     def solve(self):
         
@@ -363,7 +352,7 @@ class RHController(ABC):
                         
                         self._on_failure()
 
-                    self._fill_cmds_from_sol() # we update update the views of the cmd
+                    self._write_cmds_from_sol() # we update update the views of the cmd
                     # from the latest solution
 
                     if self._debug_sol:
@@ -440,24 +429,39 @@ class RHController(ABC):
         
         self._to_controller = [self._env_side_jnt_names.index(element) for element in self._controller_side_jnt_names]
         
-        # set remappings for shared data
+        # set joint remappings for shared data
         self.robot_state.set_jnts_remapping(jnts_remapping=self._to_controller)
         self.robot_cmds.set_jnts_remapping(jnts_remapping=self._to_controller)
 
         self._jnt_maps_created = True
 
-    def _fill_cmds_from_sol(self):
+    def set_cmds_to_homing(self):
+
+        homing = torch.tensor(self._homer.get_homing()).reshape(1, 
+                            self.robot_cmds.n_jnts())
+        
+        null_action = torch.zeros((1, self.robot_cmds.n_jnts()), 
+                        dtype=self.array_dtype)
+        
+        self.robot_cmds.jnts_state.set_q(q = homing, robot_idx=self.controller_index)
+
+        self.robot_cmds.jnts_state.set_v(v = null_action, robot_idx=self.controller_index)
+
+        self.robot_cmds.jnts_state.set_eff(eff = null_action, robot_idx=self.controller_index)
+
+    def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
-    
-        self.robot_cmds.jnts_state.get_q(robot_idx=self.controller_index)[:, :] = torch.tensor(self._homer.get_homing()).reshape(1, 
-                            self.robot_cmds.n_jnts())
 
-        self.robot_cmds.jnts_state.get_v(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
-                        dtype=self.array_dtype)
+        self.robot_cmds.jnts_state.set_q(q = self._get_cmd_jnt_q_from_sol(), robot_idx=self.controller_index)
 
-        self.robot_cmds.jnts_state.get_eff(robot_idx=self.controller_index)[:, :] = torch.zeros((1, self.robot_cmds.n_jnts()), 
-                        dtype=self.array_dtype)
+        self.robot_cmds.jnts_state.set_v(v = self._get_cmd_jnt_v_from_sol(), robot_idx=self.controller_index)
+
+        self.robot_cmds.jnts_state.set_eff(eff = self._get_cmd_jnt_eff_from_sol(), robot_idx=self.controller_index)
+
+        # self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
+
+        self.robot_cmds.synch_to_shared_mem()
 
     def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):

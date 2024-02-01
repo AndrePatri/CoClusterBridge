@@ -214,6 +214,63 @@ class JntsState(SharedDataView):
                 LogType.EXCEP,
                 throw_when_excep = True)
 
+    def get_remapping(self):
+
+        return self._jnts_remapping
+    
+    def set_q(self,
+            q: torch.Tensor,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if self._jnts_remapping is None:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._q[:, :] = q
+                
+                else:
+
+                    self._q[robot_idx, :] = q
+            
+            else:
+
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    self._q_gpu[:, :] = q
+                
+                else:
+
+                    self._q_gpu[robot_idx, :] = q
+        
+        else:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._q[:, self._jnts_remapping] = q
+                
+                else:
+
+                    self._q[robot_idx, self._jnts_remapping] = q
+            
+            else:
+
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    self._q_gpu[:, self._jnts_remapping] = q
+                
+                else:
+
+                    self._q_gpu[robot_idx, self._jnts_remapping] = q
+                
     def get_q(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -266,6 +323,59 @@ class JntsState(SharedDataView):
 
                     return self._q_gpu[robot_idx, self._jnts_remapping].view(1, -1)
 
+    def set_v(self,
+            v: torch.Tensor,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if self._jnts_remapping is None:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._v[:, :] = v
+                
+                else:
+
+                    self._v[robot_idx, :] = v
+            
+            else:
+
+                self._check_mirror_of_throw("set_v")
+
+                if robot_idx is None:
+
+                    self._v_gpu[:, :] = v
+                
+                else:
+
+                    self._v_gpu[robot_idx, :] = v
+        
+        else:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._v[:, self._jnts_remapping] = v
+                
+                else:
+
+                    self._v[robot_idx, self._jnts_remapping] = v
+            
+            else:
+
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    self._v_gpu[:, self._jnts_remapping] = v
+                
+                else:
+
+                    self._v_gpu[robot_idx, self._jnts_remapping] = v
+      
     def get_v(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -318,6 +428,59 @@ class JntsState(SharedDataView):
 
                     return self._v_gpu[robot_idx, self._jnts_remapping].view(1, -1)
 
+    def set_a(self,
+            a: torch.Tensor,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if self._jnts_remapping is None:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._a[:, :] = a
+                
+                else:
+
+                    self._a[robot_idx, :] = a
+            
+            else:
+
+                self._check_mirror_of_throw("set_a")
+
+                if robot_idx is None:
+
+                    self._a_gpu[:, :] = a
+                
+                else:
+
+                    self._a_gpu[robot_idx, :] = a
+        
+        else:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._a[:, self._jnts_remapping] = a
+                
+                else:
+
+                    self._a[robot_idx, self._jnts_remapping] = a
+            
+            else:
+
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    self._a_gpu[:, self._jnts_remapping] = a
+                
+                else:
+
+                    self._a_gpu[robot_idx, self._jnts_remapping] = a
+      
     def get_a(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -370,6 +533,59 @@ class JntsState(SharedDataView):
 
                     return self._a_gpu[robot_idx, self._jnts_remapping].view(1, -1)
 
+    def set_eff(self,
+            eff: torch.Tensor,
+            robot_idx: int = None,
+            gpu: bool = False):
+
+        if self._jnts_remapping is None:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._eff[:, :] = eff
+                
+                else:
+
+                    self._eff[robot_idx, :] = eff
+            
+            else:
+
+                self._check_mirror_of_throw("set_eff")
+
+                if robot_idx is None:
+
+                    self._eff_gpu[:, :] = eff
+                
+                else:
+
+                    self._eff_gpu[robot_idx, :] = eff
+        
+        else:
+
+            if not gpu:
+                
+                if robot_idx is None:
+
+                    self._eff[:, self._jnts_remapping] = eff
+                
+                else:
+
+                    self._eff[robot_idx, self._jnts_remapping] = eff
+            
+            else:
+
+                self._check_mirror_of_throw("get_q")
+
+                if robot_idx is None:
+
+                    self._eff_gpu[:, self._jnts_remapping] = eff
+                
+                else:
+
+                    self._eff_gpu[robot_idx, self._jnts_remapping] = eff
+      
     def get_eff(self,
         robot_idx: int = None,
         gpu: bool = False):
@@ -484,6 +700,10 @@ class RootState(SharedDataView):
 
         self._init_views()
 
+    def get_remapping(self):
+
+        return self._q_remapping
+    
     def _init_views(self):
 
         # root
@@ -513,6 +733,33 @@ class RootState(SharedDataView):
                 LogType.EXCEP,
                 throw_when_excep = True)
     
+    def set_p(self,
+            p: torch.Tensor,
+            robot_idx: int = None,
+            gpu: bool = False):
+        
+        if not gpu:
+            
+            if robot_idx is None:
+
+                self._p[:, :] = p
+            
+            else:
+
+                self._p[robot_idx, :] = p
+        
+        else:
+
+            self._check_mirror_of_throw("get_p")
+
+            if robot_idx is None:
+
+                self._p_gpu[:, :] = p
+            
+            else:
+
+                self._p_gpu[robot_idx, :] = p
+            
     def get_p(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -538,7 +785,34 @@ class RootState(SharedDataView):
             else:
 
                 return self._p_gpu[robot_idx, :].view(1, -1)
+
+    def set_q(self,
+            q: torch.Tensor,
+            robot_idx: int = None,
+            gpu: bool = False):
+        
+        if not gpu:
             
+            if robot_idx is None:
+
+                self._q[:, :] = q
+            
+            else:
+
+                self._q[robot_idx, :] = q
+        
+        else:
+
+            self._check_mirror_of_throw("set_q")
+
+            if robot_idx is None:
+
+                self._q_gpu[:, :] = q
+            
+            else:
+
+                self._q_gpu[robot_idx, :] = q
+
     def get_q(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -590,7 +864,34 @@ class RootState(SharedDataView):
                 else:
 
                     return self._q_gpu[robot_idx, self._q_remapping].view(1, -1)
-                
+    
+    def set_v(self,
+        v: torch.Tensor,
+        robot_idx: int = None,
+        gpu: bool = False):
+        
+        if not gpu:
+            
+            if robot_idx is None:
+
+                self._v[:, :] = v
+            
+            else:
+
+                self._v[robot_idx, :] = v
+        
+        else:
+
+            self._check_mirror_of_throw("set_v")
+
+            if robot_idx is None:
+
+                self._v_gpu[:, :] = v
+            
+            else:
+
+                self._v_gpu[robot_idx, :] = v
+
     def get_v(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -617,6 +918,33 @@ class RootState(SharedDataView):
 
                 return self._v_gpu[robot_idx, :].view(1, -1)
     
+    def set_omega(self,
+        omega: torch.Tensor,
+        robot_idx: int = None,
+        gpu: bool = False):
+        
+        if not gpu:
+            
+            if robot_idx is None:
+
+                self._omega[:, :] = omega
+            
+            else:
+
+                self._omega[robot_idx, :] = omega
+        
+        else:
+
+            self._check_mirror_of_throw("set_omega")
+
+            if robot_idx is None:
+
+                self._omega_gpu[:, :] = omega
+            
+            else:
+
+                self._omega_gpu[robot_idx, :] = omega
+
     def get_omega(self,
             robot_idx: int = None,
             gpu: bool = False):
@@ -651,7 +979,6 @@ class ContactWrenches(SharedDataView):
             n_robots: int = None, 
             n_contacts: int = None,
             contact_names: List[str] = None,
-            contact_remapping: List[int] = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
@@ -681,10 +1008,6 @@ class ContactWrenches(SharedDataView):
                                         vlevel = vlevel)
             
         n_cols = self.n_contacts * 6 # cart. force + torques
-
-        self._contact_remapping = None
-        if contact_remapping is not None:
-            self._contact_remapping = torch.tensor(contact_remapping)
 
         super().__init__(namespace = namespace,
             basename = basename,
@@ -783,110 +1106,187 @@ class ContactWrenches(SharedDataView):
                                                                     self.n_contacts * 3)
             self._w_gpu = self._gpu_mirror[:, :].view(self.n_robots, self.n_contacts * 6)
     
+    def set_f(self,
+            f: torch.Tensor,
+            robot_idx: int = None,
+            contact_idx: int = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idx is None:
+                
+                if contact_idx is None:
+
+                    self._f[:, :] = f
+                
+                else:
+
+                    self._f[:, (contact_idx * 3):((contact_idx+1) * 3)] = f
+            
+            else:
+
+                if contact_idx is None:
+
+                    self._f[robot_idx, :] = f
+                
+                else:
+
+                    self._f[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = f
+        
+        else:
+
+            self._check_mirror_of_throw("set_f")
+
+            if robot_idx is None:
+                
+                if contact_idx is None:
+
+                    self._f_gpu[:, :] = f
+                
+                else:
+
+                    self._f_gpu[:, (contact_idx * 3):((contact_idx+1) * 3)] = f
+            
+            else:
+
+                if contact_idx is None:
+
+                    self._f_gpu[robot_idx, :] = f
+                
+                else:
+                    
+                    self._f_gpu[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = f
+
     def get_f(self,
             robot_idx: int = None,
             gpu: bool = False):
 
-        if self._contact_remapping is None:
+        if not gpu:
+            
+            if robot_idx is None:
 
-            if not gpu:
-                
-                if robot_idx is None:
-
-                    return self._f[:, :]
-                
-                else:
-
-                    return self._f[robot_idx, :].view(1, -1)
+                return self._f[:, :]
             
             else:
 
-                self._check_mirror_of_throw("get_f")
-
-                if robot_idx is None:
-
-                    return self._f_gpu[:, :]
-                
-                else:
-
-                    return self._f_gpu[robot_idx, :].view(1, -1)
+                return self._f[robot_idx, :].view(1, -1)
         
         else:
 
-            if not gpu:
-                
-                if robot_idx is None:
+            self._check_mirror_of_throw("get_f")
 
-                    return self._f[:, self._contact_remapping]
-                
-                else:
+            if robot_idx is None:
 
-                    return self._f[robot_idx, self._contact_remapping].view(1, -1)
+                return self._f_gpu[:, :]
             
             else:
 
-                self._check_mirror_of_throw("get_q")
+                return self._f_gpu[robot_idx, :].view(1, -1)
 
-                if robot_idx is None:
+    def set_t(self,
+            t: torch.Tensor,
+            robot_idx: int = None,
+            contact_idx: int = None,
+            gpu: bool = False):
 
-                    return self._f_gpu[:, self._contact_remapping]
+        if not gpu:
+            
+            if robot_idx is None:
+                
+                if contact_idx is None:
+
+                    self._t[:, :] = t
                 
                 else:
 
-                    return self._f_gpu[robot_idx, self._contact_remapping].view(1, -1)
+                    self._t[:, (contact_idx * 3):((contact_idx+1) * 3)] = t
+            
+            else:
+
+                if contact_idx is None:
+
+                    self._t[robot_idx, :] = t
+                
+                else:
+
+                    self._t[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = t
+        
+        else:
+
+            self._check_mirror_of_throw("set_t")
+
+            if robot_idx is None:
+                
+                if contact_idx is None:
+
+                    self._t_gpu[:, :] = t
+                
+                else:
+
+                    self._t_gpu[:, (contact_idx * 3):((contact_idx+1) * 3)] = t
+            
+            else:
+
+                if contact_idx is None:
+
+                    self._t_gpu[robot_idx, :] = t
+                
+                else:
+                    
+                    self._t_gpu[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = t
 
     def get_t(self,
         robot_idx: int = None,
         gpu: bool = False):
 
-        if self._contact_remapping is None:
+        if not gpu:
+            
+            if robot_idx is None:
 
-            if not gpu:
-                
-                if robot_idx is None:
-
-                    return self._t[:, :]
-                
-                else:
-
-                    return self._t[robot_idx, :].view(1, -1)
+                return self._t[:, :]
             
             else:
 
-                self._check_mirror_of_throw("get_t")
-
-                if robot_idx is None:
-
-                    return self._t_gpu[:, :]
-                
-                else:
-
-                    return self._t_gpu[robot_idx, :].view(1, -1)
+                return self._t[robot_idx, :].view(1, -1)
         
         else:
 
-            if not gpu:
-                
-                if robot_idx is None:
+            self._check_mirror_of_throw("get_t")
 
-                    return self._t[:, self._contact_remapping]
-                
-                else:
+            if robot_idx is None:
 
-                    return self._t[robot_idx, self._contact_remapping].view(1, -1)
+                return self._t_gpu[:, :]
             
             else:
 
-                self._check_mirror_of_throw("get_q")
-
-                if robot_idx is None:
-
-                    return self._t_gpu[:, self._contact_remapping]
-                
-                else:
-
-                    return self._t_gpu[robot_idx, self._contact_remapping].view(1, -1)
+                return self._t_gpu[robot_idx, :].view(1, -1)
     
+    def set_f_contact(self,
+            f: torch.Tensor,
+            contact_name: str,
+            robot_idx: int = None,
+            gpu: bool = False):
+        
+        if not contact_name in self.contact_names:
+            
+            contact_list = "\t".join(self.contact_names)
+
+            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+
+            Journal.log(self.__class__.__name__,
+                "get_f_contact",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        
+        index = self.contact_names.index(contact_name)
+
+        self.set_f(f =f,
+            contact_idx=index,
+            robot_idx=robot_idx,
+            gpu=gpu)[:, (index * 3):((index+1) * 3)]
+                    
     def get_f_contact(self,
             contact_name: str,
             robot_idx: int = None,
@@ -909,6 +1309,31 @@ class ContactWrenches(SharedDataView):
         return self.get_f(robot_idx=robot_idx,
                     gpu=gpu)[:, (index * 3):((index+1) * 3)]
 
+    def set_t_contact(self,
+            t: torch.Tensor,
+            contact_name: str,
+            robot_idx: int = None,
+            gpu: bool = False):
+        
+        if not contact_name in self.contact_names:
+            
+            contact_list = "\t".join(self.contact_names)
+
+            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+
+            Journal.log(self.__class__.__name__,
+                "set_t_contact",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        
+        index = self.contact_names.index(contact_name)
+
+        self.set_t(t =t,
+            contact_idx=index,
+            robot_idx=robot_idx,
+            gpu=gpu)[:, (index * 3):((index+1) * 3)]
+        
     def get_t_contact(self,
             contact_name: str,
             robot_idx: int = None,
@@ -935,53 +1360,27 @@ class ContactWrenches(SharedDataView):
         robot_idx: int = None,
         gpu: bool = False):
 
-        if self._contact_remapping is None:
+        if not gpu:
+            
+            if robot_idx is None:
 
-            if not gpu:
-                
-                if robot_idx is None:
-
-                    return self._w[:, :]
-                
-                else:
-
-                    return self._w[robot_idx, :].view(1, -1)
+                return self._w[:, :]
             
             else:
 
-                self._check_mirror_of_throw("get_t")
-
-                if robot_idx is None:
-
-                    return self._w_gpu[:, :]
-                
-                else:
-
-                    return self._w_gpu[robot_idx, :].view(1, -1)
+                return self._w[robot_idx, :].view(1, -1)
         
         else:
 
-            if not gpu:
-                
-                if robot_idx is None:
+            self._check_mirror_of_throw("get_t")
 
-                    return self._w[:, self._contact_remapping]
-                
-                else:
+            if robot_idx is None:
 
-                    return self._w[robot_idx, self._contact_remapping].view(1, -1)
+                return self._w_gpu[:, :]
             
             else:
 
-                self._check_mirror_of_throw("get_q")
-
-                if robot_idx is None:
-
-                    return self._w_gpu[:, self._contact_remapping]
-                
-                else:
-
-                    return self._w_gpu[robot_idx, self._contact_remapping].view(1, -1)
+                return self._w_gpu[robot_idx, :].view(1, -1)
 
     def _check_mirror_of_throw(self,
                         name: str):
@@ -1008,7 +1407,6 @@ class FullRobState(SharedDataBase):
             jnt_names: List[str] = None,
             contact_names: List[str] = None,
             q_remapping: List[int] = None,
-            contact_remapping: List[int] = None, 
             with_gpu_mirror: bool = True,
             force_reconnection: bool = False,
             safe: bool = True,
@@ -1034,7 +1432,6 @@ class FullRobState(SharedDataBase):
         
         self._jnts_remapping = None
         self._q_remapping = q_remapping
-        self._contact_remapping = contact_remapping
 
         self._safe = safe
         self._force_reconnection = force_reconnection
@@ -1067,7 +1464,6 @@ class FullRobState(SharedDataBase):
                             n_robots=self._n_robots,
                             n_contacts=self._n_contacts,
                             contact_names=self._contact_names,
-                            contact_remapping=self._contact_remapping,
                             verbose=self._verbose,
                             vlevel=self._vlevel,
                             safe=self._safe,

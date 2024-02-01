@@ -23,7 +23,6 @@ from control_cluster_bridge.controllers.rhc import RHChild
 from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
 
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import VLevel
