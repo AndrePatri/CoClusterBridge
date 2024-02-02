@@ -21,7 +21,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "PosErr" # hardcoded
 
@@ -32,7 +33,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
     
     class VelErrView(SharedDataView):
 
@@ -43,7 +45,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "VelErr" # hardcoded
 
@@ -54,7 +57,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
     
     class PosGainsView(SharedDataView):
 
@@ -65,7 +69,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "PosGain" # hardcoded
 
@@ -76,7 +81,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
     
     class VelGainsView(SharedDataView):
 
@@ -87,7 +93,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "VelGain" # hardcoded
 
@@ -98,7 +105,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class PosView(SharedDataView):
 
@@ -109,7 +117,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "Pos" # hardcoded
 
@@ -120,7 +129,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class VelView(SharedDataView):
 
@@ -131,7 +141,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "Vel" # hardcoded
 
@@ -142,7 +153,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class EffView(SharedDataView):
 
@@ -153,7 +165,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "Eff" # hardcoded
 
@@ -164,7 +177,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class PosRefView(SharedDataView):
 
@@ -175,7 +189,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "PosRef" # hardcoded
 
@@ -186,7 +201,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class VelRefView(SharedDataView):
 
@@ -197,7 +213,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "VelRef" # hardcoded
 
@@ -208,7 +225,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class EffFFView(SharedDataView):
 
@@ -219,7 +237,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "EffFF" # hardcoded
 
@@ -230,7 +249,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     class ImpEffView(SharedDataView):
 
@@ -241,7 +261,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_jnts: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                safe: bool = True):
             
             basename = "ImpEff" # hardcoded
 
@@ -252,7 +273,8 @@ class JntImpCntrlData(SharedDataBase):
                 n_cols = n_jnts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                force_reconnection=force_reconnection)
+                force_reconnection=force_reconnection,
+                safe=safe)
 
     def __init__(self, 
             is_server = False, 
@@ -262,7 +284,8 @@ class JntImpCntrlData(SharedDataBase):
             namespace = "", 
             verbose = False, 
             vlevel: VLevel = VLevel.V0,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            safe: bool = True):
 
         self.is_server = is_server
 
@@ -296,7 +319,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
         
         self.vel_err_view = self.VelErrView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -304,7 +328,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
         
         self.pos_gains_view = self.PosGainsView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -312,7 +337,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.vel_gains_view = self.VelGainsView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -320,7 +346,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.eff_ff_view = self.EffFFView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -328,7 +355,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.pos_view = self.PosView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -336,7 +364,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
         
         self.pos_ref_view = self.PosRefView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -344,7 +373,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.vel_view = self.VelView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -352,7 +382,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.vel_ref_view = self.VelRefView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -360,7 +391,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.eff_view = self.EffView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -368,7 +400,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
 
         self.imp_eff_view = self.ImpEffView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
@@ -376,7 +409,8 @@ class JntImpCntrlData(SharedDataBase):
                                     namespace = namespace, 
                                     verbose = self.verbose, 
                                     vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection)
+                                    force_reconnection=force_reconnection,
+                                    safe=safe)
         
         self._is_runnning = False
 

@@ -220,423 +220,423 @@ class JntsState(SharedDataView):
     
     def set_q(self,
             q: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._q[:, :] = q
                 
                 else:
 
-                    self._q[robot_idx, :] = q
+                    self._q[robot_idxs, :] = q
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._q_gpu[:, :] = q
                 
                 else:
 
-                    self._q_gpu[robot_idx, :] = q
+                    self._q_gpu[robot_idxs, :] = q
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._q[:, self._jnts_remapping] = q
                 
                 else:
 
-                    self._q[robot_idx, self._jnts_remapping] = q
+                    self._q[robot_idxs, self._jnts_remapping] = q
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._q_gpu[:, self._jnts_remapping] = q
                 
                 else:
 
-                    self._q_gpu[robot_idx, self._jnts_remapping] = q
+                    self._q_gpu[robot_idxs, self._jnts_remapping] = q
                 
     def get_q(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q[:, :]
                 
                 else:
 
-                    return self._q[robot_idx, :].view(1, -1)
+                    return self._q[robot_idxs, :].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q_gpu[:, :]
                 
                 else:
 
-                    return self._q_gpu[robot_idx, :].view(1, -1)
+                    return self._q_gpu[robot_idxs, :].view(1, -1)
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._q[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._q[robot_idxs, self._jnts_remapping].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q_gpu[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._q_gpu[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._q_gpu[robot_idxs, self._jnts_remapping].view(1, -1)
 
     def set_v(self,
             v: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._v[:, :] = v
                 
                 else:
 
-                    self._v[robot_idx, :] = v
+                    self._v[robot_idxs, :] = v
             
             else:
 
                 self._check_mirror_of_throw("set_v")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._v_gpu[:, :] = v
                 
                 else:
 
-                    self._v_gpu[robot_idx, :] = v
+                    self._v_gpu[robot_idxs, :] = v
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._v[:, self._jnts_remapping] = v
                 
                 else:
 
-                    self._v[robot_idx, self._jnts_remapping] = v
+                    self._v[robot_idxs, self._jnts_remapping] = v
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._v_gpu[:, self._jnts_remapping] = v
                 
                 else:
 
-                    self._v_gpu[robot_idx, self._jnts_remapping] = v
+                    self._v_gpu[robot_idxs, self._jnts_remapping] = v
       
     def get_v(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._v[:, :]
                 
                 else:
 
-                    return self._v[robot_idx, :].view(1, -1)
+                    return self._v[robot_idxs, :].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_v")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._v_gpu[:, :]
                 
                 else:
 
-                    return self._v_gpu[robot_idx, :].view(1, -1)
+                    return self._v_gpu[robot_idxs, :].view(1, -1)
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._v[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._v[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._v[robot_idxs, self._jnts_remapping].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_v")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._v_gpu[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._v_gpu[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._v_gpu[robot_idxs, self._jnts_remapping].view(1, -1)
 
     def set_a(self,
             a: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._a[:, :] = a
                 
                 else:
 
-                    self._a[robot_idx, :] = a
+                    self._a[robot_idxs, :] = a
             
             else:
 
                 self._check_mirror_of_throw("set_a")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._a_gpu[:, :] = a
                 
                 else:
 
-                    self._a_gpu[robot_idx, :] = a
+                    self._a_gpu[robot_idxs, :] = a
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._a[:, self._jnts_remapping] = a
                 
                 else:
 
-                    self._a[robot_idx, self._jnts_remapping] = a
+                    self._a[robot_idxs, self._jnts_remapping] = a
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._a_gpu[:, self._jnts_remapping] = a
                 
                 else:
 
-                    self._a_gpu[robot_idx, self._jnts_remapping] = a
+                    self._a_gpu[robot_idxs, self._jnts_remapping] = a
       
     def get_a(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._a[:, :]
                 
                 else:
 
-                    return self._a[robot_idx, :].view(1, -1)
+                    return self._a[robot_idxs, :].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_v")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._a_gpu[:, :]
                 
                 else:
 
-                    return self._a_gpu[robot_idx, :].view(1, -1)
+                    return self._a_gpu[robot_idxs, :].view(1, -1)
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._a[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._a[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._a[robot_idxs, self._jnts_remapping].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_v")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._a_gpu[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._a_gpu[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._a_gpu[robot_idxs, self._jnts_remapping].view(1, -1)
 
     def set_eff(self,
             eff: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._eff[:, :] = eff
                 
                 else:
 
-                    self._eff[robot_idx, :] = eff
+                    self._eff[robot_idxs, :] = eff
             
             else:
 
                 self._check_mirror_of_throw("set_eff")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._eff_gpu[:, :] = eff
                 
                 else:
 
-                    self._eff_gpu[robot_idx, :] = eff
+                    self._eff_gpu[robot_idxs, :] = eff
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._eff[:, self._jnts_remapping] = eff
                 
                 else:
 
-                    self._eff[robot_idx, self._jnts_remapping] = eff
+                    self._eff[robot_idxs, self._jnts_remapping] = eff
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     self._eff_gpu[:, self._jnts_remapping] = eff
                 
                 else:
 
-                    self._eff_gpu[robot_idx, self._jnts_remapping] = eff
+                    self._eff_gpu[robot_idxs, self._jnts_remapping] = eff
       
     def get_eff(self,
-        robot_idx: int = None,
+        robot_idxs: torch.Tensor = None,
         gpu: bool = False):
 
         if self._jnts_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._eff[:, :]
                 
                 else:
 
-                    return self._eff[robot_idx, :].view(1, -1)
+                    return self._eff[robot_idxs, :].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_eff")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._eff_gpu[:, :]
                 
                 else:
 
-                    return self._eff_gpu[robot_idx, :].view(1, -1)
+                    return self._eff_gpu[robot_idxs, :].view(1, -1)
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._eff[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._eff[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._eff[robot_idxs, self._jnts_remapping].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_eff")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._eff_gpu[:, self._jnts_remapping]
                 
                 else:
 
-                    return self._eff_gpu[robot_idx, self._jnts_remapping].view(1, -1)
+                    return self._eff_gpu[robot_idxs, self._jnts_remapping].view(1, -1)
          
 class RootState(SharedDataView):
 
@@ -735,241 +735,241 @@ class RootState(SharedDataView):
     
     def set_p(self,
             p: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
         
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._p[:, :] = p
             
             else:
-
-                self._p[robot_idx, :] = p
+                
+                self._p[robot_idxs, :] = p
         
         else:
 
             self._check_mirror_of_throw("get_p")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._p_gpu[:, :] = p
             
             else:
 
-                self._p_gpu[robot_idx, :] = p
+                self._p_gpu[robot_idxs, :] = p
             
     def get_p(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
         
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._p[:, :]
             
             else:
 
-                return self._p[robot_idx, :].view(1, -1)
+                return self._p[robot_idxs, :].view(1, -1)
         
         else:
 
             self._check_mirror_of_throw("get_p")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._p_gpu[:, :]
             
             else:
 
-                return self._p_gpu[robot_idx, :].view(1, -1)
+                return self._p_gpu[robot_idxs, :].view(1, -1)
 
     def set_q(self,
             q: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
         
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._q[:, :] = q
             
             else:
 
-                self._q[robot_idx, :] = q
+                self._q[robot_idxs, :] = q
         
         else:
 
             self._check_mirror_of_throw("set_q")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._q_gpu[:, :] = q
             
             else:
 
-                self._q_gpu[robot_idx, :] = q
+                self._q_gpu[robot_idxs, :] = q
 
     def get_q(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if self._q_remapping is None:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q[:, :]
                 
                 else:
 
-                    return self._q[robot_idx, :].view(1, -1)
+                    return self._q[robot_idxs, :].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q_gpu[:, :]
                 
                 else:
 
-                    return self._q_gpu[robot_idx, :].view(1, -1)
+                    return self._q_gpu[robot_idxs, :].view(1, -1)
         
         else:
 
             if not gpu:
                 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q[:, self._q_remapping]
                 
                 else:
 
-                    return self._q[robot_idx, self._q_remapping].view(1, -1)
+                    return self._q[robot_idxs, self._q_remapping].view(1, -1)
             
             else:
 
                 self._check_mirror_of_throw("get_q")
 
-                if robot_idx is None:
+                if robot_idxs is None:
 
                     return self._q_gpu[:, self._q_remapping]
                 
                 else:
 
-                    return self._q_gpu[robot_idx, self._q_remapping].view(1, -1)
+                    return self._q_gpu[robot_idxs, self._q_remapping].view(1, -1)
     
     def set_v(self,
         v: torch.Tensor,
-        robot_idx: int = None,
+        robot_idxs: torch.Tensor = None,
         gpu: bool = False):
         
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._v[:, :] = v
             
             else:
 
-                self._v[robot_idx, :] = v
+                self._v[robot_idxs, :] = v
         
         else:
 
             self._check_mirror_of_throw("set_v")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._v_gpu[:, :] = v
             
             else:
 
-                self._v_gpu[robot_idx, :] = v
+                self._v_gpu[robot_idxs, :] = v
 
     def get_v(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._v[:, :]
             
             else:
 
-                return self._v[robot_idx, :].view(1, -1)
+                return self._v[robot_idxs, :].view(1, -1)
         
         else:
 
             self._check_mirror_of_throw("get_v")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._v_gpu[:, :]
             
             else:
 
-                return self._v_gpu[robot_idx, :].view(1, -1)
+                return self._v_gpu[robot_idxs, :].view(1, -1)
     
     def set_omega(self,
         omega: torch.Tensor,
-        robot_idx: int = None,
+        robot_idxs: torch.Tensor = None,
         gpu: bool = False):
         
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._omega[:, :] = omega
             
             else:
 
-                self._omega[robot_idx, :] = omega
+                self._omega[robot_idxs, :] = omega
         
         else:
 
             self._check_mirror_of_throw("set_omega")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 self._omega_gpu[:, :] = omega
             
             else:
 
-                self._omega_gpu[robot_idx, :] = omega
+                self._omega_gpu[robot_idxs, :] = omega
 
     def get_omega(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._omega[:, :]
             
             else:
 
-                return self._omega[robot_idx, :].view(1, -1)
+                return self._omega[robot_idxs, :].view(1, -1)
         
         else:
 
             self._check_mirror_of_throw("get_omega")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._omega_gpu[:, :]
             
             else:
 
-                return self._omega_gpu[robot_idx, :].view(1, -1)
+                return self._omega_gpu[robot_idxs, :].view(1, -1)
 
 class ContactWrenches(SharedDataView):
 
@@ -1108,13 +1108,13 @@ class ContactWrenches(SharedDataView):
     
     def set_f(self,
             f: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             contact_idx: int = None,
             gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
                 
                 if contact_idx is None:
 
@@ -1128,17 +1128,17 @@ class ContactWrenches(SharedDataView):
 
                 if contact_idx is None:
 
-                    self._f[robot_idx, :] = f
+                    self._f[robot_idxs, :] = f
                 
                 else:
 
-                    self._f[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = f
+                    self._f[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)] = f
         
         else:
 
             self._check_mirror_of_throw("set_f")
 
-            if robot_idx is None:
+            if robot_idxs is None:
                 
                 if contact_idx is None:
 
@@ -1152,47 +1152,47 @@ class ContactWrenches(SharedDataView):
 
                 if contact_idx is None:
 
-                    self._f_gpu[robot_idx, :] = f
+                    self._f_gpu[robot_idxs, :] = f
                 
                 else:
                     
-                    self._f_gpu[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = f
+                    self._f_gpu[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)] = f
 
     def get_f(self,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._f[:, :]
             
             else:
 
-                return self._f[robot_idx, :].view(1, -1)
+                return self._f[robot_idxs, :].view(1, -1)
         
         else:
 
             self._check_mirror_of_throw("get_f")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._f_gpu[:, :]
             
             else:
 
-                return self._f_gpu[robot_idx, :].view(1, -1)
+                return self._f_gpu[robot_idxs, :].view(1, -1)
 
     def set_t(self,
             t: torch.Tensor,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             contact_idx: int = None,
             gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
                 
                 if contact_idx is None:
 
@@ -1206,17 +1206,17 @@ class ContactWrenches(SharedDataView):
 
                 if contact_idx is None:
 
-                    self._t[robot_idx, :] = t
+                    self._t[robot_idxs, :] = t
                 
                 else:
 
-                    self._t[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = t
+                    self._t[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)] = t
         
         else:
 
             self._check_mirror_of_throw("set_t")
 
-            if robot_idx is None:
+            if robot_idxs is None:
                 
                 if contact_idx is None:
 
@@ -1230,42 +1230,42 @@ class ContactWrenches(SharedDataView):
 
                 if contact_idx is None:
 
-                    self._t_gpu[robot_idx, :] = t
+                    self._t_gpu[robot_idxs, :] = t
                 
                 else:
                     
-                    self._t_gpu[robot_idx, (contact_idx * 3):((contact_idx+1) * 3)] = t
+                    self._t_gpu[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)] = t
 
     def get_t(self,
-        robot_idx: int = None,
+        robot_idxs: torch.Tensor = None,
         gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._t[:, :]
             
             else:
 
-                return self._t[robot_idx, :].view(1, -1)
+                return self._t[robot_idxs, :].view(1, -1)
         
         else:
 
             self._check_mirror_of_throw("get_t")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._t_gpu[:, :]
             
             else:
 
-                return self._t_gpu[robot_idx, :].view(1, -1)
+                return self._t_gpu[robot_idxs, :].view(1, -1)
     
     def set_f_contact(self,
             f: torch.Tensor,
             contact_name: str,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
         
         if not contact_name in self.contact_names:
@@ -1275,7 +1275,7 @@ class ContactWrenches(SharedDataView):
             exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
 
             Journal.log(self.__class__.__name__,
-                "get_f_contact",
+                "set_f_contact",
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
@@ -1284,12 +1284,12 @@ class ContactWrenches(SharedDataView):
 
         self.set_f(f =f,
             contact_idx=index,
-            robot_idx=robot_idx,
-            gpu=gpu)[:, (index * 3):((index+1) * 3)]
+            robot_idxs=robot_idxs,
+            gpu=gpu)
                     
     def get_f_contact(self,
             contact_name: str,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
         
         if not contact_name in self.contact_names:
@@ -1306,13 +1306,13 @@ class ContactWrenches(SharedDataView):
         
         index = self.contact_names.index(contact_name)
 
-        return self.get_f(robot_idx=robot_idx,
+        return self.get_f(robot_idxs=robot_idxs,
                     gpu=gpu)[:, (index * 3):((index+1) * 3)]
 
     def set_t_contact(self,
             t: torch.Tensor,
             contact_name: str,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
         
         if not contact_name in self.contact_names:
@@ -1331,12 +1331,12 @@ class ContactWrenches(SharedDataView):
 
         self.set_t(t =t,
             contact_idx=index,
-            robot_idx=robot_idx,
-            gpu=gpu)[:, (index * 3):((index+1) * 3)]
+            robot_idxs=robot_idxs,
+            gpu=gpu)
         
     def get_t_contact(self,
             contact_name: str,
-            robot_idx: int = None,
+            robot_idxs: torch.Tensor = None,
             gpu: bool = False):
 
         if not contact_name in self.contact_names:
@@ -1353,34 +1353,34 @@ class ContactWrenches(SharedDataView):
         
         index = self.contact_names.index(contact_name)
 
-        return self.get_t(robot_idx=robot_idx,
+        return self.get_t(robot_idxs=robot_idxs,
                     gpu=gpu)[:, (index * 3):((index+1) * 3)]
 
     def get_w(self,
-        robot_idx: int = None,
+        robot_idxs: torch.Tensor = None,
         gpu: bool = False):
 
         if not gpu:
             
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._w[:, :]
             
             else:
 
-                return self._w[robot_idx, :].view(1, -1)
+                return self._w[robot_idxs, :].view(1, -1)
         
         else:
 
             self._check_mirror_of_throw("get_t")
 
-            if robot_idx is None:
+            if robot_idxs is None:
 
                 return self._w_gpu[:, :]
             
             else:
 
-                return self._w_gpu[robot_idx, :].view(1, -1)
+                return self._w_gpu[robot_idxs, :].view(1, -1)
 
     def _check_mirror_of_throw(self,
                         name: str):

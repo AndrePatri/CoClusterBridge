@@ -311,7 +311,8 @@ class JntImpMonitor(SharedDataWindow):
         self.shared_data_clients.append(JntImpCntrlData(is_server = False, 
                                             namespace = self.namespace, 
                                             verbose = True, 
-                                            vlevel = VLevel.V2))
+                                            vlevel = VLevel.V2,
+                                            safe=False))
         
         self.shared_data_clients[0].run()
 

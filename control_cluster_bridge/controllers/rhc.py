@@ -66,6 +66,7 @@ class RHController(ABC):
         self.perf_timer = PerfSleep()
 
         self.controller_index = controller_index
+        self.controller_index_torch = torch.tensor(controller_index)
 
         self.srdf_path = srdf_path
 
@@ -443,21 +444,21 @@ class RHController(ABC):
         null_action = torch.zeros((1, self.robot_cmds.n_jnts()), 
                         dtype=self.array_dtype)
         
-        self.robot_cmds.jnts_state.set_q(q = homing, robot_idx=self.controller_index)
+        self.robot_cmds.jnts_state.set_q(q = homing, robot_idxs=self.controller_index_torch)
 
-        self.robot_cmds.jnts_state.set_v(v = null_action, robot_idx=self.controller_index)
+        self.robot_cmds.jnts_state.set_v(v = null_action, robot_idxs=self.controller_index_torch)
 
-        self.robot_cmds.jnts_state.set_eff(eff = null_action, robot_idx=self.controller_index)
+        self.robot_cmds.jnts_state.set_eff(eff = null_action, robot_idxs=self.controller_index_torch)
 
     def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
 
-        self.robot_cmds.jnts_state.set_q(q = self._get_cmd_jnt_q_from_sol(), robot_idx=self.controller_index)
+        self.robot_cmds.jnts_state.set_q(q = self._get_cmd_jnt_q_from_sol(), robot_idxs=self.controller_index_torch)
 
-        self.robot_cmds.jnts_state.set_v(v = self._get_cmd_jnt_v_from_sol(), robot_idx=self.controller_index)
+        self.robot_cmds.jnts_state.set_v(v = self._get_cmd_jnt_v_from_sol(), robot_idxs=self.controller_index_torch)
 
-        self.robot_cmds.jnts_state.set_eff(eff = self._get_cmd_jnt_eff_from_sol(), robot_idx=self.controller_index)
+        self.robot_cmds.jnts_state.set_eff(eff = self._get_cmd_jnt_eff_from_sol(), robot_idxs=self.controller_index_torch)
 
         # self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
 

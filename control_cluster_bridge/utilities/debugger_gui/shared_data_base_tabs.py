@@ -340,20 +340,22 @@ class FullRobStateWindow(SharedDataWindow):
             # update from shared mem
             self.shared_data_clients[0].synch_from_shared_mem()
 
+            torch_idx = torch.tensor(index)
+
             # root state
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_p(robot_idx=index).numpy().flatten())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_q(robot_idx=index).numpy().flatten())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_v(robot_idx=index).numpy().flatten())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_omega(robot_idx=index).numpy().flatten())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_p(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_q(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_v(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_omega(robot_idxs=torch_idx).numpy().flatten())
 
             # joint state
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_q(robot_idx=index).numpy().flatten())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_v(robot_idx=index).numpy().flatten())
-            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_a(robot_idx=index).numpy().flatten())
-            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_eff(robot_idx=index).numpy().flatten())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_q(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_v(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_a(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_eff(robot_idxs=torch_idx).numpy().flatten())
 
             # contact state
-            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get_w(robot_idx=index).numpy().flatten())
+            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get_w(robot_idxs=torch_idx).numpy().flatten())
 
 class RobotStateWindow(FullRobStateWindow):
 
@@ -664,7 +666,9 @@ class SimInfo(SharedDataWindow):
         
         is_server = False
         
-        self.shared_data_clients.append(SharedSimInfo(is_server=is_server,
+        self.shared_data_clients.append(SharedSimInfo(
+                                            namespace=self.namespace,
+                                            is_server=is_server,
                                             safe=False))
         
         self.shared_data_clients[0].run()

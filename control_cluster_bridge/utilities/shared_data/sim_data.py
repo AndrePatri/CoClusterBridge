@@ -72,11 +72,12 @@ class DynamicSimInfoNames:
 class SharedSimInfo(SharedDataBase):
                            
     def __init__(self, 
+                namespace: str,
                 is_server = False, 
                 sim_params_dict: Dict = None,
                 safe: bool = True):
         
-        self.namespace = "SharedSimInfo"
+        self.namespace = namespace + "SharedSimInfo"
 
         self._terminate = False
         
