@@ -319,6 +319,16 @@ class ControlClusterClient(ABC):
         
         now_active = self.now_active_controllers.squeeze(dim=1)
         
+        if not now_active.shape[0] == 0:
+  
+            return now_active
+        
+        else:
+            
+            # no controller active
+
+            return None
+        
         return now_active
     
     def just_started_running(self):

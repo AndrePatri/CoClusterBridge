@@ -126,137 +126,6 @@ class RHController(ABC):
 
         self._init()
 
-    def __del__(self):
-        
-        self._terminate()
-
-    def _terminate(self):
-
-        if self.robot_cmds is not None:
-            
-            self.robot_cmds.close()
-        
-        if self.robot_state is not None:
-            
-            self.robot_state.close()
-        
-        if self.rhc_status is not None:
-            
-            # signal controller deactivation over shared mem
-            self.rhc_status.activation_state.write_wait(False, 
-                                    row_index=self.controller_index,
-                                    col_index=0)
-            
-            # decrementing controllers counter
-            self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                    read = True)
-            self.rhc_status.controllers_counter.torch_view -= 1 
-            self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                    read = False)
-        
-            self.rhc_status.close()
-        
-        if self.rhc_internal is not None:
-
-            self.rhc_internal.close()
-
-        if self.cluster_stats is not None:
-
-            self.cluster_stats.close()
-
-    def _init(self):
-
-        self._init_problem() # we call the child's initialization method
-
-        self.rhc_status = RhcStatus(is_server=False,
-                                    namespace=self.namespace, 
-                                    verbose=True, 
-                                    vlevel=VLevel.V2)
-
-        self.rhc_status.run()
-
-        # incrementing controllers counter
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = True)
-        self.rhc_status.controllers_counter.torch_view += 1 
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = False)
-        
-        if self._debug_sol:
-            
-            # internal solution is published on shared mem
-
-            # we assume the user has made available the cost
-            # and constraint data at this point (e.g. through
-            # the solution of a bootstrap)
-             
-            cost_data = self._get_cost_data()
-            constr_data = self._get_constr_data()
-
-            config = RhcInternal.Config(is_server=True, 
-                        enable_q= True, 
-                        enable_v=False, 
-                        enable_a=False, 
-                        enable_a_dot=True, 
-                        enable_f=True,
-                        enable_f_dot=True, 
-                        enable_eff=True, 
-                        cost_names=cost_data[0], 
-                        cost_dims=cost_data[1],
-                        constr_names=constr_data[0],
-                        constr_dims=constr_data[1],
-                        )
-            
-            self.rhc_internal = RhcInternal(config=config, 
-                                    namespace=self.namespace,
-                                    rhc_index = self.controller_index,
-                                    is_server=True, 
-                                    n_contacts=self.n_contacts,
-                                    n_jnts=self.n_dofs,
-                                    n_nodes=self._n_nodes,
-                                    verbose = self._verbose,
-                                    vlevel=VLevel.V2)
-            
-            self.rhc_internal.run()
-            
-            # statistical data
-
-            self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
-                                        is_server=False, 
-                                        name=self.namespace,
-                                        verbose=self._verbose,
-                                        vlevel=VLevel.V2,
-                                        safe=True)
-
-            self.cluster_stats.run()
-            
-        self._homer = RobotHomer(self.srdf_path, 
-                            self._controller_side_jnt_names)
-    
-    def _update_profiling_data(self):
-
-        # updated debug data on shared memory
-        # with the latest info available
-        self.cluster_stats.solve_loop_dt.write_wait(self._profiling_data_dict["full_solve_dt"], 
-                                                            row_index=self.controller_index,
-                                                            col_index=0)
-        
-        self.cluster_stats.rti_sol_time.write_wait(self._profiling_data_dict["rti_solve_dt"], 
-                                                            row_index=self.controller_index,
-                                                            col_index=0)
-        
-        self.cluster_stats.prb_update_dt.write_wait(self._profiling_data_dict["problem_update_dt"], 
-                                                            row_index=self.controller_index,
-                                                            col_index=0)
-        
-        self.cluster_stats.phase_shift_dt.write_wait(self._profiling_data_dict["phases_shift_dt"], 
-                                                            row_index=self.controller_index,
-                                                            col_index=0)
-        
-        self.cluster_stats.task_ref_update_dt.write_wait(self._profiling_data_dict["task_ref_update"], 
-                                                            row_index=self.controller_index,
-                                                            col_index=0)
-        
     def init_rhc_task_cmds(self):
         
         self.rhc_task_refs = self._init_rhc_task_cmds()
@@ -393,18 +262,6 @@ class RHController(ABC):
 
                 break
     
-    def _on_failure(self):
-        
-        # self.controller_fail_flag.set_bool(True) # can be read by the cluster client
-
-        # self.reset() # resets controller (this has to be defined by the user)
-
-        self.rhc_status.fails.write_wait(True, 
-                                        row_index=self.controller_index,
-                                        col_index=0)
-        
-        self.n_fails += 1
-
     def reset(self):
         
         self._reset()
@@ -450,6 +307,151 @@ class RHController(ABC):
 
         self.robot_cmds.jnts_state.set_eff(eff = null_action, robot_idxs=self.controller_index_torch)
 
+        self.robot_cmds.synch_to_shared_mem() # writes on shared memory
+        
+    def __del__(self):
+        
+        self._close()
+
+    def _close(self):
+
+        if self.robot_cmds is not None:
+            
+            self.robot_cmds.close()
+        
+        if self.robot_state is not None:
+            
+            self.robot_state.close()
+        
+        if self.rhc_status is not None:
+            
+            # signal controller deactivation over shared mem
+            self.rhc_status.activation_state.write_wait(False, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+            
+            # decrementing controllers counter
+            self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = True)
+            self.rhc_status.controllers_counter.torch_view -= 1 
+            self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = False)
+        
+            self.rhc_status.close()
+        
+        if self.rhc_internal is not None:
+
+            self.rhc_internal.close()
+
+        if self.cluster_stats is not None:
+
+            self.cluster_stats.close()
+  
+    def _init(self):
+
+        self._init_problem() # we call the child's initialization method
+
+        self.rhc_status = RhcStatus(is_server=False,
+                                    namespace=self.namespace, 
+                                    verbose=True, 
+                                    vlevel=VLevel.V2)
+
+        self.rhc_status.run()
+
+        # incrementing controllers counter
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = True)
+        self.rhc_status.controllers_counter.torch_view += 1 
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = False)
+        
+        if self._debug_sol:
+            
+            # internal solution is published on shared mem
+
+            # we assume the user has made available the cost
+            # and constraint data at this point (e.g. through
+            # the solution of a bootstrap)
+             
+            cost_data = self._get_cost_data()
+            constr_data = self._get_constr_data()
+
+            config = RhcInternal.Config(is_server=True, 
+                        enable_q= True, 
+                        enable_v=False, 
+                        enable_a=False, 
+                        enable_a_dot=True, 
+                        enable_f=True,
+                        enable_f_dot=True, 
+                        enable_eff=True, 
+                        cost_names=cost_data[0], 
+                        cost_dims=cost_data[1],
+                        constr_names=constr_data[0],
+                        constr_dims=constr_data[1],
+                        )
+            
+            self.rhc_internal = RhcInternal(config=config, 
+                                    namespace=self.namespace,
+                                    rhc_index = self.controller_index,
+                                    is_server=True, 
+                                    n_contacts=self.n_contacts,
+                                    n_jnts=self.n_dofs,
+                                    n_nodes=self._n_nodes,
+                                    verbose = self._verbose,
+                                    vlevel=VLevel.V2)
+            
+            self.rhc_internal.run()
+            
+            # statistical data
+
+            self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
+                                        is_server=False, 
+                                        name=self.namespace,
+                                        verbose=self._verbose,
+                                        vlevel=VLevel.V2,
+                                        safe=True)
+
+            self.cluster_stats.run()
+            
+        self._homer = RobotHomer(self.srdf_path, 
+                            self._controller_side_jnt_names)
+       
+    def _on_failure(self):
+        
+        # self.controller_fail_flag.set_bool(True) # can be read by the cluster client
+
+        # self.reset() # resets controller (this has to be defined by the user)
+
+        self.rhc_status.fails.write_wait(True, 
+                                        row_index=self.controller_index,
+                                        col_index=0)
+        
+        self.n_fails += 1
+
+    def _update_profiling_data(self):
+
+        # updated debug data on shared memory
+        # with the latest info available
+        self.cluster_stats.solve_loop_dt.write_wait(self._profiling_data_dict["full_solve_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.rti_sol_time.write_wait(self._profiling_data_dict["rti_solve_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.prb_update_dt.write_wait(self._profiling_data_dict["problem_update_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.phase_shift_dt.write_wait(self._profiling_data_dict["phases_shift_dt"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+        
+        self.cluster_stats.task_ref_update_dt.write_wait(self._profiling_data_dict["task_ref_update"], 
+                                                            row_index=self.controller_index,
+                                                            col_index=0)
+       
     def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
