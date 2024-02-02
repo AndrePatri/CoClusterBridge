@@ -317,7 +317,7 @@ class ControlClusterClient(ABC):
     
     def get_active_controllers(self):
         
-        now_active = self.now_active_controllers.squeeze(dim=1)
+        now_active = torch.nonzero(self.now_active_controllers.squeeze(dim=1)).squeeze(dim=1)
         
         if not now_active.shape[0] == 0:
   
@@ -328,9 +328,7 @@ class ControlClusterClient(ABC):
             # no controller active
 
             return None
-        
-        return now_active
-    
+            
     def just_started_running(self):
 
         return self.is_running() and (not self._was_running)
