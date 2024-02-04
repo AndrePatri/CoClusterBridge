@@ -110,8 +110,9 @@ class ControlClusterClient(ABC):
         self._was_running = False
         self._is_running = False
         self._is_first_control_step = False
+        self._pre_trigger_steps_done = False
         self._triggered = False
-        self.now_active_controllers = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
+        self.now_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
         self.prev_active_controllers = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
 
         # other data
@@ -165,18 +166,34 @@ class ControlClusterClient(ABC):
 
         # self._close_handshake()
 
+    def pre_trigger_steps(self):
+
+        # first retrive current controllers status
+        self._rhc_status.activation_state.synch_all(read=True, 
+                                        wait=True)
+        
+        # all active controllers will be triggered
+        self.now_active[:, :] = self._rhc_status.activation_state.torch_view
+
+        self._pre_trigger_steps_done = True
+
+    def pretriggered(self):
+
+        return self._pre_trigger_steps_done
+    
     def trigger_solution(self):
 
         # performs checks and triggers cluster solution
 
         if self.is_running():
-            
-            self._triggered = True
 
             if self._debug:
                 
                 # we profile the whole solution pipeline
                 self.start_time = time.perf_counter() 
+
+            self._require_pretrigger() # we force sequentiality between pretriggering and
+            # solution triggering
 
             self._rhc_status.controllers_counter.synch_all(wait = True,
                                                         read = True)
@@ -210,6 +227,8 @@ class ControlClusterClient(ABC):
             self._post_trigger_logs() # debug info
 
             self.trigger_counter +=1
+
+            self._triggered = True
 
     def triggered(self):
 
@@ -299,14 +318,15 @@ class ControlClusterClient(ABC):
     
     def get_transitioned_controllers(self):
         
-        # flag tensors are of share (dim x 1)
-        now_active = self.now_active_controllers.squeeze(dim=1)
+        # gets indexes of controllers which are triggered for the first time
+        # after being activated
+        now_active = self.now_active.squeeze(dim=1)
         not_active_before = ~self.prev_active_controllers.squeeze(dim=1)
 
         transitioned = torch.nonzero(now_active & not_active_before).squeeze(dim=1)
-        
+    
         if not transitioned.shape[0] == 0:
-  
+            
             return transitioned
         
         else:
@@ -317,7 +337,7 @@ class ControlClusterClient(ABC):
     
     def get_active_controllers(self):
         
-        now_active = torch.nonzero(self.now_active_controllers.squeeze(dim=1)).squeeze(dim=1)
+        now_active = torch.nonzero(self.now_active.squeeze(dim=1)).squeeze(dim=1)
         
         if not now_active.shape[0] == 0:
   
@@ -341,6 +361,19 @@ class ControlClusterClient(ABC):
 
         return self._is_first_control_step
     
+    def _require_pretrigger(self):
+
+        if not self.pretriggered():
+
+            exception = "Cannot call trigger() if pre_trigger_steps()" + \
+                " was not previously called!"
+
+            Journal.log(self.__class__.__name__,
+                "_require_pretrigger",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+            
     def _require_trigger(self):
 
         if not self.triggered():
@@ -356,9 +389,9 @@ class ControlClusterClient(ABC):
 
     def _update_mem_flags(self):
 
-        self.prev_active_controllers[:, :] = self.now_active_controllers
+        self.prev_active_controllers[:, :] = self.now_active
 
-        self._was_running = True
+        self._was_running = self._is_running
 
         self.wait_for_sol_counter +=1
 
@@ -550,7 +583,7 @@ class ControlClusterClient(ABC):
         self._rhc_status.activation_state.synch_all(read=True, 
                                         wait=True)
         
-        self.now_active_controllers[:, :] = self._rhc_status.activation_state.torch_view
+        self.now_active[:, :] = self._rhc_status.activation_state.torch_view
 
         self._rhc_status.trigger.write_wait(self._rhc_status.activation_state.torch_view,
                                     0, 0)
