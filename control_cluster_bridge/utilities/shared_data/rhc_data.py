@@ -184,6 +184,30 @@ class RhcStatus(SharedDataBase):
                 force_reconnection=force_reconnection,
                 fill_value = False)
     
+    class RegistrationFlagView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
+            
+            basename = "RegistrationFlagView" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Bool,
+                force_reconnection=force_reconnection,
+                fill_value = False)
+            
     class ControllersCounterView(SharedDataView):
 
         def __init__(self,
@@ -207,6 +231,29 @@ class RhcStatus(SharedDataBase):
                 force_reconnection=force_reconnection,
                 fill_value = 0)
 
+    class SemView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
+            
+            basename = "SemView" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = 1, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Int,
+                force_reconnection=force_reconnection,
+                fill_value = 0)
+            
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
@@ -253,13 +300,34 @@ class RhcStatus(SharedDataBase):
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection)
         
+        self.registration = self.RegistrationFlagView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
+
         self.controllers_counter = self.ControllersCounterView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection)
         
+        self.registering_sem = self.ControllersCounterView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
+        
+        self.sem_view = self.SemView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
+        
         self._is_runnning = False
+
+        self._acquired_reg_sem = False
         
     def __del__(self):
 
@@ -269,13 +337,64 @@ class RhcStatus(SharedDataBase):
     
         return self._is_runnning
     
+    def acquire_reg_sem(self):
+
+        if self.is_running():
+            
+            if not self._acquired_reg_sem:
+
+                self.sem_view.synch_all(read=True, wait=True)
+                
+                print("uiiii")
+                print(self.sem_view.torch_view[0, 0])
+                
+                if self.sem_view.torch_view[0, 0] == 0:
+
+                    self.sem_view.torch_view[0, 0] = 1 # acquire sem
+
+                    self.sem_view.synch_all(read=False, wait=True)
+
+                    self._acquired_reg_sem = True
+
+            return self._acquired_reg_sem
+
+    def release_reg_sem(self):
+
+        if self.is_running():
+                        
+            if not self._acquired_reg_sem:
+
+                return False
+            
+            else:
+
+                self.sem_view.synch_all(read=True, wait=True)
+
+                if self.sem_view.torch_view[0, 0] == 0:
+
+                    exception = f"Reg. semaphore was acquired, but seems to be free on shared mem!"
+
+                    Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+                
+                self.sem_view.torch_view[0, 0] = 0 # release sem
+
+                self.sem_view.synch_all(read=False, wait=True)
+
+                self._acquired_reg_sem = False
+
     def run(self):
 
         self.resets.run()
         self.trigger.run()
         self.fails.run()
         self.activation_state.run()
+        self.registration.run()
         self.controllers_counter.run()
+        self.sem_view.run()
 
         if not self.is_server:
     
@@ -289,7 +408,9 @@ class RhcStatus(SharedDataBase):
         self.resets.close()
         self.fails.close()    
         self.activation_state.close()
+        self.registration.close()
         self.controllers_counter.close()
+        self.sem_view.close()
 
 class RhcInternal(SharedDataBase):
 

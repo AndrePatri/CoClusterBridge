@@ -52,7 +52,6 @@ class RHController(ABC):
 
     def __init__(self, 
             cluster_size: int,
-            controller_index: int,
             srdf_path: str,
             n_nodes: int,
             verbose = False, 
@@ -65,8 +64,8 @@ class RHController(ABC):
         
         self.perf_timer = PerfSleep()
 
-        self.controller_index = controller_index
-        self.controller_index_torch = torch.tensor(controller_index)
+        self.controller_index = None 
+        self.controller_index_torch = None 
 
         self.srdf_path = srdf_path
 
@@ -325,17 +324,7 @@ class RHController(ABC):
         
         if self.rhc_status is not None:
             
-            # signal controller deactivation over shared mem
-            self.rhc_status.activation_state.write_wait(False, 
-                                    row_index=self.controller_index,
-                                    col_index=0)
-            
-            # decrementing controllers counter
-            self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                    read = True)
-            self.rhc_status.controllers_counter.torch_view -= 1 
-            self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                    read = False)
+            self._unregister_from_cluster()
         
             self.rhc_status.close()
         
@@ -346,7 +335,110 @@ class RHController(ABC):
         if self.cluster_stats is not None:
 
             self.cluster_stats.close()
-  
+    
+    def _assign_cntrl_index(self, reg_state: torch.Tensor):
+        
+        control_index = 0
+        
+        state = reg_state.squeeze() # ensure 1D tensor
+
+        free_spots = torch.nonzero(state).squeeze()
+
+        control_index = free_spots[0] # just return the first free spot
+
+        return control_index
+
+    def _register_to_cluster(self):
+        
+        self._acquire_reg_sem()
+
+        available_spots = self.rhc_status.cluster_size
+
+        # incrementing cluster controllers counter
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = True)
+        
+        if self.rhc_status.controllers_counter.torch_view[0, 0] + 1 > available_spots:
+
+            exception = "Cannot register to cluster. No space left " + \
+                f"({self.rhc_status.controllers_counter.torch_view[0, 0]} controllers already registered)"
+
+            Journal.log(self.__class__.__name__,
+                    "_init",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+        
+        # increment controllers counter
+        self.rhc_status.controllers_counter.torch_view += 1 
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = False) # writes to shared mem
+        
+        # read current registration state
+        self.rhc_status.registration.synch_all(wait = True,
+                                                read = True)
+        
+        self.controller_index = self._assign_cntrl_index(self.rhc_status.registration.torch_view)
+
+        print("#################")
+        print(self.controller_index)
+
+        self.controller_index_torch = torch.tensor(self.controller_index)
+
+        self.rhc_status.registration.torch_view[self.controller_index, 0] = True
+        self.rhc_status.registration.synch_all(wait = True,
+                                                read = False) # register
+
+        self._release_reg_sem()
+
+    def _unregister_from_cluster(self):
+
+        self._acquire_reg_sem()
+
+        self.rhc_status.registration.write_wait(False, 
+                                row_index=self.controller_index,
+                                col_index=0)
+        
+        # signal controller deactivation over shared mem
+        self.rhc_status.activation_state.write_wait(False, 
+                                row_index=self.controller_index,
+                                col_index=0)
+        
+        # decrementing controllers counter
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = True)
+        self.rhc_status.controllers_counter.torch_view -= 1 
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = False)
+
+        self._release_reg_sem()
+    
+    def _acquire_reg_sem(self):
+
+        while not self.rhc_status.acquire_reg_sem():
+
+            warn = "Trying to acquire registration flags, but failed. Retrying.."
+
+            Journal.log(self.__class__.__name__,
+                    "_acquire_reg_sem",
+                    warn,
+                    LogType.WARN,
+                    throw_when_excep = True)
+            
+            self.perf_timer.clock_sleep(1000000)
+            
+    def _release_reg_sem(self):
+
+        if not self.rhc_status.release_reg_sem():
+            
+            exception = "Failed to release registration flags."
+
+            Journal.log(self.__class__.__name__,
+                    "_release_reg_sem",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            
     def _init(self):
 
         self._init_problem() # we call the child's initialization method
@@ -358,12 +450,7 @@ class RHController(ABC):
 
         self.rhc_status.run()
 
-        # incrementing controllers counter
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = True)
-        self.rhc_status.controllers_counter.torch_view += 1 
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = False)
+        self._register_to_cluster() # registers the controller to the cluster
         
         if self._debug_sol:
             
