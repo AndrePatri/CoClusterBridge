@@ -107,7 +107,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = False,
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = False)
@@ -131,7 +131,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = False, 
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = False)
@@ -155,7 +155,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = False, 
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = False)
@@ -179,7 +179,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = False, 
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = False)
@@ -202,7 +202,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, 
+                safe = True, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
                 fill_value = 0)
