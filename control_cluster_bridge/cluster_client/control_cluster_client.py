@@ -539,15 +539,17 @@ class ControlClusterClient(ABC):
                             vlevel=VLevel.V2,
                             force_reconnection=False)
         
+        cluster_info_dict = {}
+        cluster_info_dict["cluster_size"] = self.cluster_size
         self._cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
-                                    is_server=False, 
+                                    param_dict=cluster_info_dict,
+                                    is_server=True, 
                                     name=self.namespace,
                                     verbose=self._verbose,
                                     vlevel=VLevel.V2, 
-                                    safe=True,
-                                    force_reconnection=False)
+                                    safe=True)
         
-        self._rhc_task_refs = RhcClusterTaskRefs(n_contacts=4, 
+        self._rhc_task_refs = RhcClusterTaskRefs(n_contacts=self.n_contact_sensors, 
                                     cluster_size=self.cluster_size, 
                                     namespace=self.namespace,
                                     device=self._device, 

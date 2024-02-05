@@ -338,39 +338,6 @@ class ControlClusterSrvr(ABC):
                         LogType.EXCEP,
                         throw_when_excep = True)
 
-    def pre_init(self):
-        
-        # to be called before controllers are created/added
-
-        Journal.log(self.__class__.__name__,
-                        "pre_init",
-                        "Performing pre-initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-        
-        cluster_info_dict = {}
-        cluster_info_dict["cluster_size"] = self.cluster_size
-
-        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
-                                        is_server=True, 
-                                        name=self.namespace,
-                                        param_dict=cluster_info_dict,
-                                        verbose=self.verbose,
-                                        vlevel=VLevel.V2,
-                                        safe=True)
-        
-        self.cluster_stats.run()
-
-
-
-        self.pre_init_done = True
-
-        Journal.log(self.__class__.__name__,
-                        "pre_init",
-                        "Performing pre-initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-
     def _finalize_init(self):
 
         # steps to be performed after the controllers are fully initialized 
@@ -398,7 +365,35 @@ class ControlClusterSrvr(ABC):
                         "Final initialization steps completed.",
                         LogType.STAT,
                         throw_when_excep = True)
+    
+    def pre_init(self):
         
+        # to be called before controllers are created/added
+
+        Journal.log(self.__class__.__name__,
+                        "pre_init",
+                        "Performing pre-initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+
+        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
+                                    is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self.verbose,
+                                    vlevel=VLevel.V2,
+                                    safe=True,
+                                    force_reconnection=False)
+        
+        self.cluster_stats.run()
+        
+        self.pre_init_done = True
+
+        Journal.log(self.__class__.__name__,
+                        "pre_init",
+                        "Performing pre-initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+
     def add_controller(self, controller: RHChild):
         
         if not self.pre_init_done:
