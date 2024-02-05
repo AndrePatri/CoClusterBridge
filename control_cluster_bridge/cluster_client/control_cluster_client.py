@@ -82,6 +82,8 @@ class ControlClusterClient(ABC):
         
         self.cluster_size = cluster_size
         
+        self._n_controllers_connected = 0
+
         self.jnt_names = jnt_names
 
         self.cluster_dt = cluster_dt # dt at which the controllers in the cluster will run 
@@ -165,6 +167,10 @@ class ControlClusterClient(ABC):
 
         # self._close_handshake()
 
+    def n_controllers(self):
+
+        return self._n_controllers_connected
+    
     def pre_trigger_steps(self):
 
         # first retrive current controllers status
@@ -412,25 +418,25 @@ class ControlClusterClient(ABC):
 
     def _pre_trigger_logs(self):
 
-        n_clients = self._rhc_status.controllers_counter.torch_view[0, 0].item()
+        self._n_controllers_connected = self._rhc_status.controllers_counter.torch_view[0, 0].item()
 
-        if n_clients == 0:
+        if self._n_controllers_connected == 0:
             
             self._sporadic_log(calling_methd="trigger_solution",
                         msg = "waiting connection to ControlCluster server")
 
-        if n_clients < self.cluster_size and \
-                n_clients > 0 and \
+        if self._n_controllers_connected < self.cluster_size and \
+                self._n_controllers_connected > 0 and \
                 (self.trigger_counter+1) % self._print_frequency == 0:
                                             
             self._sporadic_log(calling_methd="trigger_solution",
-                    msg = f"Not all clients are connected yet ({n_clients}/{self.cluster_size}).",
+                    msg = f"Not all clients are connected yet ({self._n_controllers_connected}/{self.cluster_size}).",
                     logtype=LogType.WARN)
 
-        if n_clients > self.cluster_size:
+        if self._n_controllers_connected > self.cluster_size:
             
             msg = f"More than {self.cluster_size} controllers registered " + \
-                f"(total of {n_clients})." + \
+                f"(total of {self._n_controllers_connected})." + \
                 ". It's very likely a memory leak on the shared memory layer occurred." + \
                 " You might need to reboot the system to clean the dangling memory."
 
