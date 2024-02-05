@@ -357,7 +357,7 @@ class FullRobStateWindow(SharedDataWindow):
             # contact state
             self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get_w(robot_idxs=torch_idx).numpy().flatten())
 
-class RobotStateWindow(FullRobStateWindow):
+class RobotStates(FullRobStateWindow):
 
     def __init__(self,
             update_data_dt: int,
@@ -368,7 +368,7 @@ class RobotStateWindow(FullRobStateWindow):
             parent: QWidget = None, 
             verbose = False):
 
-        name = "RobotStateWindow"
+        name = "RobotStates"
 
         robot_state = RobotState(namespace=namespace,
                                     is_server=False, 
@@ -387,7 +387,7 @@ class RobotStateWindow(FullRobStateWindow):
             parent=parent, 
             verbose=verbose)
 
-class RhcCmdsWindow(FullRobStateWindow):
+class RHCmds(FullRobStateWindow):
 
     def __init__(self,
             update_data_dt: int,
@@ -398,7 +398,7 @@ class RhcCmdsWindow(FullRobStateWindow):
             parent: QWidget = None, 
             verbose = False):
 
-        name = "RhcCmdsWindow"
+        name = "Rhcmds"
 
         rhc_cmds = RhcCmds(namespace=namespace,
                         is_server=False, 
@@ -417,7 +417,7 @@ class RhcCmdsWindow(FullRobStateWindow):
             parent=parent, 
             verbose=verbose)
 
-class RhcInternalData(SharedDataWindow):
+class RHCInternal(SharedDataWindow):
 
     def __init__(self, 
         name: str,
@@ -431,7 +431,7 @@ class RhcInternalData(SharedDataWindow):
         is_cost: bool = True,
         is_constraint: bool = False,
         add_settings_tab = True,
-        settings_title = "SETTINGS (RhcInternalData)"
+        settings_title = "SETTINGS (RHCInternal)"
         ):
                 
         self.is_cost = is_cost
@@ -636,7 +636,6 @@ class RhcInternalData(SharedDataWindow):
 class SimInfo(SharedDataWindow):
 
     def __init__(self, 
-        name: str,
         update_data_dt: int,
         update_plot_dt: int,
         window_duration: int,
@@ -648,6 +647,8 @@ class SimInfo(SharedDataWindow):
         settings_title = " Latest values"
         ):
         
+        name = "SimInfo"
+
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
             window_duration = window_duration,
@@ -732,7 +733,6 @@ class SimInfo(SharedDataWindow):
 class RHCProfiling(SharedDataWindow):
 
     def __init__(self, 
-        name: str,
         update_data_dt: int,
         update_plot_dt: int,
         window_duration: int,
@@ -744,6 +744,8 @@ class RHCProfiling(SharedDataWindow):
         settings_title = " Latest values"
         ):
         
+        name = "RhcProfiling"
+
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
             window_duration = window_duration,
@@ -916,5 +918,163 @@ class RHCProfiling(SharedDataWindow):
             # updates side data
             # self.grid.settings_widget_list[0].update(data)
 
+class RHCStatus(SharedDataWindow):
+
+    def __init__(self, 
+        update_data_dt: int,
+        update_plot_dt: int,
+        window_duration: int,
+        window_buffer_factor: int = 2,
+        namespace = "",
+        parent: QWidget = None, 
+        verbose = False,
+        add_settings_tab = False,
+        ):
+        
+        name = "RhcStatus"
+
+        super().__init__(update_data_dt = update_data_dt,
+            update_plot_dt = update_plot_dt,
+            window_duration = window_duration,
+            window_buffer_factor = window_buffer_factor,
+            grid_n_rows = 1,
+            grid_n_cols = 1,
+            namespace = namespace,
+            name = name,
+            parent = parent, 
+            verbose = verbose,
+            add_settings_tab = add_settings_tab,
+            )
+
+    def _init_shared_data(self):
+        
+        is_server = False
+        
+        self.shared_data_clients.append(RhcStatus(is_server=is_server,
+                                            namespace=self.namespace, 
+                                            verbose=True, 
+                                            vlevel=VLevel.V2))
+        
+        self.shared_data_clients[0].run()
+
+    def _post_shared_init(self):
+        
+        self.grid_n_rows = 3
+
+        self.grid_n_cols = 2
+
+    def _initialize(self):
+        
+        cluster_size = self.shared_data_clients[0].cluster_size
+
+        cluster_idx_legend = [""] * cluster_size
+
+        for i in range(cluster_size):
             
+            cluster_idx_legend[i] = str(i)
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=1,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Controllers counter", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=["counter"], 
+                                    ylabel="[n]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Failure flags", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[bool]"))
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Reset flags", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[bool]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Trigger flags", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[bool]"))
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Activation flags", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[bool]"))
+        
+        self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 1)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 2, 0)
+        self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 1)
+
+    def _finalize_grid(self):
+        
+        if self.add_settings_tab:
+
+            widget_utils = WidgetUtils()
+
+            settings_frames = []
+
+            # sim_info_widget = widget_utils.create_scrollable_label_list(parent=None, 
+            #                                     parent_layout=None, 
+            #                                     list_names=self.shared_data_clients[0].param_keys,
+            #                                     title="RT SIMULATOR INFO", 
+            #                                     init=[np.nan] * len(self.shared_data_clients[0].param_keys))
+            
+            # settings_frames.append(sim_info_widget)
+            
+            self.grid.addToSettings(settings_frames)
+
+    def update(self,
+            index: int):
+
+        # index not used here (no dependency on cluster index)
+
+        if not self._terminated:
+            
+            # read data on shared memory
+            self.shared_data_clients[0].controllers_counter.synch_all(read = True, 
+                                                        wait=False)
+            self.shared_data_clients[0].fails.synch_all(read = True, 
+                                                        wait=False)
+            self.shared_data_clients[0].resets.synch_all(read = True, 
+                                                        wait=False)
+            self.shared_data_clients[0].trigger.synch_all(read = True, 
+                                                        wait=False)
+            self.shared_data_clients[0].activation_state.synch_all(read = True, 
+                                                        wait=False)
+
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.numpy_view)
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].fails.numpy_view)
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].resets.numpy_view)
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].trigger.numpy_view)
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].activation_state.numpy_view)
+
             
