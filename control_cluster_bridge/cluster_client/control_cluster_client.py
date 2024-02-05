@@ -564,6 +564,8 @@ class ControlClusterClient(ABC):
         self._rhc_task_refs.start()
 
         self._rhc_status.run()
+        
+        self._cluster_stats.run()
 
         # self._spawn_handshake() # we launch all the child processes
 
