@@ -101,7 +101,6 @@ class ControlClusterClient(ABC):
         self._rhc_cmds = None
 
         self._rhc_task_refs = None
-        # self.shared_cluster_info = None
 
         self._rhc_status = None
         self._cluster_stats = None 
@@ -273,17 +272,14 @@ class ControlClusterClient(ABC):
 
                 # update shared debug info
 
-                # self.shared_cluster_info.update(solve_time=self.solution_time, 
-                #                             controllers_up = self.controllers_active) # we update the shared info
-
-                # self._cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
-                #                             "cluster_rt_factor",
-                #                             "cluster_ready",
-                #                             "cluster_state_update_dt"],
-                #             val=[self.solution_time,
-                #                 self.cluster_dt/self.solution_time,
-                #                 self.cluster_ready(),
-                #                 np.nan])
+                self._cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
+                                            "cluster_rt_factor",
+                                            "cluster_ready",
+                                            "cluster_state_update_dt"],
+                            val=[self.solution_time,
+                                self.cluster_dt/self.solution_time,
+                                self.is_running(),
+                                np.nan])
 
         self._update_mem_flags() # used to keep track of previous flag states
     
@@ -316,22 +312,41 @@ class ControlClusterClient(ABC):
         
         return (control_index + 1) % self.n_sim_step_per_cntrl == 0
     
-    def get_transitioned_controllers(self):
+    def get_just_activated(self):
         
         # gets indexes of controllers which are triggered for the first time
         # after being activated
         now_active = self.now_active.squeeze(dim=1)
         not_active_before = ~self.prev_active_controllers.squeeze(dim=1)
 
-        transitioned = torch.nonzero(now_active & not_active_before).squeeze(dim=1)
+        just_activated = torch.nonzero(now_active & not_active_before).squeeze(dim=1)
     
-        if not transitioned.shape[0] == 0:
+        if not just_activated.shape[0] == 0:
             
-            return transitioned
+            return just_activated
         
         else:
             
-            # no controller transitioned
+            # no controller just activated
+
+            return None
+        
+    def get_just_deactivated(self):
+        
+        # gets indexes of controllers which are triggered for the first time
+        # after being activated
+        now_not_active = ~self.now_active.squeeze(dim=1)
+        active_before = self.prev_active_controllers.squeeze(dim=1)
+
+        just_deactivated = torch.nonzero(now_not_active & active_before).squeeze(dim=1)
+    
+        if not just_deactivated.shape[0] == 0:
+            
+            return just_deactivated
+        
+        else:
+            
+            # no controller just deactivated
 
             return None
     
@@ -547,8 +562,6 @@ class ControlClusterClient(ABC):
         self._rhc_cmds.run()
 
         self._rhc_task_refs.start()
-
-        # self.shared_cluster_info.start()
 
         self._rhc_status.run()
 
