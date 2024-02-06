@@ -123,7 +123,7 @@ class RHController(ABC):
 
         self._start_time = time.perf_counter()
 
-        self._homer: RobotHomer = None
+        self._homer = None
 
         self._init()
 
@@ -132,10 +132,12 @@ class RHController(ABC):
         self.rhc_task_refs = self._init_rhc_task_cmds()
         
     def init_states(self):
+        
+        quat_remap = self._get_quat_remap()
 
         self.robot_state = RobotState(namespace=self.namespace,
                                 is_server=False,
-                                q_remapping=self._quat_remap, # remapping from environment to controller
+                                q_remapping=quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
                                 safe=False,
                                 verbose=self._verbose,
@@ -144,15 +146,13 @@ class RHController(ABC):
         
         self.robot_cmds = RhcCmds(namespace=self.namespace,
                                 is_server=False,
-                                q_remapping=self._quat_remap, # remapping from environment to controller
+                                q_remapping=quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
                                 safe=False,
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
         self.robot_cmds.run()
         
-        self.set_cmds_to_homing()
-
         self._states_initialized = True
         
     def solve(self):
@@ -450,9 +450,24 @@ class RHController(ABC):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-            
+    
+    def _get_quat_remap(self):
+
+        # to be overridden
+
+        return [0, 1, 2, 3]
+    
     def _init(self):
 
+        stat = f"Initializing RHC controller " + \
+            f"with dt: {self._dt} s, t_horizon: {self._t_horizon} s, n_intervals: {self._n_intervals}"
+        
+        Journal.log(self.__class__.__name__,
+                    "_init",
+                    stat,
+                    LogType.STAT,
+                    throw_when_excep = True)
+        
         self._init_problem() # we call the child's initialization method
 
         self.rhc_status = RhcStatus(is_server=False,
@@ -501,26 +516,44 @@ class RHController(ABC):
             
             self.rhc_internal.run()
             
-            # statistical data
+        # statistical data
 
-            self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
-                                        is_server=False, 
-                                        name=self.namespace,
-                                        verbose=self._verbose,
-                                        vlevel=VLevel.V2,
-                                        safe=True)
+        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
+                                    is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self._verbose,
+                                    vlevel=VLevel.V2,
+                                    safe=True)
 
-            self.cluster_stats.run()
+        self.cluster_stats.run()
 
-            self.init_states() # initializes states
+        self.init_states() # initializes states
 
-            self.create_jnt_maps()
+        self.create_jnt_maps()
 
-            self.init_rhc_task_cmds() # initializes rhc commands
+        self.init_rhc_task_cmds() # initializes rhc commands
             
         self._homer = RobotHomer(self.srdf_path, 
                             self._controller_side_jnt_names)
-    
+
+        if self._homer is None:
+
+            exception = f"Robot homer not initialized. Did you call the _init_robot_homer() method in the child class?"
+
+            Journal.log(self.__class__.__name__,
+                    "create_jnt_maps",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            
+        self.set_cmds_to_homing()
+
+        Journal.log(self.__class__.__name__,
+                    "_init",
+                    f"RHC controller initialized with index {self.controller_index}",
+                    LogType.STAT,
+                    throw_when_excep = True)
+
     def _on_failure(self):
         
         # self.controller_fail_flag.set_bool(True) # can be read by the cluster client
@@ -533,6 +566,11 @@ class RHController(ABC):
         
         self.n_fails += 1
 
+    def _init_robot_homer(self):
+
+        self._homer = RobotHomer(srdf_path=self.srdf_path, 
+                            jnt_names_prb=self._get_robot_jnt_names())
+        
     def _update_profiling_data(self):
 
         # updated debug data on shared memory
