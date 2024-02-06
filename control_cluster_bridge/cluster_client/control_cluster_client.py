@@ -25,7 +25,6 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.shared_data.handshaking import HandShaker
 
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
 
@@ -96,16 +95,13 @@ class ControlClusterClient(ABC):
             self.using_gpu = True
 
         # shared mem objects
-        self._handshaker = None
-        self._handshake_thread2 = None
-        
+
         self._robot_states = None
         self._rhc_cmds = None
-
-        self._rhc_task_refs = None
-
         self._rhc_status = None
         self._cluster_stats = None 
+        
+        self._rhc_task_refs = None
         
         # flags
         self._was_running = False
@@ -164,8 +160,6 @@ class ControlClusterClient(ABC):
             if self._cluster_stats is not None:
 
                 self._cluster_stats.close()
-
-        # self._close_handshake()
 
     def n_controllers(self):
 
@@ -268,11 +262,11 @@ class ControlClusterClient(ABC):
                     # only read cmds from shared mem
                     self._rhc_cmds.synch_from_shared_mem()
 
-                print("###########")
+                print("########### rhc cmds from shared mem")
                 print(self._rhc_cmds.jnts_state.get_q())
                 
                 self.solution_counter += 1
-
+            
             self._triggered = False # allow next trigger
 
             if self._debug:
@@ -481,29 +475,6 @@ class ControlClusterClient(ABC):
         # writes failures to reset flags
         self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
                                     0, 0)
-      
-    def _close_handshake(self):
-        
-        if self._handshaker is not None:
-
-            self._handshaker.close()
-
-        if self._handshake_thread2 is not None:
-
-            self._close_thread(self._handshake_thread2)
-
-    def _close_thread(self, 
-                    thread):
-        
-        if thread.is_alive():
-            
-            Journal.log(self.__class__.__name__,
-                    "_close_thread",
-                    "Terminating child thread " + str(thread.name),
-                    LogType.INFO,
-                    throw_when_excep = False)
-        
-            thread.join() # wait for thread to join
 
     def _setup(self):
 
@@ -565,9 +536,6 @@ class ControlClusterClient(ABC):
                                     backend=self._backend, 
                                     dtype=self.torch_dtype)
 
-        # giving to handshaker all things which need to run in background
-        self._handshaker = HandShaker([self._cluster_stats])
-
         self._robot_states.run()
 
         self._rhc_cmds.run()
@@ -576,26 +544,7 @@ class ControlClusterClient(ABC):
 
         self._rhc_status.run()
         
-        self._cluster_stats.run()
-
-        # self._spawn_handshake() # we launch all the child processes
-
-    def _spawn_handshake(self):
-        
-        # we spawn the heartbeat() to another process, 
-        # so that it's not blocking wrt the simulator
-
-        self._handshake_thread2 = threading.Thread(target=self._handshaker.run, 
-                                args=(), 
-                                kwargs={})
-        
-        self._handshake_thread2.start()
-
-        Journal.log(self.__class__.__name__,
-                    "_spawn_handshake",
-                    "Spawned _heartbeat thread",
-                    LogType.INFO,
-                    throw_when_excep = False)            
+        self._cluster_stats.run()          
 
     def _trigger_solution(self):
         
@@ -626,13 +575,16 @@ class ControlClusterClient(ABC):
             self._rhc_status.trigger.synch_all(read=True, 
                                         wait=True) # wait for synch to succeed
             
+            active_controllers = self._rhc_status.activation_state.torch_view
+
             # only wait solution from active controllers
-            solved_and_active = ~(self._rhc_status.trigger.torch_view[self._rhc_status.activation_state.torch_view])
+            solved_and_active = ~(self._rhc_status.trigger.torch_view[active_controllers])
 
             if (not self._closed) and \
-                (solved_and_active.shape[0] == 1 
+                (solved_and_active.shape[0] == active_controllers.shape[0] # all active controllers have solved
                 ):
                 
+                # wait for all triggered (i.e. active) controllers to finish
                 solved = (solved_and_active).all()
 
                 self.perf_timer.clock_sleep(1000) # nanoseconds (but this
