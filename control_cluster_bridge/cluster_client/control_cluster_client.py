@@ -580,8 +580,10 @@ class ControlClusterClient(ABC):
             # only wait solution from active controllers
             solved_and_active = ~(self._rhc_status.trigger.torch_view[active_controllers])
 
+            active_idxs = torch.nonzero(self.now_active.squeeze(dim=1)).squeeze(dim=1)
+
             if (not self._closed) and \
-                (solved_and_active.shape[0] == active_controllers.shape[0] # all active controllers have solved
+                (solved_and_active.shape[0] == active_idxs.shape[0] # all active controllers have solved
                 ):
                 
                 # wait for all triggered (i.e. active) controllers to finish
