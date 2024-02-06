@@ -990,6 +990,17 @@ class RHCStatus(SharedDataWindow):
                                     update_plot_dt=self.update_plot_dt,
                                     window_duration=self.window_duration, 
                                     parent=None, 
+                                    base_name=f"Registration flags", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[bool]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
                                     base_name=f"Failure flags", 
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=cluster_idx_legend, 
@@ -1029,10 +1040,11 @@ class RHCStatus(SharedDataWindow):
                                     ylabel="[bool]"))
         
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
-        self.grid.addFrame(self.rt_plotters[1].base_frame, 1, 0)
-        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 1)
-        self.grid.addFrame(self.rt_plotters[3].base_frame, 2, 0)
-        self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 1)
+        self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+        self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+        self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
+        self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 0)
+        self.grid.addFrame(self.rt_plotters[5].base_frame, 2, 1)
 
     def _finalize_grid(self):
         
@@ -1062,6 +1074,8 @@ class RHCStatus(SharedDataWindow):
             # read data on shared memory
             self.shared_data_clients[0].controllers_counter.synch_all(read = True, 
                                                         wait=False)
+            self.shared_data_clients[0].registration.synch_all(read = True, 
+                                                        wait=False)
             self.shared_data_clients[0].fails.synch_all(read = True, 
                                                         wait=False)
             self.shared_data_clients[0].resets.synch_all(read = True, 
@@ -1072,9 +1086,10 @@ class RHCStatus(SharedDataWindow):
                                                         wait=False)
 
             self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.numpy_view)
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].fails.numpy_view)
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].resets.numpy_view)
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].trigger.numpy_view)
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].activation_state.numpy_view)
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.numpy_view)
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].fails.numpy_view)
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].resets.numpy_view)
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].trigger.numpy_view)
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].activation_state.numpy_view)
 
             

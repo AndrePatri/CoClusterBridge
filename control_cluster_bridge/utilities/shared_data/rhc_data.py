@@ -107,7 +107,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = False, # boolean operations are atomic on 64 bit systems
+                safe = False, # boolean operations are atomdic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = False)
@@ -170,7 +170,7 @@ class RhcStatus(SharedDataBase):
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False):
             
-            basename = "ActivationFlagView" # hardcoded
+            basename = "ClusterActivationFlag" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -194,7 +194,7 @@ class RhcStatus(SharedDataBase):
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False):
             
-            basename = "RegistrationFlagView" # hardcoded
+            basename = "ClusterRegistrationFlag" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -217,7 +217,7 @@ class RhcStatus(SharedDataBase):
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False):
             
-            basename = "ControllersCounterView" # hardcoded
+            basename = "ClusterControllersCounter" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -344,10 +344,7 @@ class RhcStatus(SharedDataBase):
             if not self._acquired_reg_sem:
 
                 self.sem_view.synch_all(read=True, wait=True)
-                
-                print("uiiii")
-                print(self.sem_view.torch_view[0, 0])
-                
+
                 if self.sem_view.torch_view[0, 0] == 0:
 
                     self.sem_view.torch_view[0, 0] = 1 # acquire sem
@@ -385,6 +382,8 @@ class RhcStatus(SharedDataBase):
                 self.sem_view.synch_all(read=False, wait=True)
 
                 self._acquired_reg_sem = False
+
+                return True
 
     def run(self):
 

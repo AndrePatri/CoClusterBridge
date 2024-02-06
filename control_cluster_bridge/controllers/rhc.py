@@ -81,6 +81,8 @@ class RHController(ABC):
         self._profiling_data_dict["task_ref_update"] = np.nan
         
         self.cluster_size = cluster_size
+        self._registered = False
+        self._closed = False 
 
         self.n_dofs = None
         self.n_contacts = None
@@ -131,7 +133,6 @@ class RHController(ABC):
         
     def init_states(self):
 
-        # to be called after n_dofs is known
         self.robot_state = RobotState(namespace=self.namespace,
                                 is_server=False,
                                 q_remapping=self._quat_remap, # remapping from environment to controller
@@ -163,7 +164,7 @@ class RHController(ABC):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-
+        
         if not self._states_initialized:
 
             exception =f"States not initialized. Did you call the init_states()?"
@@ -263,9 +264,11 @@ class RHController(ABC):
     
     def reset(self):
         
-        self._reset()
+        if not self._closed:
 
-        self.n_resets += 1
+            self._reset()
+
+            self.n_resets += 1
 
     def create_jnt_maps(self):
         
@@ -310,7 +313,9 @@ class RHController(ABC):
         
     def __del__(self):
         
-        self._close()
+        if not self._closed:
+
+            self._close()
 
     def _close(self):
 
@@ -335,22 +340,24 @@ class RHController(ABC):
         if self.cluster_stats is not None:
 
             self.cluster_stats.close()
+        
+        self._closed = True
     
     def _assign_cntrl_index(self, reg_state: torch.Tensor):
-        
+
         control_index = 0
         
         state = reg_state.squeeze() # ensure 1D tensor
 
-        free_spots = torch.nonzero(state).squeeze()
+        free_spots = torch.nonzero(~state)
 
-        control_index = free_spots[0] # just return the first free spot
+        control_index = free_spots[0].item() # just return the first free spot
 
         return control_index
 
     def _register_to_cluster(self):
         
-        self._acquire_reg_sem()
+        # self._acquire_reg_sem()
 
         available_spots = self.rhc_status.cluster_size
 
@@ -367,7 +374,9 @@ class RHController(ABC):
                     "_init",
                     exception,
                     LogType.EXCEP,
-                    throw_when_excep = True)
+                    throw_when_excep = False)
+            
+            exit()
         
         # increment controllers counter
         self.rhc_status.controllers_counter.torch_view += 1 
@@ -380,38 +389,39 @@ class RHController(ABC):
         
         self.controller_index = self._assign_cntrl_index(self.rhc_status.registration.torch_view)
 
-        print("#################")
-        print(self.controller_index)
-
         self.controller_index_torch = torch.tensor(self.controller_index)
 
         self.rhc_status.registration.torch_view[self.controller_index, 0] = True
         self.rhc_status.registration.synch_all(wait = True,
                                                 read = False) # register
 
-        self._release_reg_sem()
+        # self._release_reg_sem()
+
+        self._registered = True
 
     def _unregister_from_cluster(self):
 
-        self._acquire_reg_sem()
+        if self._registered:
 
-        self.rhc_status.registration.write_wait(False, 
-                                row_index=self.controller_index,
-                                col_index=0)
-        
-        # signal controller deactivation over shared mem
-        self.rhc_status.activation_state.write_wait(False, 
-                                row_index=self.controller_index,
-                                col_index=0)
-        
-        # decrementing controllers counter
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = True)
-        self.rhc_status.controllers_counter.torch_view -= 1 
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = False)
+            # self._acquire_reg_sem()
 
-        self._release_reg_sem()
+            self.rhc_status.registration.write_wait(False, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+            
+            # signal controller deactivation over shared mem
+            self.rhc_status.activation_state.write_wait(False, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+            
+            # decrementing controllers counter
+            self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = True)
+            self.rhc_status.controllers_counter.torch_view -= 1 
+            self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                    read = False)
+
+            # self._release_reg_sem()
     
     def _acquire_reg_sem(self):
 
@@ -459,7 +469,7 @@ class RHController(ABC):
             # we assume the user has made available the cost
             # and constraint data at this point (e.g. through
             # the solution of a bootstrap)
-             
+            
             cost_data = self._get_cost_data()
             constr_data = self._get_constr_data()
 
@@ -502,7 +512,7 @@ class RHController(ABC):
             
         self._homer = RobotHomer(self.srdf_path, 
                             self._controller_side_jnt_names)
-       
+    
     def _on_failure(self):
         
         # self.controller_fail_flag.set_bool(True) # can be read by the cluster client

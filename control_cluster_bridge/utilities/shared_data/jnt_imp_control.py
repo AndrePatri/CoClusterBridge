@@ -300,7 +300,7 @@ class JntImpCntrlData(SharedDataBase):
         if self.is_server:
 
             self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
-                                        basename = "SharedJntNames", 
+                                        basename = "JntImpCntrlSharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
                                         vlevel = self.vlevel)
@@ -308,7 +308,7 @@ class JntImpCntrlData(SharedDataBase):
         else:
 
             self.shared_jnt_names = StringTensorClient(
-                                        basename = "SharedJntNames", 
+                                        basename = "JntImpCntrlSharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
                                         vlevel = self.vlevel)
