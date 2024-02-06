@@ -150,7 +150,9 @@ class RHController(ABC):
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
         self.robot_cmds.run()
-                
+        
+        self.set_cmds_to_homing()
+
         self._states_initialized = True
         
     def solve(self):
@@ -245,7 +247,7 @@ class RHController(ABC):
 
                     if self._verbose and self._debug:
                         
-                        Journal.log(self.__class__.__name__,
+                        Journal.log(self.__class__.__name__ + str(self.controller_index),
                             "solve",
                             f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
                             LogType.INFO,
@@ -509,6 +511,12 @@ class RHController(ABC):
                                         safe=True)
 
             self.cluster_stats.run()
+
+            self.init_states() # initializes states
+
+            self.create_jnt_maps()
+
+            self.init_rhc_task_cmds() # initializes rhc commands
             
         self._homer = RobotHomer(self.srdf_path, 
                             self._controller_side_jnt_names)

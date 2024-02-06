@@ -337,34 +337,6 @@ class ControlClusterSrvr(ABC):
                         "You didn't finish to fill the cluster. Please call the add_controller() method to do so.",
                         LogType.EXCEP,
                         throw_when_excep = True)
-
-    def _finalize_init(self):
-
-        # steps to be performed after the controllers are fully initialized 
-
-        Journal.log(self.__class__.__name__,
-                        "_finalize_init",
-                        "Performing final initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-        
-        for i in range(0, self.cluster_size):
-
-            # we assign the client-side joint names to each controller (used for mapping purposes)
-
-            self._controllers[i].init_states() # initializes states
-
-            self._controllers[i].create_jnt_maps()
-
-            self._controllers[i].set_cmds_to_homing() # safe cmds
-
-            self._controllers[i].init_rhc_task_cmds() # initializes rhc commands
-        
-        Journal.log(self.__class__.__name__,
-                        "_finalize_init",
-                        "Final initialization steps completed.",
-                        LogType.STAT,
-                        throw_when_excep = True)
     
     def pre_init(self):
         
@@ -409,10 +381,6 @@ class ControlClusterSrvr(ABC):
             self._controllers.append(controller)
             
             self._controllers_count += 1
-
-            if self._controllers_count == self.cluster_size:
-            
-                self._finalize_init()
         
             return True
 

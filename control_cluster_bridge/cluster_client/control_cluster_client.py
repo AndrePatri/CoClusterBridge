@@ -268,6 +268,9 @@ class ControlClusterClient(ABC):
                     # only read cmds from shared mem
                     self._rhc_cmds.synch_from_shared_mem()
 
+                print("###########")
+                print(self._rhc_cmds.jnts_state.get_q())
+                
                 self.solution_counter += 1
 
             self._triggered = False # allow next trigger
