@@ -118,6 +118,7 @@ class RHController(ABC):
 
         self.n_resets = 0
         self.n_fails = 0
+        self._failed = False
 
         self._n_nodes = n_nodes
 
@@ -218,11 +219,17 @@ class RHController(ABC):
                     # latest data on shared mem
 
                     # latest state is employed
-                    success = self._solve() # solve actual TO
 
-                    if (not success):
+                    if not self.failed():
                         
-                        self._on_failure()
+                        # we can solve only if not in failure state
+                        self._failed = not self._solve() # solve actual TO
+
+                    else:
+                        
+                        # perform failure procedure
+
+                        self._on_failure()                       
 
                     self._write_cmds_from_sol() # we update update the views of the cmd
                     # from the latest solution
@@ -270,6 +277,8 @@ class RHController(ABC):
 
             self._reset()
 
+            self._failed = False # allow triggering
+
             self.n_resets += 1
 
     def create_jnt_maps(self):
@@ -313,7 +322,11 @@ class RHController(ABC):
 
         self.robot_cmds.jnts_state.synch_wait(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False)
-        
+    
+    def failed(self):
+
+        return self._failed
+    
     def __del__(self):
         
         if not self._closed:
@@ -402,6 +415,13 @@ class RHController(ABC):
 
         self._registered = True
 
+    def _deactivate(self):
+
+        # signal controller deactivation over shared mem
+            self.rhc_status.activation_state.write_wait(False, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+                                    
     def _unregister_from_cluster(self):
 
         if self._registered:
@@ -412,10 +432,7 @@ class RHController(ABC):
                                     row_index=self.controller_index,
                                     col_index=0)
             
-            # signal controller deactivation over shared mem
-            self.rhc_status.activation_state.write_wait(False, 
-                                    row_index=self.controller_index,
-                                    col_index=0)
+            self._deactivate()
             
             # decrementing controllers counter
             self.rhc_status.controllers_counter.synch_all(wait = True,
@@ -557,14 +574,12 @@ class RHController(ABC):
 
     def _on_failure(self):
         
-        # self.controller_fail_flag.set_bool(True) # can be read by the cluster client
-
-        # self.reset() # resets controller (this has to be defined by the user)
-
         self.rhc_status.fails.write_wait(True, 
                                         row_index=self.controller_index,
                                         col_index=0)
         
+        self._deactivate()
+
         self.n_fails += 1
 
     def _init_robot_homer(self):
