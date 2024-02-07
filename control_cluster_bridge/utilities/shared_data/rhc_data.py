@@ -359,7 +359,7 @@ class RhcStatus(SharedDataBase):
 
         if self.is_running():
                         
-            if not self._acquired_reg_sem:
+            if not self.acquire_reg_sem():
 
                 return False
             
@@ -376,6 +376,8 @@ class RhcStatus(SharedDataBase):
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
+                    
+                    exit()
                 
                 self.sem_view.torch_view[0, 0] = 0 # release sem
 
@@ -385,6 +387,10 @@ class RhcStatus(SharedDataBase):
 
                 return True
 
+    def ref_sem_acquired(self):
+
+        return self._acquired_reg_sem
+    
     def run(self):
 
         self.resets.run()
@@ -403,13 +409,20 @@ class RhcStatus(SharedDataBase):
 
     def close(self):
         
-        self.trigger.close()
-        self.resets.close()
-        self.fails.close()    
-        self.activation_state.close()
-        self.registration.close()
-        self.controllers_counter.close()
-        self.sem_view.close()
+        if self.is_running():
+            
+            # we first release it so that other controllers can still register
+            self.release_reg_sem()
+
+            self.trigger.close()
+            self.resets.close()
+            self.fails.close()    
+            self.activation_state.close()
+            self.registration.close()
+            self.controllers_counter.close()
+            self.sem_view.close()
+
+            self._is_runnning = False
 
 class RhcInternal(SharedDataBase):
 

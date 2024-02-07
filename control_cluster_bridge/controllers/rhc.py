@@ -360,7 +360,7 @@ class RHController(ABC):
 
     def _register_to_cluster(self):
         
-        # self._acquire_reg_sem()
+        self._acquire_reg_sem()
 
         available_spots = self.rhc_status.cluster_size
 
@@ -398,7 +398,7 @@ class RHController(ABC):
         self.rhc_status.registration.synch_all(wait = True,
                                                 read = False) # register
 
-        # self._release_reg_sem()
+        self._release_reg_sem()
 
         self._registered = True
 
@@ -406,7 +406,7 @@ class RHController(ABC):
 
         if self._registered:
 
-            # self._acquire_reg_sem()
+            self._acquire_reg_sem()
 
             self.rhc_status.registration.write_wait(False, 
                                     row_index=self.controller_index,
@@ -424,7 +424,7 @@ class RHController(ABC):
             self.rhc_status.controllers_counter.synch_all(wait = True,
                                                     read = False)
 
-            # self._release_reg_sem()
+            self._release_reg_sem()
     
     def _acquire_reg_sem(self):
 
