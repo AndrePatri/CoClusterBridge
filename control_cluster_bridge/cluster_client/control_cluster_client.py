@@ -32,8 +32,6 @@ import time
 
 import numpy as np
 
-import threading
-
 from typing import List
 
 from perf_sleep.pyperfsleep import PerfSleep
@@ -269,10 +267,10 @@ class ControlClusterClient(ABC):
                     # only read cmds from shared mem
                     self._rhc_cmds.synch_from_shared_mem()
 
-                print("########### self._rhc_cmds")
-                print(self._rhc_cmds.jnts_state.get_q()[0, :])
-                print(self._rhc_cmds.jnts_state.get_v()[0, :])
-                print(self._rhc_cmds.jnts_state.get_eff()[0, :])
+                # print("########### self._rhc_cmds")
+                # print(self._rhc_cmds.jnts_state.get_q()[0, :])
+                # print(self._rhc_cmds.jnts_state.get_v()[0, :])
+                # print(self._rhc_cmds.jnts_state.get_eff()[0, :])
 
                 self.solution_counter += 1
             
@@ -485,7 +483,7 @@ class ControlClusterClient(ABC):
         if not self._rhc_status.activation_state.torch_view.all():
                 
                 msg = f"Controllers waiting to be activated... (" + \
-                    f"{self._rhc_status.activation_state.torch_view.sum().item()}/{self.cluster_size})"
+                    f"{self._rhc_status.activation_state.torch_view.sum().item()}/{self.cluster_size} active)"
                 
                 self._sporadic_log(calling_methd="trigger_solution",
                             msg = msg,
@@ -507,7 +505,6 @@ class ControlClusterClient(ABC):
                 
     def _on_failure(self):
         
-        print("iAAAAAAAAAAAAAAA")
         failed = self.get_failed_controllers()
 
         if failed is not None:

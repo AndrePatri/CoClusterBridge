@@ -283,8 +283,6 @@ class RHController(ABC):
                                         row_index=self.controller_index,
                                         col_index=0)
             
-            print("Resettingggggggggg")
-
             self.rhc_status.resets.write_wait(False, 
                                             row_index=self.controller_index,
                                             col_index=0)
@@ -628,11 +626,21 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.set_v(v = self._get_cmd_jnt_v_from_sol(), robot_idxs=self.controller_index_torch)
 
         self.robot_cmds.jnts_state.set_eff(eff = self._get_cmd_jnt_eff_from_sol(), robot_idxs=self.controller_index_torch)
-
-        # self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
-
+        
+        # write to shared mem
         self.robot_cmds.jnts_state.synch_wait(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False)
+        
+        # we also fill other data (cost, constr. violation, etc..)
+        self.rhc_status.rhc_cost.write_wait(self._get_rhc_cost(), 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+        self.rhc_status.rhc_constr_viol.write_wait(self._get_rhc_residual(), 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+        self.rhc_status.rhc_n_iter.write_wait(self._get_rhc_niter_to_sol(), 
+                                    row_index=self.controller_index,
+                                    col_index=0)
     
     def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):
@@ -795,12 +803,25 @@ class RHController(ABC):
     def _get_cmd_jnt_eff_from_sol(self) -> torch.Tensor:
 
         pass
+
+    def _get_rhc_cost(self) -> torch.Tensor:
+
+        # to be overridden
+
+        return np.nan
     
-    @abstractmethod
-    def _get_additional_slvr_info(self) -> torch.Tensor:
+    def _get_rhc_residual(self) -> torch.Tensor:
+        
+        # to be overridden
 
-        pass
+        return np.nan
 
+    def _get_rhc_niter_to_sol(self) -> torch.Tensor:
+        
+        # to be overridden
+        
+        return np.nan
+    
     @abstractmethod
     def _update_open_loop(self):
 
