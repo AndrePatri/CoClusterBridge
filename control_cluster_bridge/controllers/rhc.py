@@ -311,7 +311,8 @@ class RHController(ABC):
 
         self.robot_cmds.jnts_state.set_eff(eff = null_action, robot_idxs=self.controller_index_torch)
 
-        self.robot_cmds.synch_to_shared_mem() # writes on shared memory
+        self.robot_cmds.jnts_state.synch_wait(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.n_jnts(),
+                                read=False)
         
     def __del__(self):
         
@@ -607,8 +608,9 @@ class RHController(ABC):
 
         # self.robot_cmds.slvr_state.set_info(self._get_additional_slvr_info())
 
-        self.robot_cmds.synch_to_shared_mem()
-
+        self.robot_cmds.jnts_state.synch_wait(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.n_jnts(),
+                                read=False)
+    
     def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):
 
