@@ -959,7 +959,7 @@ class RHCStatus(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        self.grid_n_rows = 3
+        self.grid_n_rows = 5
 
         self.grid_n_cols = 2
 
@@ -1039,12 +1039,48 @@ class RHCStatus(SharedDataWindow):
                                     legend_list=cluster_idx_legend, 
                                     ylabel="[bool]"))
         
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc Cost", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[float]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc Constraint Violation", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[float]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc Iteration Number", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[n]"))
+        
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
         self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 0)
         self.grid.addFrame(self.rt_plotters[5].base_frame, 2, 1)
+        self.grid.addFrame(self.rt_plotters[6].base_frame, 3, 0)
+        self.grid.addFrame(self.rt_plotters[7].base_frame, 3, 1)
+        self.grid.addFrame(self.rt_plotters[8].base_frame, 4, 0)
 
     def _finalize_grid(self):
         
@@ -1084,6 +1120,12 @@ class RHCStatus(SharedDataWindow):
                                                         wait=False)
             self.shared_data_clients[0].activation_state.synch_all(read = True, 
                                                         wait=False)
+            self.shared_data_clients[0].rhc_cost.synch_all(read = True, 
+                                                    wait=False)
+            self.shared_data_clients[0].rhc_constr_viol.synch_all(read = True, 
+                                                    wait=False)
+            self.shared_data_clients[0].rhc_n_iter.synch_all(read = True, 
+                                                    wait=False)
 
             self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.numpy_view)
             self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.numpy_view)
@@ -1091,5 +1133,8 @@ class RHCStatus(SharedDataWindow):
             self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].resets.numpy_view)
             self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].trigger.numpy_view)
             self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].activation_state.numpy_view)
+            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].rhc_cost.numpy_view)
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].rhc_constr_viol.numpy_view)
+            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.numpy_view)
 
             

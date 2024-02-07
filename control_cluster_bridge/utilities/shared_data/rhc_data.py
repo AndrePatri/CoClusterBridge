@@ -11,8 +11,6 @@ from control_cluster_bridge.utilities.shared_data.abstractions import SharedData
 from control_cluster_bridge.utilities.shared_data.state_encoding import FullRobState
 import numpy as np
 
-import torch
-
 from typing import List
 
 # implementations for robot state and 
@@ -230,7 +228,79 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
                 fill_value = 0)
+    
+    class RhcCostView(SharedDataView):
 
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
+            
+            basename = "RhcCost" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                fill_value = np.nan)
+    
+    class RhcCnstrViolationView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
+            
+            basename = "RhcCnstrViolation" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                fill_value = np.nan)
+    
+    class RhcNIterationsView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False):
+            
+            basename = "RhcNIterations" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                fill_value = np.nan)
+            
     class SemView(SharedDataView):
 
         def __init__(self,
@@ -313,12 +383,27 @@ class RhcStatus(SharedDataBase):
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection)
         
-        self.registering_sem = self.ControllersCounterView(namespace=self.namespace, 
+        self.rhc_cost = self.RhcCostView(namespace=self.namespace, 
                                 is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
+
+        self.rhc_constr_viol = self.RhcCnstrViolationView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection)
         
+        self.rhc_n_iter = self.RhcNIterationsView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection)
+
         self.sem_view = self.SemView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 verbose=self.verbose, 
@@ -399,6 +484,9 @@ class RhcStatus(SharedDataBase):
         self.activation_state.run()
         self.registration.run()
         self.controllers_counter.run()
+        self.rhc_cost.run()
+        self.rhc_constr_viol.run()
+        self.rhc_n_iter.run()
         self.sem_view.run()
 
         if not self.is_server:
@@ -420,6 +508,9 @@ class RhcStatus(SharedDataBase):
             self.activation_state.close()
             self.registration.close()
             self.controllers_counter.close()
+            self.rhc_n_iter.close()
+            self.rhc_cost.close()
+            self.rhc_constr_viol.close()
             self.sem_view.close()
 
             self._is_runnning = False
@@ -1251,7 +1342,7 @@ class RhcInternal(SharedDataBase):
                 LogType.EXCEP,
                 throw_when_excep = True)
             
-class RhcRefs(SharedDataBase):
+class RhcRefs(FullRobState):
 
     def __init__(self):
 
