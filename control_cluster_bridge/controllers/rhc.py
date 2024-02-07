@@ -201,12 +201,6 @@ class RHController(ABC):
 
                     self.reset()
 
-                    self.fail_n = 0 # resets number of fails
-
-                    self.rhc_status.resets.write_wait(False, 
-                                                    row_index=self.controller_index,
-                                                    col_index=0)
-
                 # checks for trigger requests
                 if self.rhc_status.trigger.read_wait(row_index=self.controller_index,
                                                     col_index=0)[0]:
@@ -278,12 +272,22 @@ class RHController(ABC):
             self._reset()
 
             self._failed = False # allow triggering
+            
+            self.set_cmds_to_homing()
+
+            self.fail_n = 0 # resets number of fails
+
+            self.n_resets += 1
 
             self.rhc_status.fails.write_wait(False, 
                                         row_index=self.controller_index,
                                         col_index=0)
             
-            self.n_resets += 1
+            print("Resettingggggggggg")
+
+            self.rhc_status.resets.write_wait(False, 
+                                            row_index=self.controller_index,
+                                            col_index=0)
 
     def create_jnt_maps(self):
         

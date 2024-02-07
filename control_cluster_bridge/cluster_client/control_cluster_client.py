@@ -181,6 +181,9 @@ class ControlClusterClient(ABC):
 
         self.failed[:, :] = self._rhc_status.fails.torch_view
 
+        # we handle controller fails, if any
+        self._on_failure()
+        
         self._pre_trigger_steps_done = True
 
     def pretriggered(self):
@@ -250,9 +253,6 @@ class ControlClusterClient(ABC):
             # we wait for all controllers to finish      
             done = self._wait_for_solution() # this is blocking if at least a controller
             # is active
-            
-            # we handle controller fails, if any
-            self._on_failure()
 
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
@@ -268,6 +268,11 @@ class ControlClusterClient(ABC):
                     
                     # only read cmds from shared mem
                     self._rhc_cmds.synch_from_shared_mem()
+
+                print("########### self._rhc_cmds")
+                print(self._rhc_cmds.jnts_state.get_q()[0, :])
+                print(self._rhc_cmds.jnts_state.get_v()[0, :])
+                print(self._rhc_cmds.jnts_state.get_eff()[0, :])
 
                 self.solution_counter += 1
             
@@ -502,6 +507,7 @@ class ControlClusterClient(ABC):
                 
     def _on_failure(self):
         
+        print("iAAAAAAAAAAAAAAA")
         failed = self.get_failed_controllers()
 
         if failed is not None:
