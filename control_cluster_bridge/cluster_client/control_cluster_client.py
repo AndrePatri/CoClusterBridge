@@ -252,7 +252,7 @@ class ControlClusterClient(ABC):
             # is active
             
             # we handle controller fails, if any
-            # self._on_failure()
+            self._on_failure()
 
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
@@ -502,9 +502,15 @@ class ControlClusterClient(ABC):
                 
     def _on_failure(self):
         
-        # writes failures to reset flags
-        self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
-                                    0, 0)
+        failed = self.get_failed_controllers()
+
+        if failed is not None:
+
+            msg = f"These controllers in the cluster failed: {failed}"
+                    
+            self._sporadic_log(calling_methd="_on_failure",
+                        msg = msg,
+                        logtype=LogType.WARN)
 
     def _setup(self):
 
