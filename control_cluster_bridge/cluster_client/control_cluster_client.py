@@ -109,8 +109,10 @@ class ControlClusterClient(ABC):
         self._is_first_control_step = False
         self._pre_trigger_steps_done = False
         self._triggered = False
+
         self.now_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
         self.prev_active_controllers = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
+        self.failed = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
 
         # other data
         self.n_contact_sensors = n_contact_sensors
@@ -171,8 +173,13 @@ class ControlClusterClient(ABC):
         self._rhc_status.activation_state.synch_all(read=True, 
                                         wait=True)
         
+        self._rhc_status.fails.synch_all(read=True, 
+                                        wait=True)
+                
         # all active controllers will be triggered
         self.now_active[:, :] = self._rhc_status.activation_state.torch_view
+
+        self.failed[:, :] = self._rhc_status.fails.torch_view
 
         self._pre_trigger_steps_done = True
 
@@ -245,7 +252,7 @@ class ControlClusterClient(ABC):
             # is active
             
             # we handle controller fails, if any
-            self._on_failure()
+            # self._on_failure()
 
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
@@ -262,9 +269,6 @@ class ControlClusterClient(ABC):
                     # only read cmds from shared mem
                     self._rhc_cmds.synch_from_shared_mem()
 
-                print("########### rhc cmds from shared mem")
-                print(self._rhc_cmds.jnts_state.get_q())
-                
                 self.solution_counter += 1
             
             self._triggered = False # allow next trigger
@@ -366,10 +370,40 @@ class ControlClusterClient(ABC):
             # no controller active
 
             return None
+    
+    def get_failed_controllers(self):
+        
+        failed = torch.nonzero(self.failed.squeeze(dim=1)).squeeze(dim=1)
+        
+        if not failed.shape[0] == 0:
+  
+            return failed
+        
+        else:
+            
+            # no controller active
+
+            return None
             
     def just_started_running(self):
 
         return self.is_running() and (not self._was_running)
+    
+    def reset_controllers(self,
+                    idxs: torch.Tensor = None):
+        
+        if idxs is not None:
+            
+            self._rhc_status.resets.torch_view[idxs, 0] = torch.full(size=(idxs.shape[0], 1), 
+                                                            fill_value=True)
+            
+            self._rhc_status.resets.synch_all(read=False, wait=True)
+            
+        else:
+
+            # resets all failed controllers
+            self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
+                                        0, 0)
         
     def is_running(self):
 
@@ -467,10 +501,6 @@ class ControlClusterClient(ABC):
                 throw_when_excep = True)
                 
     def _on_failure(self):
-
-        # checks failure status
-        self._rhc_status.fails.synch_all(read=True, 
-                                    wait=True)
         
         # writes failures to reset flags
         self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
