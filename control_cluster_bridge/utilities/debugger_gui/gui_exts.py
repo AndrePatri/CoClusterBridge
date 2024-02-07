@@ -397,7 +397,7 @@ class JntImpMonitor(SharedDataWindow):
             self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].vel_err_view.numpy_view[index, :].flatten())
 
             # eff. feedforward  
-            self.shared_data_clients[0].imp_eff_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].imp_eff_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].imp_eff_view.n_cols) # synch data
-            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].imp_eff_view.numpy_view[index, :].flatten())
+            self.shared_data_clients[0].eff_ff_view.synch(read=True, row_index = 0, col_index = 0, 
+                                            n_rows = self.shared_data_clients[0].eff_ff_view.n_rows, 
+                                            n_cols = self.shared_data_clients[0].eff_ff_view.n_cols) # synch data
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].eff_ff_view.numpy_view[index, :].flatten())

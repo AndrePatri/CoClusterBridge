@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QWidget
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs, ContactState
+from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
