@@ -279,6 +279,10 @@ class RHController(ABC):
 
             self._failed = False # allow triggering
 
+            self.rhc_status.fails.write_wait(False, 
+                                        row_index=self.controller_index,
+                                        col_index=0)
+            
             self.n_resets += 1
 
     def create_jnt_maps(self):
