@@ -51,7 +51,7 @@ class DynamicSimInfoNames:
                 "OmniJntImpCntrl:time_to_update_state",
                 "OmniJntImpCntrl:time_to_set_refs",
                 "OmniJntImpCntrl:time_to_apply_cmds",
-                "time_to_get_agent_data"]
+                "time_to_get_states_from_sim"]
         
         self.idx_dict = dict.fromkeys(self._keys, None)
 
