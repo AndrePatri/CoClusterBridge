@@ -75,7 +75,8 @@ class SharedSimInfo(SharedDataBase):
                 namespace: str,
                 is_server = False, 
                 sim_params_dict: Dict = None,
-                safe: bool = True):
+                safe: bool = True,
+                force_reconnection: bool = True):
         
         self.namespace = namespace + "SharedSimInfo"
 
@@ -104,7 +105,8 @@ class SharedSimInfo(SharedDataBase):
                     n_dims = len(self.param_keys), 
                     verbose = True, 
                     vlevel = VLevel.V2,
-                    safe = safe)
+                    safe = safe, 
+                    force_reconnection = force_reconnection)
         
         # names
         if self.is_server:
@@ -113,8 +115,8 @@ class SharedSimInfo(SharedDataBase):
                                         basename = "SimDataNames", 
                                         name_space = self.namespace,
                                         verbose = True, 
-                                        vlevel = VLevel.V1, 
-                                        force_reconnection = True)
+                                        vlevel = VLevel.V2, 
+                                        force_reconnection = force_reconnection)
 
         else:
 
@@ -122,7 +124,7 @@ class SharedSimInfo(SharedDataBase):
                                         basename = "SimDataNames", 
                                         name_space = self.namespace,
                                         verbose = True, 
-                                        vlevel = VLevel.V1)
+                                        vlevel = VLevel.V2)
             
         self._is_running = False
     
