@@ -310,7 +310,7 @@ class ControlClusterClient(ABC):
                 # ini case user wants to set core ids manually
                 core_ids = self.core_ids_override_list
 
-            for i in range(len(self._processes[i])):
+            for i in range(len(self._processes)):
 
                 self._processes[i].start()
 
