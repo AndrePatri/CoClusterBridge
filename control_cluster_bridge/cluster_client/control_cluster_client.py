@@ -214,8 +214,8 @@ class ControlClusterClient(ABC):
                     Journal.log(self.__class__.__name__,
                         "_debug_prints",
                         exception,
-                        LogType.EXEP,
-                        throw_when_excep = True)
+                        LogType.EXCEP,
+                        throw_when_excep = False)
 
                     raise Exception(exception)
                         
@@ -281,12 +281,20 @@ class ControlClusterClient(ABC):
                         LogType.STAT,
                         throw_when_excep = True)
 
-        if self._controllers_count == self.cluster_size:
+        if self._controllers_count <= self.cluster_size:
             
             self._debug_prints() # some debug prints
 
-            for i in range(0, self.cluster_size):
+            for i in range(0, self._controllers_count):
+                
+                info = f"Spawning process for controller n.{i}."
 
+                Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
+                
                 process = mp.Process(target=self._controllers[i].solve, name=self.processes_basename + str(i))
 
                 self._processes.append(process)
@@ -302,14 +310,13 @@ class ControlClusterClient(ABC):
                 # ini case user wants to set core ids manually
                 core_ids = self.core_ids_override_list
 
-            i = 0
-            for process in self._processes:
+            for i in range(len(self._processes[i])):
 
-                process.start()
+                self._processes[i].start()
 
-                os.sched_setaffinity(process.pid, {self._get_process_affinity(i, core_ids=core_ids)})
+                os.sched_setaffinity(self._processes[i].pid, {self._get_process_affinity(i, core_ids=core_ids)})
                 
-                info = f"Setting affinity ID {os.sched_getaffinity(process.pid)} for controller n.{i}."
+                info = f"Affinity ID {os.sched_getaffinity(self._processes[i].pid)} was set for controller n.{i}."
 
                 Journal.log(self.__class__.__name__,
                         "_spawn_processes",
@@ -317,8 +324,6 @@ class ControlClusterClient(ABC):
                         LogType.STAT,
                         throw_when_excep = True)
                 
-                i += 1
-
             self._is_cluster_ready = True
 
             self.cluster_stats.write_info(dyn_info_name="cluster_ready",
