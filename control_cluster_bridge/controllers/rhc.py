@@ -95,7 +95,7 @@ class RHController(ABC):
         self.cluster_stats = None
 
         self.robot_cmds = None
-        self.rhc_task_refs = None
+        self.rhc_refs = None
 
         # jnt names
         self._env_side_jnt_names = []
@@ -130,7 +130,7 @@ class RHController(ABC):
 
     def init_rhc_task_cmds(self):
         
-        self.rhc_task_refs = self._init_rhc_task_cmds()
+        self.rhc_refs = self._init_rhc_task_cmds()
         
     def init_states(self):
         
@@ -178,7 +178,7 @@ class RHController(ABC):
                     LogType.EXCEP,
                     throw_when_excep = True)
 
-        if self.rhc_task_refs is None:
+        if self.rhc_refs is None:
 
             exception = f"RHC task references non initialized. Did you call init_rhc_task_cmds()?"
 

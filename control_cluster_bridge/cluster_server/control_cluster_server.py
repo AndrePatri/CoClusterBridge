@@ -24,6 +24,8 @@ from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTask
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
+
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
@@ -96,6 +98,7 @@ class ControlClusterServer(ABC):
 
         self._robot_states = None
         self._rhc_cmds = None
+        self._rhc_refs = None
         self._rhc_status = None
         self._cluster_stats = None 
         
@@ -150,6 +153,10 @@ class ControlClusterServer(ABC):
             if self._rhc_cmds is not None:
                 
                 self._rhc_cmds.close()
+            
+            if self._rhc_refs is not None:
+                
+                self._rhc_refs.close()
 
             if self._rhc_task_refs is not None:
 
@@ -552,7 +559,21 @@ class ControlClusterServer(ABC):
                                 verbose=True,
                                 vlevel=VLevel.V2,
                                 safe=False)
-                                            
+
+        self._rhc_refs = RhcRefs(namespace=self.namespace,
+                            is_server=True,
+                            n_robots=self.cluster_size,
+                            n_jnts=self.n_dofs,
+                            n_contacts=self.n_contact_sensors,
+                            jnt_names=self.jnt_names,
+                            contact_names=self.contact_linknames,
+                            with_gpu_mirror = True,
+                            force_reconnection = self._force_reconnection,
+                            safe = False,
+                            verbose = True,
+                            vlevel = VLevel.V2,
+                            fill_value=np.nan)
+        
         self._rhc_status = RhcStatus(is_server=True,
                             cluster_size=self.cluster_size,
                             namespace=self.namespace, 
@@ -570,7 +591,7 @@ class ControlClusterServer(ABC):
                                     vlevel=VLevel.V2, 
                                     safe=True,
                                     force_reconnection=self._force_reconnection)
-        
+
         self._rhc_task_refs = RhcClusterTaskRefs(n_contacts=self.n_contact_sensors, 
                                     cluster_size=self.cluster_size, 
                                     namespace=self.namespace,
@@ -581,6 +602,8 @@ class ControlClusterServer(ABC):
         self._robot_states.run()
 
         self._rhc_cmds.run()
+
+        self._rhc_refs.run()
 
         self._rhc_task_refs.start()
 

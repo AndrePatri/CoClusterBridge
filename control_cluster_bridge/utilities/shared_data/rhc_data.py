@@ -31,7 +31,8 @@ class RobotState(FullRobState):
             force_reconnection: bool = False,
             safe: bool = True,
             verbose: bool = False,
-            vlevel: VLevel = VLevel.V1):
+            vlevel: VLevel = VLevel.V1,
+            fill_value = 0):
 
         basename = "RobotState"
 
@@ -48,7 +49,8 @@ class RobotState(FullRobState):
             force_reconnection=force_reconnection,
             safe=safe,
             verbose=verbose,
-            vlevel=vlevel)
+            vlevel=vlevel,
+            fill_value=fill_value)
 
 class RhcCmds(FullRobState):
 
@@ -65,7 +67,8 @@ class RhcCmds(FullRobState):
             force_reconnection: bool = False,
             safe: bool = True,
             verbose: bool = False,
-            vlevel: VLevel = VLevel.V1):
+            vlevel: VLevel = VLevel.V1,
+            fill_value=0):
 
         basename = "RhcCmds"
 
@@ -82,7 +85,198 @@ class RhcCmds(FullRobState):
             force_reconnection=force_reconnection,
             safe=safe,
             verbose=verbose,
-            vlevel=vlevel)
+            vlevel=vlevel,
+            fill_value=fill_value)
+        
+class RhcRefs(SharedDataBase):
+    
+    class RobotFullConfigRef(FullRobState):
+
+        def __init__(self,
+                namespace: str,
+                is_server: bool,
+                basename: str = "",
+                n_robots: int = None,
+                n_jnts: int = None,
+                n_contacts: int = 1,
+                jnt_names: List[str] = None,
+                contact_names: List[str] = None,
+                q_remapping: List[int] = None,
+                with_gpu_mirror: bool = True,
+                force_reconnection: bool = False,
+                safe: bool = True,
+                verbose: bool = False,
+                vlevel: VLevel = VLevel.V1,
+                fill_value=np.nan, # if ref is not used
+                ):
+
+            basename = basename + "RobotFullConfigRef"
+
+            super().__init__(namespace=namespace,
+                basename=basename,
+                is_server=is_server,
+                n_robots=n_robots,
+                n_jnts=n_jnts,
+                n_contacts=n_contacts,
+                jnt_names=jnt_names,
+                contact_names=contact_names,
+                q_remapping=q_remapping,
+                with_gpu_mirror=with_gpu_mirror,
+                force_reconnection=force_reconnection,
+                safe=safe,
+                verbose=verbose,
+                vlevel=vlevel,
+                fill_value=fill_value)
+    
+    class Phase(SharedDataView):
+
+        def __init__(self,
+            namespace = "",
+            basename = "",
+            is_server = False, 
+            n_robots: int = -1, 
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0,
+            force_reconnection: bool = False):
+        
+            basename = basename + "Phase" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_robots, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Int,
+                force_reconnection=force_reconnection,
+                fill_value = np.nan)
+            
+    class ContactFlag(SharedDataView):
+
+        def __init__(self,
+            namespace = "",
+            basename = "",
+            is_server = False, 
+            n_robots: int = -1, 
+            n_contacts: int = -1,
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0,
+            force_reconnection: bool = False):
+        
+            basename = basename + "ContactFlag" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = n_robots, 
+                n_cols = n_contacts, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = True, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Bool,
+                force_reconnection=force_reconnection,
+                fill_value = True)
+
+    def __init__(self,
+                namespace: str,
+                is_server: bool,
+                basename: str = "",
+                n_robots: int = None,
+                n_jnts: int = None,
+                n_contacts: int = 1,
+                jnt_names: List[str] = None,
+                contact_names: List[str] = None,
+                q_remapping: List[int] = None,
+                with_gpu_mirror: bool = True,
+                force_reconnection: bool = False,
+                safe: bool = False,
+                verbose: bool = False,
+                vlevel: VLevel = VLevel.V1,
+                fill_value=np.nan):
+        
+        self.basename = "Rhc"
+
+        self.is_server = is_server
+
+        self.n_robots = n_robots
+
+        self.namespace = namespace
+
+        self.verbose = verbose
+
+        self.vlevel = vlevel
+
+        self.force_reconnection = force_reconnection
+
+        self.rob_refs = self.RobotFullConfigRef(namespace=namespace,
+                                    basename=self.basename,
+                                    is_server=is_server,
+                                    n_robots=n_robots,
+                                    n_jnts=n_jnts,
+                                    n_contacts=n_contacts,
+                                    jnt_names=jnt_names,
+                                    contact_names=contact_names,
+                                    q_remapping=q_remapping,
+                                    with_gpu_mirror=with_gpu_mirror,
+                                    force_reconnection=force_reconnection,
+                                    safe=safe,
+                                    verbose=verbose,
+                                    vlevel=vlevel,
+                                    fill_value=fill_value)
+        
+        self.phase_id = self.Phase(namespace=namespace,
+                            basename=self.basename,
+                            is_server=is_server,
+                            n_robots=n_robots,
+                            verbose=verbose,
+                            vlevel=vlevel,
+                            force_reconnection=force_reconnection)
+
+        self.contact_flags = None
+
+        self._is_runnning = False
+
+    def __del__(self):
+
+        self.close()
+
+    def is_running(self):
+    
+        return self._is_runnning
+    
+    def run(self):
+
+        self.rob_refs.run()
+        self.phase_id.run()
+
+        self.n_contacts = self.rob_refs.n_contacts()
+        
+        self.n_robots = self.rob_refs.n_robots()    
+        
+        self.contact_flags = self.ContactFlag(namespace=self.namespace,
+                            basename=self.basename,
+                            is_server=self.is_server,
+                            n_robots=self.n_robots,
+                            n_contacts=self.n_contacts,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection)
+
+        self.contact_flags.run()
+
+        self._is_runnning = True
+
+    def close(self):
+        
+        if self.is_running():
+            
+            self.rob_refs.close()
+            self.phase_id.close()
+            self.contact_flags.close()
+
+            self._is_runnning = False
 
 class RhcStatus(SharedDataBase):
     
@@ -1341,17 +1535,3 @@ class RhcInternal(SharedDataBase):
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
-            
-class RhcRefs(FullRobState):
-
-    def __init__(self):
-
-        self._is_running = False
-    
-    def run(self):
-
-        a = 1
-    
-    def close(self):
-
-        a = 2

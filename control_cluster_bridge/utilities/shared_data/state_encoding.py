@@ -649,7 +649,8 @@ class RootState(SharedDataView):
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
             force_reconnection: bool = False,
-            with_gpu_mirror: bool = True):
+            with_gpu_mirror: bool = True,
+            fill_value = 0):
         
         basename = "RootState" 
 
@@ -658,8 +659,10 @@ class RootState(SharedDataView):
         self.n_robots = n_robots
 
         self._q_remapping = None
+
         if q_remapping is not None:
-            self._q_remapping = torch.tensor(q_remapping)
+
+            self.set_q_remapping(q_remapping)
 
         super().__init__(namespace = namespace,
             basename = basename,
@@ -669,7 +672,7 @@ class RootState(SharedDataView):
             dtype = sharsor_dtype.Float,
             verbose = verbose, 
             vlevel = vlevel,
-            fill_value = 0, 
+            fill_value = fill_value, 
             safe = safe,
             force_reconnection=force_reconnection,
             with_gpu_mirror=with_gpu_mirror)
@@ -688,7 +691,8 @@ class RootState(SharedDataView):
         self._v_gpu = None
         self._omega_gpu = None
         
-    def run(self):
+    def run(self,
+            q_remapping: List[int] = None):
         
         # overriding parent 
 
@@ -700,10 +704,30 @@ class RootState(SharedDataView):
 
         self._init_views()
 
+        self.set_q_remapping(q_remapping)
+
     def get_remapping(self):
 
         return self._q_remapping
     
+    def set_q_remapping(self, 
+                q_remapping: List[int] = None):
+        
+        if q_remapping is not None:
+
+            if not len(q_remapping) == 4:
+
+                exception = f"Provided q remapping length {len(q_remapping)}" + \
+                    f"is not 4!"
+
+                Journal.log(self.__class__.__name__,
+                    "update_jnts_remapping",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+
+            self._q_remapping = torch.tensor(q_remapping)
+
     def _init_views(self):
 
         # root
@@ -983,7 +1007,8 @@ class ContactWrenches(SharedDataView):
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
             force_reconnection: bool = False,
-            with_gpu_mirror: bool = True):
+            with_gpu_mirror: bool = True,
+            fill_value = 0):
         
         basename = "ContactWrenches"
 
@@ -1017,7 +1042,7 @@ class ContactWrenches(SharedDataView):
             dtype = sharsor_dtype.Float,
             verbose = verbose, 
             vlevel = vlevel,
-            fill_value = 0, 
+            fill_value = fill_value, 
             safe = safe,
             force_reconnection=force_reconnection,
             with_gpu_mirror=with_gpu_mirror)
@@ -1411,7 +1436,8 @@ class FullRobState(SharedDataBase):
             force_reconnection: bool = False,
             safe: bool = True,
             verbose: bool = False,
-            vlevel: VLevel = VLevel.V1):
+            vlevel: VLevel = VLevel.V1,
+            fill_value = 0):
 
         self._namespace = namespace
         self._basename = basename
@@ -1446,7 +1472,8 @@ class FullRobState(SharedDataBase):
                             vlevel=self._vlevel,
                             safe=self._safe,
                             force_reconnection=self._force_reconnection,
-                            with_gpu_mirror=with_gpu_mirror)
+                            with_gpu_mirror=with_gpu_mirror,
+                            fill_value=fill_value)
     
         self.jnts_state = JntsState(namespace=self._namespace + self._basename, 
                             is_server=self._is_server,
@@ -1457,7 +1484,8 @@ class FullRobState(SharedDataBase):
                             vlevel=self._vlevel,
                             safe=self._safe,
                             force_reconnection=self._force_reconnection,
-                            with_gpu_mirror=with_gpu_mirror)
+                            with_gpu_mirror=with_gpu_mirror,
+                            fill_value=fill_value)
         
         self.contact_wrenches = ContactWrenches(namespace=self._namespace + self._basename, 
                             is_server=self._is_server,
@@ -1468,7 +1496,8 @@ class FullRobState(SharedDataBase):
                             vlevel=self._vlevel,
                             safe=self._safe,
                             force_reconnection=self._force_reconnection,
-                            with_gpu_mirror=with_gpu_mirror)
+                            with_gpu_mirror=with_gpu_mirror,
+                            fill_value=fill_value)
         
         self._is_running = False
     
@@ -1504,6 +1533,11 @@ class FullRobState(SharedDataBase):
                 jnts_remapping: List[int] = None):
 
         self.jnts_state.set_jnts_remapping(jnts_remapping=jnts_remapping)
+    
+    def set_q_remapping(self,
+                q_remapping: List[int] = None):
+
+        self.root_state.set_q_remapping(q_remapping==q_remapping)
 
     def run(self,
         jnts_remapping: List[int] = None):
