@@ -125,6 +125,8 @@ class ControlClusterServer(ABC):
         self.wait_for_sol_counter = 0
         self._print_frequency = 100 # number of "steps" at which sporadic logs are printed
 
+        self._force_reconnection = True
+
     def __del__(self):
                 
         self.close()
@@ -533,7 +535,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self.contact_linknames,
                                 with_gpu_mirror=True,
-                                force_reconnection=False,
+                                force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=VLevel.V2,
                                 safe=False)
@@ -546,7 +548,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self.contact_linknames,
                                 with_gpu_mirror=True,
-                                force_reconnection=False,
+                                force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=VLevel.V2,
                                 safe=False)
@@ -556,7 +558,7 @@ class ControlClusterServer(ABC):
                             namespace=self.namespace, 
                             verbose=self._verbose, 
                             vlevel=VLevel.V2,
-                            force_reconnection=False)
+                            force_reconnection=self._force_reconnection)
         
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
@@ -566,7 +568,8 @@ class ControlClusterServer(ABC):
                                     name=self.namespace,
                                     verbose=self._verbose,
                                     vlevel=VLevel.V2, 
-                                    safe=True)
+                                    safe=True,
+                                    force_reconnection=self._force_reconnection)
         
         self._rhc_task_refs = RhcClusterTaskRefs(n_contacts=self.n_contact_sensors, 
                                     cluster_size=self.cluster_size, 
