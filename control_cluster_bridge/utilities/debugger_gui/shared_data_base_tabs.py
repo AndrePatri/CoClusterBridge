@@ -329,7 +329,7 @@ class RHCRefs(SharedDataWindow):
                     update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
                     parent=None, 
-                    base_name="Base ref VS meas. linear vel.", 
+                    base_name="Root ref VS meas. linear vel.", 
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=["v_x_ref", "v_y_ref", "v_z_ref",
                             "v_x", "v_y", "v_z"], 
@@ -341,100 +341,48 @@ class RHCRefs(SharedDataWindow):
                     update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
                     parent=None, 
-                    base_name="Base ref. VS meas. angular vel.",
+                    base_name="Root ref. VS meas. angular vel.",
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=["omega_x_ref", "omega_y_ref", "omega_z_ref",
                             "omega_x", "omega_y", "omega_z"], 
                     ylabel="[rad/s]"))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.n_jnts(),
-                    n_data = 1,
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Joints ref. VS meas. q",
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=jnt_leg_full, 
-                    ylabel="[rad]"))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.n_jnts(),
+    
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].contact_flags.n_cols,
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
+                    update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
                     parent=None, 
-                    base_name="Joints ref. VS meas. v",
+                    base_name="Contact flags",
                     window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=jnt_leg_full, 
-                    ylabel="[rad/s]"))
+                    legend_list=self.shared_data_clients[0].rob_refs.contact_names(), 
+                    ylabel="[bool]"))
         
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.n_jnts(),
+        cluster_idx_legend = [""] * self.shared_data_clients[0].rob_refs.n_robots()
+
+        for i in range(len(cluster_idx_legend)):
+            
+            cluster_idx_legend[i] = str(i)
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].rob_refs.n_robots(),
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
+                    update_plot_dt=self.update_plot_dt, 
                     window_duration=self.window_duration, 
                     parent=None, 
-                    base_name="Joints ref. VS meas. a",
+                    base_name="Phase ID",
                     window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=jnt_leg_full, 
-                    ylabel="[rad/s^2]"))
-        
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.n_jnts(),
-                    n_data = 1,
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Joints ref. VS meas. efforts",
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=jnt_leg_full, 
-                    ylabel="[Nm]"))
-        
-        contact_wrench_legend = [""] * self.shared_data_clients[0].rob_refs.contact_wrenches.n_cols
-        contact_names = self.shared_data_clients[0].rob_refs.contact_names()
-
-        for i in range(self.shared_data_clients[0].rob_refs.n_contacts()):
-
-            contact_wrench_legend[i * 3] = "f_x - " + contact_names[i]
-            contact_wrench_legend[i * 3 + 1] = "f_y - " + contact_names[i]
-            contact_wrench_legend[i * 3 + 2] = "f_z - " + contact_names[i]
-
-        for i in range(self.shared_data_clients[0].rob_refs.n_contacts()):
-
-            contact_wrench_legend[i * 3 + 3 * len(contact_names)] = "t_x - " + contact_names[i]
-            contact_wrench_legend[i * 3 + 1 + 3 * len(contact_names)] = "t_y - " + contact_names[i]
-            contact_wrench_legend[i * 3 + 2 + 3 * len(contact_names)] = "t_z - " + contact_names[i]
-
-        contact_wrench_legend_ref = [element + "_ref" for element in self.shared_data_clients[0].rob_refs.jnt_names()]
-        contact_leg_full = contact_wrench_legend_ref + self.shared_data_clients[0].rob_refs.jnt_names()
-
-        self.rt_plotters.append(RtPlotWindow(data_dim=len(contact_leg_full),
-                    n_data = 1, 
-                    update_data_dt=self.update_data_dt, 
-                    update_plot_dt=self.update_plot_dt,
-                    window_duration=self.window_duration, 
-                    parent=None, 
-                    base_name="Ref. VS meas. contact wrenches",
-                    window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=contact_leg_full, 
-                    ylabel="[N] - [Nm]"))
+                    legend_list=cluster_idx_legend, 
+                    ylabel="[int]"))
         
         # root state
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
-        
-        # joint state
         self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 0)
         self.grid.addFrame(self.rt_plotters[5].base_frame, 2, 1)
-        self.grid.addFrame(self.rt_plotters[6].base_frame, 3, 0)
-        self.grid.addFrame(self.rt_plotters[7].base_frame, 3, 1)
-
-        # contact state
-        self.grid.addFrame(self.rt_plotters[8].base_frame, 4, 0)
-
+        
     def _init_shared_data(self):
         
         self.shared_data_clients.append(RhcRefs(namespace=self.namespace,
@@ -472,20 +420,30 @@ class RHCRefs(SharedDataWindow):
 
             torch_idx = torch.tensor(index)
 
+            p_ref = self.shared_data_clients[0].rob_refs.root_state.get_p(robot_idxs=torch_idx).numpy().flatten()
+            p_meas = self.shared_data_clients[1].root_state.get_p(robot_idxs=torch_idx).numpy().flatten()
+            p_full = np.concatenate((p_ref, p_meas)) 
+                        
+            q_ref = self.shared_data_clients[0].rob_refs.root_state.get_q(robot_idxs=torch_idx).numpy().flatten()
+            q_meas = self.shared_data_clients[1].root_state.get_q(robot_idxs=torch_idx).numpy().flatten()
+            q_full = np.concatenate((q_ref, q_meas)) 
+
+            v_ref = self.shared_data_clients[0].rob_refs.root_state.get_v(robot_idxs=torch_idx).numpy().flatten()
+            v_meas = self.shared_data_clients[1].root_state.get_v(robot_idxs=torch_idx).numpy().flatten()
+            v_full = np.concatenate((v_ref, v_meas)) 
+
+            omega_ref = self.shared_data_clients[0].rob_refs.root_state.get_omega(robot_idxs=torch_idx).numpy().flatten()
+            omega_meas = self.shared_data_clients[1].root_state.get_omega(robot_idxs=torch_idx).numpy().flatten()
+            omega_full = np.concatenate((omega_ref, omega_meas)) 
+
             # # root state
-            # self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_p(robot_idxs=torch_idx).numpy().flatten())
-            # self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_q(robot_idxs=torch_idx).numpy().flatten())
-            # self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_v(robot_idxs=torch_idx).numpy().flatten())
-            # self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_omega(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[0].rt_plot_widget.update(p_full)
+            self.rt_plotters[1].rt_plot_widget.update(q_full)
+            self.rt_plotters[2].rt_plot_widget.update(v_full)
+            self.rt_plotters[3].rt_plot_widget.update(omega_full)
 
-            # # joint state
-            # self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_q(robot_idxs=torch_idx).numpy().flatten())
-            # self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_v(robot_idxs=torch_idx).numpy().flatten())
-            # self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_a(robot_idxs=torch_idx).numpy().flatten())
-            # self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_eff(robot_idxs=torch_idx).numpy().flatten())
-
-            # # contact state
-            # self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get_w(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].contact_flags.numpy_view[index, :])
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].phase_id.numpy_view)
 
 class RHCInternal(SharedDataWindow):
 
