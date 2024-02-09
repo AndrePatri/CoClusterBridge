@@ -151,7 +151,7 @@ class RhcRefs(SharedDataBase):
                 safe = True, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
-                fill_value = np.nan)
+                fill_value = -1)
             
     class ContactFlag(SharedDataView):
 

@@ -25,6 +25,7 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
@@ -101,9 +102,7 @@ class ControlClusterServer(ABC):
         self._rhc_refs = None
         self._rhc_status = None
         self._cluster_stats = None 
-        
-        self._rhc_task_refs = None
-        
+                
         # flags
         self._was_running = False
         self._is_running = False
@@ -157,10 +156,6 @@ class ControlClusterServer(ABC):
             if self._rhc_refs is not None:
                 
                 self._rhc_refs.close()
-
-            if self._rhc_task_refs is not None:
-
-                self._rhc_task_refs.terminate()
 
             if self._rhc_status is not None:
 
@@ -312,7 +307,7 @@ class ControlClusterServer(ABC):
     
     def get_refs(self):
 
-        return self._rhc_task_refs
+        return self._rhc_refs
     
     def get_status(self):
 
@@ -592,20 +587,11 @@ class ControlClusterServer(ABC):
                                     safe=True,
                                     force_reconnection=self._force_reconnection)
 
-        self._rhc_task_refs = RhcClusterTaskRefs(n_contacts=self.n_contact_sensors, 
-                                    cluster_size=self.cluster_size, 
-                                    namespace=self.namespace,
-                                    device=self._device, 
-                                    backend=self._backend, 
-                                    dtype=self.torch_dtype)
-
         self._robot_states.run()
 
         self._rhc_cmds.run()
 
         self._rhc_refs.run()
-
-        self._rhc_task_refs.start()
 
         self._rhc_status.run()
         

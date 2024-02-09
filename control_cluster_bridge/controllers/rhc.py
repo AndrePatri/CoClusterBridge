@@ -536,7 +536,8 @@ class RHController(ABC):
                                     n_jnts=self.n_dofs,
                                     n_nodes=self._n_nodes,
                                     verbose = self._verbose,
-                                    vlevel=VLevel.V2)
+                                    vlevel=VLevel.V2,
+                                    force_reconnection=True)
             
             self.rhc_internal.run()
             
