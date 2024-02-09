@@ -199,7 +199,7 @@ class RhcRefsFromKeyboard:
         self.rhc_refs.rob_refs.root_state.set_p(p = current_p_ref,
                                     robot_idxs=self.cluster_idx_torch)
         
-        self.rhc_refs.rob_refs.root_state.set_q(p = current_q_ref,
+        self.rhc_refs.rob_refs.root_state.set_q(q = current_q_ref,
                                     robot_idxs=self.cluster_idx_torch)
 
     def _update_phase_id(self,
