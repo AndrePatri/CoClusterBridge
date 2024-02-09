@@ -357,14 +357,8 @@ class RHCRefs(SharedDataWindow):
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=self.shared_data_clients[0].rob_refs.contact_names(), 
                     ylabel="[bool]"))
-        
-        cluster_idx_legend = [""] * self.shared_data_clients[0].rob_refs.n_robots()
 
-        for i in range(len(cluster_idx_legend)):
-            
-            cluster_idx_legend[i] = str(i)
-
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].rob_refs.n_robots(),
+        self.rt_plotters.append(RtPlotWindow(data_dim=1,
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
@@ -372,7 +366,7 @@ class RHCRefs(SharedDataWindow):
                     parent=None, 
                     base_name="Phase ID",
                     window_buffer_factor=self.window_buffer_factor, 
-                    legend_list=cluster_idx_legend, 
+                    legend_list=[""], 
                     ylabel="[int]"))
         
         # root state
@@ -443,7 +437,7 @@ class RHCRefs(SharedDataWindow):
             self.rt_plotters[3].rt_plot_widget.update(omega_full)
 
             self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].contact_flags.numpy_view[index, :])
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].phase_id.numpy_view)
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].phase_id.numpy_view[index, :])
 
 class RHCInternal(SharedDataWindow):
 

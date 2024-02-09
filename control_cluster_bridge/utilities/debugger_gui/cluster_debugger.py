@@ -40,10 +40,6 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient
-
-from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
-from control_cluster_bridge.utilities.defs import env_selector_name
 from control_cluster_bridge.utilities.sysutils import PathsGetter
 from control_cluster_bridge.utilities.defs import Journal
 
@@ -259,13 +255,13 @@ class RtClusterDebugger(QMainWindow):
             self.data_thread.terminate()
 
         if self.launch_controllers is not None:
-            self.launch_controllers.terminate()
+            self.launch_controllers.close()
                 
         if self.launch_keyboard_cmds is not None:
-            self.launch_keyboard_cmds.terminate()
+            self.launch_keyboard_cmds.close()
 
         if self.env_index is not None:
-            self.env_index.terminate()
+            self.env_index.close()
         
         # terminate shared data windows
         for i in range(len(self.shared_data_tabs_name)):
@@ -477,7 +473,21 @@ class RtClusterDebugger(QMainWindow):
                 fill_value = 0)
         
         self.env_index.run()
-            
+
+        self.launch_keyboard_cmds = SharedDataView(namespace = self.namespace,
+                basename = "KeyboardCmdsLauncher",
+                is_server = True, 
+                n_rows = 1, 
+                n_cols = 1, 
+                verbose = True, 
+                vlevel = VLevel.V2,
+                safe = False,
+                dtype=dtype.Bool,
+                force_reconnection=True,
+                fill_value = False)
+        
+        self.launch_keyboard_cmds.run()
+        
     def _spawn_shared_data_tabs(self, 
                     label: str):
         
@@ -615,28 +625,15 @@ class RtClusterDebugger(QMainWindow):
         self.rhc_status.activation_state.torch_view[self.cluster_index, 0] = controller_active
 
         self.rhc_status.activation_state.synch_all(read=False, wait=True)
-    
-    def _connect_to_keyboard_cmds(self):
-
-        self.launch_keyboard_cmds = SharedMemClient(name=launch_keybrd_cmds_flagname(), 
-                        namespace=self.namespace, 
-                        dtype=torch.bool, 
-                        client_index=0, 
-                        verbose=self.verbose)
-        self.launch_keyboard_cmds.attach()
-        self.launch_keyboard_cmds.set_bool(False) # we disable cmds by default
 
     def _toggle_keyboard_cmds(self):
 
         self._keyboard_cmds_triggered = not self._keyboard_cmds_triggered
+
+        self.launch_keyboard_cmds.torch_view[0, 0] = self._keyboard_cmds_triggered
+
+        self.launch_keyboard_cmds.synch_all(read=False, wait=True)
         
-        if self.launch_keyboard_cmds is None:
-            
-            # we spawn the necessary shared mem client if not already done
-            self._connect_to_keyboard_cmds()
-
-        self.launch_keyboard_cmds.set_bool(self._keyboard_cmds_triggered)
-
         if self._keyboard_cmds_triggered:
             
             self.trigger_keyboard_cmds_button.iconed_button.setIcon(

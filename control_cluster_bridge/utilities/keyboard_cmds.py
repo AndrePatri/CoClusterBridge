@@ -19,19 +19,12 @@ import torch
 
 from pynput import keyboard
 
-from control_cluster_bridge.utilities.rhc_defs import RhcTaskRefs
-from control_cluster_bridge.utilities.shared_mem import SharedMemClient
-from control_cluster_bridge.utilities.shared_mem import SharedMemSrvr
-from control_cluster_bridge.utilities.defs import cluster_size_name
-from control_cluster_bridge.utilities.defs import n_contacts_name
-from control_cluster_bridge.utilities.defs import launch_keybrd_cmds_flagname
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
 
 from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
 from SharsorIPCpp.PySharsorIPC import VLevel
-from SharsorIPCpp.PySharsorIPC import Journal
+from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import dtype
-
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 
 from control_cluster_bridge.utilities.math_utils import incremental_rotate
 
@@ -47,42 +40,35 @@ class RhcRefsFromKeyboard:
 
         self.namespace = namespace
 
-        self._terminated = False
-
-        self.contacts = None 
+        self._closed = False
         
         self.enable_heightchange = False
-        self.com_height_dh = 0.008 # [m]
+        self.height_dh = 0.008 # [m]
 
         self.enable_navigation = False
         self.dxy = 0.05 # [m]
         self.dtheta_z = 1.0 * math.pi / 180.0 # [rad]
 
-        self.cluster_size = -1
-        self.n_contacts = -1
+        self.enable_phase_id_change = False
 
-        self.rhc_task_refs = []
+        self.rhc_refs = None
+
+        self.cluster_idx = -1
+        self.cluster_idx_torch = torch.tensor(self.cluster_idx)
 
         self._init_shared_data()
 
     def _init_shared_data(self):
 
-        self.rhc_cmds = RhcCmds(namespace=self.namespace,
-                            is_server=False, 
-                            with_gpu_mirror=False, 
-                            verbose=True, 
-                            vlevel=VLevel.V2)
-        self.rhc_cmds.run()
-        self.cluster_size = self.rhc_cmds.n_robots()
-        self.n_contacts = self.rhc_cmds.n_contacts()
-
-        self.launch_keyboard_cmds = SharedMemSrvr(n_rows=1, 
-                                        n_cols=1, 
-                                        name=launch_keybrd_cmds_flagname(), 
-                                        namespace=self.namespace,
-                                        dtype=torch.bool)
-        self.launch_keyboard_cmds.start()
-        self.launch_keyboard_cmds.reset_bool(False)
+        self.launch_keyboard_cmds = SharedDataView(namespace = self.namespace,
+                basename = "KeyboardCmdsLauncher",
+                is_server = False, 
+                verbose = True, 
+                vlevel = VLevel.V2,
+                safe = False,
+                dtype=dtype.Bool)
+        
+        self.launch_keyboard_cmds.run()
 
         self.env_index = SharedDataView(namespace = self.namespace,
                 basename = "EnvSelector",
@@ -94,227 +80,323 @@ class RhcRefsFromKeyboard:
         
         self.env_index.run()
         
-        self.contacts = torch.tensor([[True] * self.n_contacts], 
-                        dtype=torch.float32)
-        
-        self._init_shared_task_data()
+        self._init_rhc_ref_subscriber()
 
-    def _init_shared_task_data(self):
+    def _init_rhc_ref_subscriber(self):
 
-        # view of rhc references
-        for i in range(0, self.cluster_size):
+        self.rhc_refs = RhcRefs(namespace=self.namespace,
+                                is_server=False, 
+                                with_gpu_mirror=False, 
+                                safe=False, 
+                                verbose=self._verbose,
+                                vlevel=VLevel.V2)
 
-            self.rhc_task_refs.append(RhcTaskRefs( 
-                n_contacts=self.n_contacts,
-                index=i,
-                q_remapping=None,
-                namespace=self.namespace,
-                dtype=torch.float32, 
-                verbose=self._verbose))
-        
+        self.rhc_refs.run()
+
     def __del__(self):
 
-        if not self._terminated:
+        if not self._closed:
 
-            self._terminate()
+            self._close()
     
-    def _terminate(self):
+    def _close(self):
         
-        self._terminated = True
+        if self.rhc_refs is not None:
 
-        self.__del__()
+            self.rhc_refs.close()
+
+        self._closed = True
     
-    def _update(self):
+    def _synch(self, 
+            read = True):
         
-        self.env_index.synch_all(read=True, wait=True)
+        if read:
 
-        self.cluster_idx = self.env_index.torch_view[0, 0].item()
+            self.env_index.synch_all(read=True, wait=True)
 
-    def _set_cmds(self):
+            self.cluster_idx = self.env_index.torch_view[0, 0].item()
+            self.cluster_idx_torch = self.cluster_idx
 
-        self.rhc_task_refs[self.cluster_idx].phase_id.set_contacts(
-                                self.contacts)
+            self.rhc_refs.rob_refs.synch_from_shared_mem()
+            self.rhc_refs.contact_flags.synch_all(read=True, wait=True)
+            self.rhc_refs.phase_id.synch_all(read=True, wait=True)
+        
+        else:
+            
+            self.rhc_refs.rob_refs.root_state.synch_wait(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self.rhc_refs.rob_refs.root_state.n_cols,
+                                                read=False)
 
-    def _update_com_height(self, 
+            self.rhc_refs.contact_flags.synch_wait(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self.rhc_refs.contact_flags.n_cols,
+                                                read=False)
+            
+            self.rhc_refs.phase_id.synch_wait(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self.rhc_refs.phase_id.n_cols,
+                                                read=False)
+                                                
+    def _update_base_height(self, 
                 decrement = False):
         
-        current_com_ref = self.rhc_task_refs[self.cluster_idx].com_pose.get_com_height()
+        current_p_ref = self.rhc_refs.rob_refs.root_state.get_p(robot_idxs=self.cluster_idx_torch)
 
         if decrement:
 
-            new_com_ref = current_com_ref - self.com_height_dh
+            new_height_ref = current_p_ref[0, 2] - self.height_dh
 
         else:
 
-            new_com_ref = current_com_ref + self.com_height_dh
+            new_height_ref = current_p_ref[0, 2] + self.height_dh
 
-        self.rhc_task_refs[self.cluster_idx].com_pose.set_com_height(new_com_ref)
+        current_p_ref[0, 2] = new_height_ref
+
+        self.rhc_refs.rob_refs.root_state.set_p(p = current_p_ref,
+                                    robot_idxs=self.cluster_idx_torch)
     
     def _update_navigation(self, 
                     lateral = None, 
                     orientation = None,
                     increment = True):
 
-        current_com_pos_ref = self.rhc_task_refs[self.cluster_idx].com_pose.get_com_pos()
-        current_q_ref = self.rhc_task_refs[self.cluster_idx].base_pose.get_q()
+        current_p_ref = self.rhc_refs.rob_refs.root_state.get_p(robot_idxs=self.cluster_idx_torch)
+
+        current_q_ref = self.rhc_refs.rob_refs.root_state.get_q(robot_idxs=self.cluster_idx_torch)
 
         if lateral is not None and lateral and increment:
             # lateral motion
             
-            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] - self.dxy
+            current_p_ref[0, 1] = current_p_ref[0, 1] - self.dxy
 
         if lateral is not None and lateral and not increment:
             # lateral motion
             
-            current_com_pos_ref[:, 1] = current_com_pos_ref[:, 1] + self.dxy
+            current_p_ref[0, 1] = current_p_ref[0, 1] + self.dxy
 
         if lateral is not None and not lateral and not increment:
             # frontal motion
             
-            current_com_pos_ref[:, 0] = current_com_pos_ref[:, 0] - self.dxy
+            current_p_ref[0, 0] = current_p_ref[0, 0] - self.dxy
 
         if lateral is not None and not lateral and increment:
             # frontal motion
             
-            current_com_pos_ref[:, 0] = current_com_pos_ref[:, 0] + self.dxy
+            current_p_ref[0, 0] = current_p_ref[0, 0] + self.dxy
 
         if orientation is not None and orientation and increment:
             
-            q_result = torch.tensor([[1, 0, 0, 0]], dtype=torch.float32)
             # rotate counter-clockwise
-            q_result[0] = incremental_rotate(current_q_ref[0], 
+            current_q_ref[0, :] = incremental_rotate(current_q_ref.flatten(), 
                             self.dtheta_z, 
                             [0, 0, 1])
-            current_q_ref = q_result
 
         if orientation is not None and orientation and not increment:
             
-            # rotate clockwise
             # rotate counter-clockwise
-            q_result = torch.tensor([[1, 0, 0, 0]], dtype=torch.float32)
-            q_result[0] = incremental_rotate(current_q_ref[0], 
-                            - self.dtheta_z, 
+            current_q_ref[0, :] = incremental_rotate(current_q_ref.flatten(), 
+                            -self.dtheta_z, 
                             [0, 0, 1])
-            current_q_ref = q_result
 
-        self.rhc_task_refs[self.cluster_idx].com_pose.set_com_pos(current_com_pos_ref)
-        # self.rhc_task_refs[self.cluster_idx].com_pose.set_com_q(current_com_q_ref)
-        self.rhc_task_refs[self.cluster_idx].base_pose.set_q(current_q_ref)
+        self.rhc_refs.rob_refs.root_state.set_p(p = current_p_ref,
+                                    robot_idxs=self.cluster_idx_torch)
+        
+        self.rhc_refs.rob_refs.root_state.set_q(p = current_q_ref,
+                                    robot_idxs=self.cluster_idx_torch)
 
+    def _update_phase_id(self,
+                phase_id: int = -1):
+
+        self.rhc_refs.phase_id.torch_view[self.cluster_idx, 0] = phase_id
+
+    def _set_contacts(self,
+                key,
+                is_contact: bool = True):
+        
+        if key.char == "7":
+                    
+            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 0] = is_contact
+
+        if key.char == "9":
+            
+            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 1] = is_contact
+
+        if key.char == "1":
+            
+            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 2] = is_contact
+
+        if key.char == "3":
+            
+            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 3] = is_contact
+    
+    def _set_phase_id(self,
+                    key):
+
+        if key.char == "p":
+                    
+            self.enable_phase_id_change = not self.enable_phase_id_change
+
+            info = f"Phase ID change enabled: {self.enable_phase_id_change}"
+
+            Journal.log(self.__class__.__name__,
+                "_set_phase_id",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+            
+        if key.char == "0" and self.enable_phase_id_change:
+            
+            self._update_phase_id(phase_id = 0)
+
+        elif key.char == "1" and self.enable_phase_id_change:
+
+            self._update_phase_id(phase_id = 1)
+        
+        elif key.char == "2" and self.enable_phase_id_change:
+
+            self._update_phase_id(phase_id = 2)
+        
+        elif key.char == "3" and self.enable_phase_id_change:
+
+            self._update_phase_id(phase_id = 3)
+        
+        elif key.char == "4" and self.enable_phase_id_change:
+
+            self._update_phase_id(phase_id = 4)
+        
+        elif key.char == "5" and self.enable_phase_id_change:
+
+            self._update_phase_id(phase_id = 5)
+
+        elif key.char == "6" and self.enable_phase_id_change:
+
+            self._update_phase_id(phase_id = 6)
+
+        elif key.char == "r" and self.enable_phase_id_change:
+        
+            self._update_phase_id(phase_id = -1)
+
+    def _set_base_height(self,
+                    key):
+
+        if key.char == "h":
+                    
+            self.enable_heightchange = not self.enable_heightchange
+
+            info = f"Base heightchange enabled: {self.enable_heightchange}"
+
+            Journal.log(self.__class__.__name__,
+                "_set_base_height",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+            
+        if key.char == "+" and self.enable_heightchange:
+
+            self._update_base_height(decrement=False)
+        
+        if key.char == "-" and self.enable_heightchange:
+
+            self._update_base_height(decrement=True)
+
+    def _set_navigation(self,
+                key):
+
+        if key.char == "n":
+                    
+            self.enable_navigation = not self.enable_navigation
+
+            info = f"Navigation enabled: {self.enable_navigation}"
+
+            Journal.log(self.__class__.__name__,
+                "_set_navigation",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+        
+        if key.char == "6" and self.enable_navigation:
+            
+            self._update_navigation(lateral = True, 
+                            increment = True)
+
+        if key.char == "4" and self.enable_navigation:
+            
+            self._update_navigation(lateral = True, 
+                            increment = False)
+        
+        if key.char == "8" and self.enable_navigation:
+            
+            self._update_navigation(lateral = False, 
+                            increment = True)
+        
+        if key.char == "2" and self.enable_navigation:
+            
+            self._update_navigation(lateral = False, 
+                            increment = False)
+        
+        if key == keyboard.Key.left and self.enable_navigation:
+                
+            self._update_navigation(orientation=True,
+                                increment = True)
+
+        if key == keyboard.Key.right and self.enable_navigation:
+            
+            self._update_navigation(orientation=True,
+                                increment = False)
+                
     def _on_press(self, key):
 
-        if self.launch_keyboard_cmds.all():
+        if self.launch_keyboard_cmds.read_wait(row_index=0,
+                                            col_index=0)[0]:
             
-            self._update() # updates  data like
+            self._synch(read=True) # updates  data like
             # current cluster index
 
             if hasattr(key, 'char'):
                 
-                print('Key {0} pressed.'.format(key.char))
+                # print('Key {0} pressed.'.format(key.char))
                 
-                # stepping ph
-                if key.char == "7":
-                    
-                    self.contacts[0, 0] = False
+                # phase ids
+                self._set_phase_id(key)
 
-                if key.char == "9":
-                    
-                    self.contacts[0, 1] = False
-
-                if key.char == "1":
-                    
-                    self.contacts[0, 2] = False
-
-                if key.char == "3":
-                    
-                    self.contacts[0, 3] = False
+                # stepping phases (if phase id allows it)
+                self._set_contacts(key=key, 
+                            is_contact=False)
                 
                 # height change
-                if key.char == "h" and not self.enable_heightchange:
-                    
-                    self.enable_heightchange = True
-
-                if key.char == "+" and self.enable_heightchange:
-
-                    self._update_com_height(decrement=False)
-                
-                if key.char == "-" and self.enable_heightchange:
-
-                    self._update_com_height(decrement=True)
+                self._set_base_height(key)
 
                 # navigation
-                if key.char == "n" and not self.enable_navigation:
-                    
-                    self.enable_navigation = True
+                self._set_navigation(key)
 
-                if key.char == "6" and self.enable_navigation:
-                    
-                    self._update_navigation(lateral = True, 
-                                    increment = True)
-
-                if key.char == "4" and self.enable_navigation:
-                    
-                    self._update_navigation(lateral = True, 
-                                    increment = False)
-                
-                if key.char == "8" and self.enable_navigation:
-                    
-                    self._update_navigation(lateral = False, 
-                                    increment = True)
-                
-                if key.char == "2" and self.enable_navigation:
-                    
-                    self._update_navigation(lateral = False, 
-                                    increment = False)
-            
-            if key == keyboard.Key.left and self.enable_navigation:
-                
-                self._update_navigation(orientation=True,
-                                    increment = True)
-
-            if key == keyboard.Key.right and self.enable_navigation:
-                
-                self._update_navigation(orientation=True,
-                                    increment = False)
-
-            self._set_cmds()
+            self._synch(read=False)
 
     def _on_release(self, key):
 
-        if self.launch_keyboard_cmds.all():
+        if self.launch_keyboard_cmds.read_wait(row_index=0,
+                                            col_index=0)[0]:
             
-            self._update() # updates  data like
-            # current cluster index
-            
-            print(key)
             if hasattr(key, 'char'):
                 
                 # print('Key {0} released.'.format(key.char))
 
-                if key.char == "7":
-                    
-                    self.contacts[0, 0] = True
-
-                if key.char == "9":
-                    
-                    self.contacts[0, 1] = True
-
-                if key.char == "1":
-                    
-                    self.contacts[0, 2] = True
-
-                if key.char == "3":
-                    
-                    self.contacts[0, 3] = True
+                self._set_contacts(key=key, 
+                            is_contact=True)
 
                 if key == keyboard.Key.esc:
 
-                    self._terminate()  # Stop listener
+                    self._close()
 
-            self._set_cmds()
+            self._synch(read=False)
 
-    def start(self):
+    def run(self):
 
+        info = f"Ready. Starting to listen for commands..."
+
+        Journal.log(self.__class__.__name__,
+            "run",
+            info,
+            LogType.INFO,
+            throw_when_excep = True)
+        
         with keyboard.Listener(on_press=self._on_press, 
                                on_release=self._on_release) as listener:
 
@@ -325,4 +407,4 @@ if __name__ == "__main__":
     keyb_cmds = RhcRefsFromKeyboard(namespace="kyon0", 
                             verbose=True)
 
-    keyb_cmds.start()
+    keyb_cmds.run()
