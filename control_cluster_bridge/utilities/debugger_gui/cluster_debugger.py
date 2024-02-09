@@ -227,6 +227,17 @@ class RtClusterDebugger(QMainWindow):
                                 is_cost=False,
                                 is_constraint=True)
         
+        rhc_internal_data = RHCInternal(name = "RhcInternalData",
+                                update_data_dt=self.data_update_dt, 
+                                update_plot_dt=self.plot_update_dt,
+                                window_duration=self.window_length, 
+                                window_buffer_factor=self.window_buffer_factor, 
+                                namespace=self.namespace,
+                                parent=None, 
+                                verbose=self.verbose,
+                                is_cost=False,
+                                is_constraint=False)
+        
         rhc_status = RHCStatus(update_data_dt=self.data_update_dt, 
                             update_plot_dt=self.plot_update_dt,
                             window_duration=self.window_length, 
@@ -240,7 +251,8 @@ class RtClusterDebugger(QMainWindow):
                             rhc_status, 
                             rhc_task_ref, rhc_cms, robot_state, 
                             rhc_internal_costs,
-                            rhc_internal_constr]
+                            rhc_internal_constr,
+                            rhc_internal_data]
 
     def __del__(self):
         

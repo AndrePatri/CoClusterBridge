@@ -469,6 +469,8 @@ class RHCInternal(SharedDataWindow):
 
         self.name = name
         
+        self.enable_data = True
+
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
             window_duration = window_duration,
@@ -509,12 +511,16 @@ class RHCInternal(SharedDataWindow):
             
             enable_constr = True
 
+        if self.is_cost or self.is_constraint:
+
+            self.enable_data = False
+
         config = RhcInternal.Config(is_server=is_server, 
-                        enable_q=False, 
-                        enable_v=False, 
-                        enable_a=False, 
+                        enable_q=self.enable_data, 
+                        enable_v=self.enable_data, 
+                        enable_a=self.enable_data, 
                         enable_a_dot=False, 
-                        enable_f=False,
+                        enable_f=self.enable_data,
                         enable_f_dot=False, 
                         enable_eff=False,
                         enable_costs=enable_costs, 
@@ -537,69 +543,157 @@ class RHCInternal(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        if self.is_cost:
+        if not self.enable_data:
 
-            self.names = self.shared_data_clients[0].costs.names
-            self.dims = self.shared_data_clients[0].costs.dimensions
-            self.n_nodes =  self.shared_data_clients[0].costs.n_nodes
+            if self.is_cost:
 
-        if self.is_constraint:
+                self.names = self.shared_data_clients[0].costs.names
+                self.dims = self.shared_data_clients[0].costs.dimensions
+                self.n_nodes =  self.shared_data_clients[0].costs.n_nodes
 
-            self.names = self.shared_data_clients[0].cnstr.names
-            self.dims = self.shared_data_clients[0].cnstr.dimensions
-            self.n_nodes =  self.shared_data_clients[0].cnstr.n_nodes
+            if self.is_constraint:
 
-        # import math 
+                self.names = self.shared_data_clients[0].cnstr.names
+                self.dims = self.shared_data_clients[0].cnstr.dimensions
+                self.n_nodes =  self.shared_data_clients[0].cnstr.n_nodes
 
-        # grid_size = math.ceil(math.sqrt(len(self.names)))
+            # import math 
 
-        # # distributing plots over a square grid
-        # self.grid_n_rows = grid_size
-        # self.grid_n_cols = grid_size
+            # grid_size = math.ceil(math.sqrt(len(self.names)))
 
-        self.grid_n_rows = len(self.names)
+            # # distributing plots over a square grid
+            # self.grid_n_rows = grid_size
+            # self.grid_n_cols = grid_size
 
-        self.grid_n_cols = 1
+            self.grid_n_rows = len(self.names)
+
+            self.grid_n_cols = 1
+        
+        else:
+
+            self.grid_n_rows = 4
+            self.grid_n_cols = 2
 
     def _initialize(self):
         
-        base_name = ""
+        if not self.enable_data:
 
-        if self.is_cost:
+            base_name = ""
 
-            base_name = "Cost name"
+            if self.is_cost:
 
-        if self.is_constraint:
+                base_name = "Cost name"
 
-            base_name = "Constraint name"
+            if self.is_constraint:
 
-        # distribute plots on each row
-        counter = 0
-        for i in range(0, self.grid_n_rows):
-            
-            for j in range(0, self.grid_n_cols):
-            
-                if (counter < len(self.names)):
-                    
-                    legend_list = [""] * self.dims[counter]
-                    for k in range(self.dims[counter]):
+                base_name = "Constraint name"
+
+            # distribute plots on each row
+            counter = 0
+            for i in range(0, self.grid_n_rows):
+                
+                for j in range(0, self.grid_n_cols):
+                
+                    if (counter < len(self.names)):
                         
-                        legend_list[k] = str(k)
+                        legend_list = [""] * self.dims[counter]
+                        for k in range(self.dims[counter]):
+                            
+                            legend_list[k] = str(k)
 
-                    self.rt_plotters.append(RtPlotWindow(data_dim=self.dims[counter],
-                                n_data = self.n_nodes,
-                                update_data_dt=self.update_data_dt, 
-                                update_plot_dt=self.update_plot_dt,
-                                window_duration=self.window_duration, 
-                                parent=None, 
-                                base_name=f"{base_name}: {self.names[counter]}", 
-                                window_buffer_factor=self.window_buffer_factor, 
-                                legend_list=legend_list, 
-                                ylabel=""))
+                        self.rt_plotters.append(RtPlotWindow(data_dim=self.dims[counter],
+                                    n_data = self.n_nodes,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"{base_name}: {self.names[counter]}", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=legend_list, 
+                                    ylabel=""))
 
-                    self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
+                        self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
 
-                    counter = counter + 1
+                        counter = counter + 1
+        
+        else:
+            
+            n_dims_q = self.shared_data_clients[0].q.n_rows 
+            n_nodes_q = self.shared_data_clients[0].q.n_cols
+            legend = [""] * n_dims_q
+            for i in range(len(legend)):
+                legend[i] = str(i)
+            q_legend = ["q_" + element for element in legend]
+
+            n_dims_v = self.shared_data_clients[0].v.n_rows 
+            n_nodes_v = self.shared_data_clients[0].v.n_cols
+            legend = [""] * n_dims_v
+            for i in range(len(legend)):
+                legend[i] = str(i)
+            v_legend = ["v_" + element for element in legend]
+            
+            n_dims_a = self.shared_data_clients[0].a.n_rows 
+            n_nodes_a = self.shared_data_clients[0].a.n_cols
+            legend = [""] * n_dims_a
+            for i in range(len(legend)):
+                legend[i] = str(i)            
+            a_legend = ["a_" + element for element in legend]
+
+            n_dims_f = self.shared_data_clients[0].f.n_rows 
+            n_nodes_f = self.shared_data_clients[0].f.n_cols
+            legend = [""] * n_dims_f
+            for i in range(len(legend)):
+                legend[i] = str(i)            
+            f_legend = ["f_" + element for element in legend]
+
+            self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_q,
+                                    n_data = n_nodes_q,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc internal data: q", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=q_legend, 
+                                    ylabel=""))
+            
+            self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_v,
+                                    n_data = n_nodes_v,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc internal data: v", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=v_legend, 
+                                    ylabel=""))
+            
+            self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_a,
+                                    n_data = n_nodes_a,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc internal data: a", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=a_legend, 
+                                    ylabel=""))
+
+            self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_f,
+                                    n_data = n_nodes_f,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc internal data: f", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=f_legend, 
+                                    ylabel=""))
+
+            self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
+            self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
+            self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
+            self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
 
     def _finalize_grid(self):
         
@@ -639,21 +733,30 @@ class RHCInternal(SharedDataWindow):
 
         if not self._terminated:
             
-            for i in range(0, len(self.names)):
-                
-                # iterate over data names (i.e. plots)
-                
-                if self.is_cost:
-                    
-                    data = np.atleast_2d(self.shared_data_clients[index].read_cost(self.names[i])[:, :])
-                    
-                    self.rt_plotters[i].rt_plot_widget.update(data)
+            if not self.enable_data:
 
-                if self.is_constraint:
-
-                    data = np.atleast_2d(self.shared_data_clients[index].read_constr(self.names[i])[:, :])
+                for i in range(0, len(self.names)):
                     
-                    self.rt_plotters[i].rt_plot_widget.update(data)
+                    # iterate over data names (i.e. plots)
+
+                        if self.is_cost:
+                            
+                            data = np.atleast_2d(self.shared_data_clients[index].read_cost(self.names[i])[:, :])
+                            
+                            self.rt_plotters[i].rt_plot_widget.update(data)
+
+                        if self.is_constraint:
+
+                            data = np.atleast_2d(self.shared_data_clients[index].read_constr(self.names[i])[:, :])
+                            
+                            self.rt_plotters[i].rt_plot_widget.update(data)
+
+            else:
+
+                self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].q.numpy_view[:, :])
+                self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].v.numpy_view[:, :])
+                self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].a.numpy_view[:, :])
+                self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].f.numpy_view[:, :])
 
 class SimInfo(SharedDataWindow):
 

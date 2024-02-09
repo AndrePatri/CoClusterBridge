@@ -1258,7 +1258,7 @@ class RhcInternal(SharedDataBase):
 
         self._is_running = True
 
-    def synch(self):
+    def synch(self, read = True):
         
         # to be used to read updated data 
         # (before calling any read method)
@@ -1266,31 +1266,31 @@ class RhcInternal(SharedDataBase):
         
         if self.q is not None:
 
-            self.q.synch()
+            self.q.synch_all(read=read, wait=True)
         
         if self.v is not None:
 
-            self.v.synch()
+            self.v.synch_all(read=read, wait=True)
         
         if self.a is not None:
 
-            self.a.synch()
+            self.a.synch_all(read=read, wait=True)
         
         if self.a_dot is not None:
 
-            self.a_dot.synch()
+            self.a_dot.synch_all(read=read, wait=True)
         
         if self.f is not None:
 
-            self.f.synch()
+            self.f.synch_all(read=read, wait=True)
             
         if self.f_dot is not None:
 
-            self.f_dot.synch()
+            self.f_dot.synch_all(read=read, wait=True)
         
         if self.eff is not None:
 
-            self.eff.synch()
+            self.eff.synch_all(read=read, wait=True)
             
         if self.costs is not None:
 
