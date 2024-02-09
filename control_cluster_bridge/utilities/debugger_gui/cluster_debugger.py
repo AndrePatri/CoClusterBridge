@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import QSpacerItem, QSizePolicy
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RhcTaskRefWindow
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCRefs
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCmds
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RobotStates
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCInternal
@@ -186,13 +186,6 @@ class RtClusterDebugger(QMainWindow):
                         parent=None, 
                         verbose=self.verbose)
         
-        rhc_task_ref = RhcTaskRefWindow(update_data_dt=self.data_update_dt, 
-                            update_plot_dt=self.plot_update_dt,
-                            window_duration=self.window_length, 
-                            window_buffer_factor=self.window_buffer_factor, 
-                            namespace=self.namespace,
-                            parent=None, 
-                            verbose = self.verbose)
         rhc_cms = RHCmds(update_data_dt=self.data_update_dt, 
                     update_plot_dt=self.plot_update_dt,
                     window_duration=self.window_length, 
@@ -200,6 +193,7 @@ class RtClusterDebugger(QMainWindow):
                     namespace=self.namespace,
                     parent=None, 
                     verbose = self.verbose)
+        
         robot_state = RobotStates(update_data_dt=self.data_update_dt, 
                     update_plot_dt=self.plot_update_dt,
                     window_duration=self.window_length, 
@@ -207,6 +201,15 @@ class RtClusterDebugger(QMainWindow):
                     namespace=self.namespace,
                     parent=None, 
                     verbose = self.verbose)
+        
+        rhc_task_ref = RHCRefs(update_data_dt=self.data_update_dt, 
+                            update_plot_dt=self.plot_update_dt,
+                            window_duration=self.window_length, 
+                            window_buffer_factor=self.window_buffer_factor, 
+                            namespace=self.namespace,
+                            parent=None, 
+                            verbose = self.verbose)
+        
         rhc_internal_costs = RHCInternal(name = "RhcInternalCosts",
                                 update_data_dt=self.data_update_dt, 
                                 update_plot_dt=self.plot_update_dt,
@@ -216,6 +219,7 @@ class RtClusterDebugger(QMainWindow):
                                 parent=None, 
                                 verbose=self.verbose,
                                 is_cost=True)
+        
         rhc_internal_constr = RHCInternal(name = "RhcInternalConstr",
                                 update_data_dt=self.data_update_dt, 
                                 update_plot_dt=self.plot_update_dt,
@@ -226,6 +230,7 @@ class RtClusterDebugger(QMainWindow):
                                 verbose=self.verbose,
                                 is_cost=False,
                                 is_constraint=True)
+        
         rhc_status = RHCStatus(update_data_dt=self.data_update_dt, 
                             update_plot_dt=self.plot_update_dt,
                             window_duration=self.window_length, 
@@ -237,8 +242,7 @@ class RtClusterDebugger(QMainWindow):
         self.base_spawnable_tabs = [sim_info, 
                             cluster_info,
                             rhc_status, 
-                            rhc_task_ref, rhc_cms, 
-                            robot_state, 
+                            rhc_task_ref, rhc_cms, robot_state, 
                             rhc_internal_costs,
                             rhc_internal_constr]
 

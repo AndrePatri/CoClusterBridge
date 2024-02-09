@@ -685,11 +685,15 @@ class RootState(SharedDataView):
         self._q = None
         self._v = None
         self._omega = None
+        self._q_full = None # full root configuration (pos + quaternion)
+        self._v_full = None # full root velocity (lin. + angular)
 
         self._p_gpu = None
         self._q_gpu = None
         self._v_gpu = None
         self._omega_gpu = None
+        self._q_full_gpu = None
+        self._v_full_gpu = None 
         
     def run(self,
             q_remapping: List[int] = None):
@@ -733,16 +737,22 @@ class RootState(SharedDataView):
         # root
         self._p = self.torch_view[:, 0:3].view(self.n_robots, 3)
         self._q = self.torch_view[:, 3:7].view(self.n_robots, 4)
+        self._q_full = self.torch_view[:, 0:7].view(self.n_robots, 7)
+
         self._v = self.torch_view[:, 7:10].view(self.n_robots, 3)
         self._omega = self.torch_view[:, 10:13].view(self.n_robots, 3)
+        self._v_full = self.torch_view[:, 7:13].view(self.n_robots, 6)
 
         if self.gpu_mirror_exists():
 
             # gpu views
             self._p_gpu = self._gpu_mirror[:, 0:3].view(self.n_robots, 3)
             self._q_gpu = self._gpu_mirror[:, 3:7].view(self.n_robots, 4)
+            self._q_full_gpu = self._gpu_mirror[:, 0:7].view(self.n_robots, 7)
+
             self._v_gpu = self._gpu_mirror[:, 7:10].view(self.n_robots, 3)
             self._omega_gpu = self._gpu_mirror[:, 10:13].view(self.n_robots, 3)
+            self._v_full_gpu = self._gpu_mirror[:, 7:13].view(self.n_robots, 6)
     
     def _check_mirror_of_throw(self,
                         name: str):
@@ -774,7 +784,7 @@ class RootState(SharedDataView):
         
         else:
 
-            self._check_mirror_of_throw("get_p")
+            self._check_mirror_of_throw("set_p")
 
             if robot_idxs is None:
 
@@ -889,6 +899,59 @@ class RootState(SharedDataView):
 
                     return self._q_gpu[robot_idxs, self._q_remapping].view(1, -1)
     
+    def set_q_full(self,
+            q_full: torch.Tensor,
+            robot_idxs: torch.Tensor = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idxs is None:
+
+                self._q_full[:, :] = q_full
+            
+            else:
+                
+                self._q_full[robot_idxs, :] = q_full
+        
+        else:
+
+            self._check_mirror_of_throw("set_q_full")
+
+            if robot_idxs is None:
+
+                self._q_full_gpu[:, :] = q_full
+            
+            else:
+
+                self._q_full_gpu[robot_idxs, :] = q_full
+
+    def get_q_full(self,
+            robot_idxs: torch.Tensor = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idxs is None:
+
+                return self._q_full[:, :]
+            
+            else:
+
+                return self._q_full[robot_idxs, :].view(1, -1)
+        
+        else:
+
+            self._check_mirror_of_throw("get_q_full")
+
+            if robot_idxs is None:
+
+                return self._q_full_gpu[:, :]
+            
+            else:
+
+                return self._q_full_gpu[robot_idxs, :].view(1, -1)
+            
     def set_v(self,
         v: torch.Tensor,
         robot_idxs: torch.Tensor = None,
@@ -995,6 +1058,59 @@ class RootState(SharedDataView):
 
                 return self._omega_gpu[robot_idxs, :].view(1, -1)
 
+    def set_v_full(self,
+        v_full: torch.Tensor,
+        robot_idxs: torch.Tensor = None,
+        gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idxs is None:
+
+                self._v_full[:, :] = v_full
+            
+            else:
+
+                self._v_full[robot_idxs, :] = v_full
+        
+        else:
+
+            self._check_mirror_of_throw("set_v_full")
+
+            if robot_idxs is None:
+
+                self._v_full_gpu[:, :] = v_full
+            
+            else:
+
+                self._v_full_gpu[robot_idxs, :] = v_full
+
+    def get_v_full(self,
+            robot_idxs: torch.Tensor = None,
+            gpu: bool = False):
+
+        if not gpu:
+            
+            if robot_idxs is None:
+
+                return self._v_full[:, :]
+            
+            else:
+
+                return self._v_full[robot_idxs, :].view(1, -1)
+        
+        else:
+
+            self._check_mirror_of_throw("get_v_full")
+
+            if robot_idxs is None:
+
+                return self._v_full_gpu[:, :]
+            
+            else:
+
+                return self._v_full_gpu[robot_idxs, :].view(1, -1)
+            
 class ContactWrenches(SharedDataView):
 
     def __init__(self,
@@ -1537,7 +1653,7 @@ class FullRobState(SharedDataBase):
     def set_q_remapping(self,
                 q_remapping: List[int] = None):
 
-        self.root_state.set_q_remapping(q_remapping==q_remapping)
+        self.root_state.set_q_remapping(q_remapping=q_remapping)
 
     def run(self,
         jnts_remapping: List[int] = None):
