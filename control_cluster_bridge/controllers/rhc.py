@@ -54,6 +54,7 @@ class RHController(ABC):
             cluster_size: int,
             srdf_path: str,
             n_nodes: int,
+            dt: float,
             verbose = False, 
             debug = False,
             array_dtype = torch.float32, 
@@ -121,6 +122,9 @@ class RHController(ABC):
         self._failed = False
 
         self._n_nodes = n_nodes
+        self._dt = dt
+        self._n_intervals = self._n_nodes - 1 
+        self._t_horizon = self._n_intervals * dt
 
         self._start_time = time.perf_counter()
 
@@ -481,6 +485,23 @@ class RHController(ABC):
 
         return [0, 1, 2, 3]
     
+    def _consinstency_checks(self):
+                
+        server_side_cluster_dt = self.cluster_stats.get_info(info_name="cluster_dt")
+  
+        if not (abs(server_side_cluster_dt - self._dt) < 1e-8):
+
+            exception = f"Trying to initialize a controller with control dt {self._dt}, which" + \
+                f"does not match the cluster control dt {server_side_cluster_dt}"
+        
+            Journal.log(self.__class__.__name__,
+                        "_consinstency_checks",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            
+            exit()
+        
     def _init(self):
 
         stat = f"Initializing RHC controller " + \
@@ -500,6 +521,21 @@ class RHController(ABC):
                                     vlevel=VLevel.V2)
 
         self.rhc_status.run()
+
+        # statistical data
+
+        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
+                                    is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self._verbose,
+                                    vlevel=VLevel.V2,
+                                    safe=True)
+
+        self.cluster_stats.run()
+        self.cluster_stats.synch_info()
+
+        print("AAAAAAAAAAa")
+        print(self.cluster_stats.get_all_info())
 
         self._register_to_cluster() # registers the controller to the cluster
         
@@ -540,24 +576,15 @@ class RHController(ABC):
                                     force_reconnection=True)
             
             self.rhc_internal.run()
-            
-        # statistical data
-
-        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
-                                    is_server=False, 
-                                    name=self.namespace,
-                                    verbose=self._verbose,
-                                    vlevel=VLevel.V2,
-                                    safe=True)
-
-        self.cluster_stats.run()
 
         self.init_states() # initializes states
 
         self.create_jnt_maps()
 
         self.init_rhc_task_cmds() # initializes rhc commands
-            
+        
+        self._consinstency_checks()
+
         self._homer = RobotHomer(self.srdf_path, 
                             self._controller_side_jnt_names)
 

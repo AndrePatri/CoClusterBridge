@@ -216,17 +216,17 @@ class RhcProfiling(SharedDataBase):
 
         self.init = None                                                  
 
-        self.param_dict = param_dict
-
         self.param_keys = []
 
         self.runtime_info =  ClusterRuntimeInfoNames()
+
+        self.static_param_dict = param_dict
 
         if self.is_server:
 
             # if client info is read on shared memory
 
-            self.param_keys = self.runtime_info.get() + list(self.param_dict.keys())
+            self.param_keys = self.runtime_info.get() + list(self.static_param_dict.keys())
 
         self.shared_data = ClusterCumulativeData(namespace = self.namespace,
                             is_server = is_server, 
@@ -364,7 +364,7 @@ class RhcProfiling(SharedDataBase):
 
         if self.is_server:
             
-            for i in range(len(list(self.param_dict.keys()))):
+            for i in range(len(list(self.static_param_dict.keys()))):
                 
                 # writing static sim info
 
@@ -372,12 +372,12 @@ class RhcProfiling(SharedDataBase):
 
                 # first m elements are custom info
                 self.param_values[dyn_info_size + i, 0] = \
-                    self.param_dict[self.param_keys[dyn_info_size + i]]
+                    self.static_param_dict[self.param_keys[dyn_info_size + i]]
                                         
             self.shared_data.write_wait(row_index=0,
                                     col_index=0,
                                     data=self.param_values)
-            
+
         self._is_runnning = True
                           
     def write_info(self,
@@ -426,21 +426,68 @@ class RhcProfiling(SharedDataBase):
             self.shared_data.write_wait(data=self.param_values[idx, 0],
                                 row_index=idx, col_index=0) 
     
+    def get_static_info_idx(self, name: str):
+
+        return self.idx_dict[name]
+    
+    def get_info(self,
+            info_name: Union[str, List[str]]):
+        
+        if isinstance(info_name, list):
+            
+            return_list = []
+
+            for i in range(len(info_name)):
+                
+                try:
+                    
+                    return_list.append(self.param_values[idx, 0].item())
+
+                except ValueError:
+
+                    pass
+
+            return return_list
+        
+        elif isinstance(info_name, str):
+            
+            try:
+
+                idx = self.param_keys.index(info_name)
+            
+                return self.param_values[idx, 0].item()
+
+            except ValueError:
+
+                pass
+        
+        else:
+
+            exception = "The provided info_name should be a list strings or a string!"
+
+            Logger.log(self.__class__.__name__,
+                name,
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+            
     def synch_info(self):
 
         self.shared_data.synch_all(read=True, wait = True)
-    
+
+        self.param_values[:, :] = self.shared_data.numpy_view
+
     def synch_all(self):
 
         self.rti_sol_time.synch_all(read=True, wait = True)
 
         self.solve_loop_dt.synch_all(read=True, wait = True)
 
-    def get_info(self):
+    def get_all_info(self):
 
         self.synch_info()
 
-        return self.shared_data.numpy_view.copy()
+        return self.param_values
     
     def close(self):
 

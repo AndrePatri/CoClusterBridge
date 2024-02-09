@@ -909,7 +909,7 @@ class RHCProfiling(SharedDataWindow):
         if not self._terminated:
             
             # get cumulative data
-            data = self.shared_data_clients[0].get_info().flatten()
+            data = self.shared_data_clients[0].get_all_info().flatten()
             self.rt_plotters[0].rt_plot_widget.update(data)
 
             # prb update

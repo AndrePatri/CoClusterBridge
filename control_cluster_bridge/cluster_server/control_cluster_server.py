@@ -19,13 +19,10 @@ import torch
 
 from abc import ABC
 
-from control_cluster_bridge.utilities.control_cluster_defs import RhcClusterTaskRefs
-
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
@@ -578,6 +575,9 @@ class ControlClusterServer(ABC):
         
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
+        cluster_info_dict["cluster_dt"] = self.cluster_dt
+        cluster_info_dict["low_level_control_dt"] = self.control_dt
+        
         self._cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
                                     param_dict=cluster_info_dict,
                                     is_server=True, 
