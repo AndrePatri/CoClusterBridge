@@ -110,6 +110,7 @@ class RHController(ABC):
         self._jnt_maps_created = False
         
         self._states_initialized = False
+        self._got_contact_names = False
 
         self._trigger_flag = False
 
@@ -171,7 +172,7 @@ class RHController(ABC):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-        
+            
         if not self._states_initialized:
 
             exception =f"States not initialized. Did you call the init_states()?"
@@ -486,7 +487,8 @@ class RHController(ABC):
         return [0, 1, 2, 3]
     
     def _consinstency_checks(self):
-                
+        
+        # check controller dt
         server_side_cluster_dt = self.cluster_stats.get_info(info_name="cluster_dt")
   
         if not (abs(server_side_cluster_dt - self._dt) < 1e-8):
@@ -502,6 +504,34 @@ class RHController(ABC):
             
             exit()
         
+        # check contact names
+        
+        server_side_contact_names = set(self.robot_state.contact_names())
+        control_side_contact_names = set(self._get_contacts())
+
+        if not server_side_contact_names == control_side_contact_names:
+
+            warn = f"Controller-side contact names do not match server-side joint names!" + \
+                f"\nServer: {self.robot_state.contact_names()}\n Controller: {self._get_contacts()}"
+        
+            Journal.log(self.__class__.__name__,
+                        "_consinstency_checks",
+                        warn,
+                        LogType.WARN,
+                        throw_when_excep = True)
+        
+        if not len(self.robot_state.contact_names()) == len(self._get_contacts()):
+
+            exception = f"Controller-side n contacts {self._get_contacts()} do not match " + \
+                f"server-side n contacts {len(self.robot_state.contact_names())}!"
+        
+            Journal.log(self.__class__.__name__,
+                        "_consinstency_checks",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            exit()
+            
     def _init(self):
 
         stat = f"Initializing RHC controller " + \
@@ -533,9 +563,6 @@ class RHController(ABC):
 
         self.cluster_stats.run()
         self.cluster_stats.synch_info()
-
-        print("AAAAAAAAAAa")
-        print(self.cluster_stats.get_all_info())
 
         self._register_to_cluster() # registers the controller to the cluster
         
@@ -745,7 +772,15 @@ class RHController(ABC):
             self.rhc_internal.write_constr(data= self._get_constr_from_sol(constr_name=constr_name),
                                 constr_name = constr_name,
                                 wait=True)
+    
+    def _get_contacts(self):
         
+        contact_names = self._get_contact_names()
+
+        self._got_contact_names = True
+
+        return contact_names
+    
     def _get_q_from_sol(self):
 
         # to be overridden by child class
@@ -813,7 +848,12 @@ class RHController(ABC):
         pass
 
     @abstractmethod
-    def _get_robot_jnt_names(self) -> List[str]:
+    def _get_robot_jnt_names(self):
+
+        pass
+    
+    @abstractmethod
+    def _get_contact_names(self):
 
         pass
 
