@@ -470,6 +470,7 @@ class RHCInternal(SharedDataWindow):
         self.name = name
         
         self.enable_data = True
+        self._contact_names = None
 
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
@@ -534,12 +535,28 @@ class RHCInternal(SharedDataWindow):
                                             rhc_index = i,
                                             is_server=is_server,
                                             verbose=self.verbose,
-                                            vlevel=VLevel.V2))
+                                            vlevel=VLevel.V2,
+                                            safe=False))
         
         # run clients
         for i in range(0, self.cluster_size):
 
             self.shared_data_clients[i].run()
+        
+        if self.enable_data:
+
+            rhc_refs = RhcRefs(namespace=self.namespace,
+                                    is_server=False,
+                                    with_gpu_mirror=False, 
+                                    safe=False,
+                                    verbose=self.verbose,
+                                    vlevel=VLevel.V2)
+            
+            rhc_refs.run()
+
+            self._contact_names = rhc_refs.rob_refs.contact_names()
+
+            rhc_refs.close() # not needed anymore
 
     def _post_shared_init(self):
         
@@ -641,10 +658,15 @@ class RHCInternal(SharedDataWindow):
 
             n_dims_f = self.shared_data_clients[0].f.n_rows 
             n_nodes_f = self.shared_data_clients[0].f.n_cols
-            legend = [""] * n_dims_f
-            for i in range(len(legend)):
-                legend[i] = str(i)            
-            f_legend = ["f_" + element for element in legend]
+            f_legend_base = ["f_x", "f_y", "f_z", "t_x", "t_y", "t_z"]
+            f_legend = f_legend_base * len(self._contact_names)
+
+            for i in range(len(self._contact_names)):
+                contact_name = self._contact_names[i]
+
+                for j in range(6):
+
+                    f_legend[6 * i + j] = f_legend[6 * i + j] + "_" + contact_name
 
             self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_q,
                                     n_data = n_nodes_q,
@@ -695,6 +717,8 @@ class RHCInternal(SharedDataWindow):
             self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
             self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
 
+            self.n_nodes = n_nodes_q # we assume all data to be of same dimension (even if not defined on some nodes)
+
     def _finalize_grid(self):
         
         widget_utils = WidgetUtils()
@@ -722,7 +746,7 @@ class RHCInternal(SharedDataWindow):
 
         self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
 
-        for i in range(0, len(self.names)):
+        for i in range(0, len(self.rt_plotters)):
             
             self.rt_plotters[i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
 
@@ -752,7 +776,7 @@ class RHCInternal(SharedDataWindow):
                             self.rt_plotters[i].rt_plot_widget.update(data)
 
             else:
-
+                
                 self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].q.numpy_view[:, :])
                 self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].v.numpy_view[:, :])
                 self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].a.numpy_view[:, :])

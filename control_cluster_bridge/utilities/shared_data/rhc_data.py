@@ -137,7 +137,8 @@ class RhcRefs(SharedDataBase):
             n_robots: int = -1, 
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            safe: bool = True):
         
             basename = basename + "Phase" # hardcoded
 
@@ -148,7 +149,7 @@ class RhcRefs(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
+                safe = safe, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
                 fill_value = -1)
@@ -163,7 +164,8 @@ class RhcRefs(SharedDataBase):
             n_contacts: int = -1,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            safe: bool = True):
         
             basename = basename + "ContactFlag" # hardcoded
 
@@ -174,7 +176,7 @@ class RhcRefs(SharedDataBase):
                 n_cols = n_contacts, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
+                safe = safe, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 fill_value = True)
@@ -210,6 +212,8 @@ class RhcRefs(SharedDataBase):
 
         self.force_reconnection = force_reconnection
 
+        self.safe = safe
+
         self.rob_refs = self.RobotFullConfigRef(namespace=namespace,
                                     basename=self.basename,
                                     is_server=is_server,
@@ -232,7 +236,8 @@ class RhcRefs(SharedDataBase):
                             n_robots=n_robots,
                             verbose=verbose,
                             vlevel=vlevel,
-                            force_reconnection=force_reconnection)
+                            force_reconnection=force_reconnection,
+                            safe=safe)
 
         self.contact_flags = None
 
@@ -262,7 +267,8 @@ class RhcRefs(SharedDataBase):
                             n_contacts=self.n_contacts,
                             verbose=self.verbose,
                             vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection)
+                            force_reconnection=self.force_reconnection,
+                            safe=self.safe)
 
         self.contact_flags.run()
 
@@ -418,7 +424,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
                 fill_value = 0)
@@ -442,7 +448,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 fill_value = np.nan)
@@ -466,7 +472,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 fill_value = np.nan)
@@ -490,7 +496,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = 1, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
+                safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 fill_value = np.nan)
@@ -727,7 +733,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "q" # configuration vector
+            basename = "Q" # configuration vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -753,7 +759,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "q" # velocity vector
+            basename = "V" # velocity vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -805,7 +811,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "a_dot" # jerk vector
+            basename = "ADot" # jerk vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -831,7 +837,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "f" # cartesian force vector
+            basename = "F" # cartesian force vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -857,7 +863,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "f_dot" # yank vector
+            basename = "FDot" # yank vector
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -883,7 +889,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "v" # hardcoded
+            basename = "Eff" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -909,7 +915,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "rhc_costs"
+            basename = "RhcCosts"
 
             super().__init__(names = names, # not needed if client
                     dimensions = dimensions, # not needed if client
@@ -934,7 +940,7 @@ class RhcInternal(SharedDataBase):
                 safe: bool = True,
                 force_reconnection: bool = False):
             
-            basename = "rhc_constraints"
+            basename = "RhcConstraints"
 
             super().__init__(names = names, # not needed if client
                     dimensions = dimensions, # not needed if client
@@ -1090,7 +1096,8 @@ class RhcInternal(SharedDataBase):
             n_jnts: int = -1,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            safe: bool = True):
 
         self.rhc_index = rhc_index
 
@@ -1126,7 +1133,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         if self.config.enable_v:
 
@@ -1136,7 +1144,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         if self.config.enable_a:
 
@@ -1146,7 +1155,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         if self.config.enable_a_dot:
 
@@ -1156,7 +1166,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         if self.config.enable_f:
 
@@ -1166,7 +1177,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
             
         if self.config.enable_f_dot:
 
@@ -1176,7 +1188,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         if self.config.enable_eff:
 
@@ -1186,7 +1199,8 @@ class RhcInternal(SharedDataBase):
                     n_nodes = n_nodes, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
             
         if self.config.enable_costs:
 
@@ -1197,7 +1211,8 @@ class RhcInternal(SharedDataBase):
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         if self.config.enable_constr:
 
@@ -1208,7 +1223,8 @@ class RhcInternal(SharedDataBase):
                     is_server = is_server, 
                     verbose = verbose, 
                     vlevel = vlevel,
-                    force_reconnection=force_reconnection)
+                    force_reconnection=force_reconnection,
+                    safe=safe)
         
         self._is_running = False
     

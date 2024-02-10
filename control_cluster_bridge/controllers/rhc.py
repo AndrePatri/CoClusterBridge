@@ -346,6 +346,8 @@ class RHController(ABC):
 
     def _close(self):
 
+        self._unregister_from_cluster()
+
         if self.robot_cmds is not None:
             
             self.robot_cmds.close()
@@ -355,8 +357,6 @@ class RHController(ABC):
             self.robot_state.close()
         
         if self.rhc_status is not None:
-            
-            self._unregister_from_cluster()
         
             self.rhc_status.close()
         
@@ -384,7 +384,7 @@ class RHController(ABC):
 
     def _register_to_cluster(self):
         
-        self._acquire_reg_sem()
+        # self._acquire_reg_sem()
 
         available_spots = self.rhc_status.cluster_size
 
@@ -422,7 +422,7 @@ class RHController(ABC):
         self.rhc_status.registration.synch_all(wait = True,
                                                 read = False) # register
 
-        self._release_reg_sem()
+        # self._release_reg_sem()
 
         self._registered = True
 
@@ -437,7 +437,7 @@ class RHController(ABC):
 
         if self._registered:
 
-            self._acquire_reg_sem()
+            # self._acquire_reg_sem()
 
             self.rhc_status.registration.write_wait(False, 
                                     row_index=self.controller_index,
@@ -452,7 +452,7 @@ class RHController(ABC):
             self.rhc_status.controllers_counter.synch_all(wait = True,
                                                     read = False)
 
-            self._release_reg_sem()
+            # self._release_reg_sem()
     
     def _acquire_reg_sem(self):
 
@@ -600,7 +600,8 @@ class RHController(ABC):
                                     n_nodes=self._n_nodes,
                                     verbose = self._verbose,
                                     vlevel=VLevel.V2,
-                                    force_reconnection=True)
+                                    force_reconnection=True,
+                                    safe=True)
             
             self.rhc_internal.run()
 
