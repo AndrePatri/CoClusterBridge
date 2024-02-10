@@ -285,12 +285,10 @@ class ControlClusterServer(ABC):
 
                 self._cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
                                             "cluster_rt_factor",
-                                            "cluster_ready",
-                                            "cluster_state_update_dt"],
+                                            "cluster_ready"],
                             val=[self.solution_time,
                                 self.cluster_dt/self.solution_time,
-                                self.is_running(),
-                                np.nan])
+                                self.is_running()])
 
         self._update_mem_flags() # used to keep track of previous flag states
     

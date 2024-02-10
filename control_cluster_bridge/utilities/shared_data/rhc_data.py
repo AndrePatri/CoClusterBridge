@@ -956,13 +956,13 @@ class RhcInternal(SharedDataBase):
 
         def __init__(self,
             is_server: bool = False,
-            enable_q: bool = True, 
-            enable_v: bool = True, 
-            enable_a: bool = True,
+            enable_q: bool = False, 
+            enable_v: bool = False, 
+            enable_a: bool = False,
             enable_a_dot: bool = False, 
-            enable_f: bool = True, 
+            enable_f: bool = False, 
             enable_f_dot: bool = False, 
-            enable_eff: bool = True, 
+            enable_eff: bool = False, 
             cost_names: List[str] = None, 
             constr_names: List[str] = None,
             cost_dims: List[int] = None, 
@@ -1124,11 +1124,13 @@ class RhcInternal(SharedDataBase):
         self.eff = None
         self.costs = None
         self.cnstr = None
-            
+        
+        self._is_server = config.is_server
+
         if self.config.enable_q:
             
             self.q = self.Q(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 3 + 4 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1139,7 +1141,7 @@ class RhcInternal(SharedDataBase):
         if self.config.enable_v:
 
             self.v = self.V(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1150,7 +1152,7 @@ class RhcInternal(SharedDataBase):
         if self.config.enable_a:
 
             self.a = self.A(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1161,7 +1163,7 @@ class RhcInternal(SharedDataBase):
         if self.config.enable_a_dot:
 
             self.a_dot = self.ADot(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1172,7 +1174,7 @@ class RhcInternal(SharedDataBase):
         if self.config.enable_f:
 
             self.f = self.F(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 6 * n_contacts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1183,7 +1185,7 @@ class RhcInternal(SharedDataBase):
         if self.config.enable_f_dot:
 
             self.f_dot = self.FDot(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 6 * n_contacts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1194,7 +1196,7 @@ class RhcInternal(SharedDataBase):
         if self.config.enable_eff:
 
             self.eff = self.Eff(namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
                     n_nodes = n_nodes, 
                     verbose = verbose, 
@@ -1208,7 +1210,7 @@ class RhcInternal(SharedDataBase):
                     dimensions = self.config.cost_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
                     namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     verbose = verbose, 
                     vlevel = vlevel,
                     force_reconnection=force_reconnection,
@@ -1220,7 +1222,7 @@ class RhcInternal(SharedDataBase):
                     dimensions = self.config.constr_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
                     namespace = self.namespace,
-                    is_server = is_server, 
+                    is_server = self._is_server, 
                     verbose = verbose, 
                     vlevel = vlevel,
                     force_reconnection=force_reconnection,

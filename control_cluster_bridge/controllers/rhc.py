@@ -635,7 +635,6 @@ class RHController(ABC):
             self.rhc_internal = RhcInternal(config=config, 
                                     namespace=self.namespace,
                                     rhc_index = self.controller_index,
-                                    is_server=True, 
                                     n_contacts=self.n_contacts,
                                     n_jnts=self.n_dofs,
                                     n_nodes=self._n_nodes,

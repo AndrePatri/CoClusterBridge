@@ -533,7 +533,6 @@ class RHCInternal(SharedDataWindow):
             self.shared_data_clients.append(RhcInternal(config=config,
                                             namespace=self.namespace,
                                             rhc_index = i,
-                                            is_server=is_server,
                                             verbose=self.verbose,
                                             vlevel=VLevel.V2,
                                             safe=False))
