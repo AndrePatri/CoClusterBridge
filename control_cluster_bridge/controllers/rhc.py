@@ -131,6 +131,8 @@ class RHController(ABC):
 
         self._homer = None
 
+        self._core_idx = None
+
         self._init()
 
     def init_rhc_task_cmds(self):
@@ -160,7 +162,44 @@ class RHController(ABC):
         self.robot_cmds.run()
         
         self._states_initialized = True
+    
+    def _set_affinity(self):
+
+        if self._core_idx is not None:
         
+            import os
+
+            pid = os.getpid()  
+
+            os.sched_setaffinity(pid, {self._core_idx})
+
+            info = f"Affinity ID {os.sched_getaffinity(pid)} was set for controller n.{self.controller_index}."
+
+            Journal.log(self.__class__.__name__,
+                        "_set_affinity",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
+
+    def set_affinity(self, 
+                core_idx: int):
+        
+        if not isinstance(core_idx, int):
+
+            exception = f"core_idx should be an int"
+
+            Journal.log(self.__class__.__name__,
+                    "solve",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+
+        self._core_idx = core_idx
+
+    def get_core_idx(self):
+
+        return self._core_idx
+    
     def solve(self):
         
         if not self._jnt_maps_created:
@@ -193,6 +232,8 @@ class RHController(ABC):
                     LogType.EXCEP,
                     throw_when_excep = True)
         
+        self._set_affinity() # set affinity, if core ids was provided
+
         while True:
             
             # we are always listening for a trigger signal from the client 

@@ -167,9 +167,7 @@ class ClusterRuntimeInfoNames:
 
         self._keys = ["cluster_rt_factor", 
                 "cluster_sol_time",
-                "cluster_state_update_dt",
-                "cluster_ready",
-                "cluster_nominal_dt"]
+                "cluster_ready"]
         
         self.idx_dict = dict.fromkeys(self._keys, None)
 

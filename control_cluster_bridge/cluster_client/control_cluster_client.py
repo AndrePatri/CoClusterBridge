@@ -18,7 +18,6 @@
 from abc import ABC
 
 from control_cluster_bridge.controllers.rhc import RHChild
-# from control_cluster_bridge.utilities.control_cluster_defs import HanshakeDataCntrlSrvr
 
 from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
 
@@ -252,19 +251,6 @@ class ControlClusterClient(ABC):
                         LogType.WARN,
                         throw_when_excep = True)
             
-        if len(self.isolated_cores) < self.cluster_size and self.isolated_cores_only:
-            
-            # we distribute the controllers over the available ones
-            warning = "Not enough isolated cores available to distribute the controllers " + \
-                f"on them. N. available isolated cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}. "+ \
-                "Processes will be distributed among the available ones."
-            
-            Journal.log(self.__class__.__name__,
-                        "_debug_prints",
-                        warning,
-                        LogType.WARN,
-                        throw_when_excep = True)
-            
     def _get_process_affinity(self, 
                         process_index: int, 
                         core_ids: List[int]):
@@ -280,68 +266,44 @@ class ControlClusterClient(ABC):
                         "spawning processes...",
                         LogType.STAT,
                         throw_when_excep = True)
-
-        if self._controllers_count <= self.cluster_size:
             
-            self._debug_prints() # some debug prints
-
-            for i in range(0, self._controllers_count):
-                
-                info = f"Spawning process for controller n.{i}."
-
-                Journal.log(self.__class__.__name__,
-                        "_spawn_processes",
-                        info,
-                        LogType.STAT,
-                        throw_when_excep = True)
-                
-                process = mp.Process(target=self._controllers[i].solve, name=self.processes_basename + str(i))
-
-                self._processes.append(process)
-            
-            core_ids = []
-
-            if self.core_ids_override_list is None:
-
-                core_ids = self._get_cores() # gets cores over which processes are to be distributed
-
-            else:
-                
-                # ini case user wants to set core ids manually
-                core_ids = self.core_ids_override_list
-
-            for i in range(len(self._processes)):
-
-                self._processes[i].start()
-
-                os.sched_setaffinity(self._processes[i].pid, {self._get_process_affinity(i, core_ids=core_ids)})
-                
-                info = f"Affinity ID {os.sched_getaffinity(self._processes[i].pid)} was set for controller n.{i}."
-
-                Journal.log(self.__class__.__name__,
-                        "_spawn_processes",
-                        info,
-                        LogType.STAT,
-                        throw_when_excep = True)
-                
-            self._is_cluster_ready = True
-
-            self.cluster_stats.write_info(dyn_info_name="cluster_ready",
-                                        val=self._is_cluster_ready)
-
-            Journal.log(self.__class__.__name__,
-                        "_spawn_processes",
-                        "Processes spawned.",
-                        LogType.STAT,
-                        throw_when_excep = True)
-                            
+        self._debug_prints() # some debug prints
+        
+        core_ids = []
+        if self.core_ids_override_list is None:
+            core_ids = self._get_cores() # gets cores over which processes are to be distributed
         else:
+            # ini case user wants to set core ids manually
+            core_ids = self.core_ids_override_list
+
+        for i in range(0, self._controllers_count):
             
+            info = f"Spawning process for controller n.{i}."
+
             Journal.log(self.__class__.__name__,
-                        "_spawn_processes",
-                        "You didn't finish to fill the cluster. Please call the add_controller() method to do so.",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
+                    "_spawn_processes",
+                    info,
+                    LogType.STAT,
+                    throw_when_excep = True)
+            
+            self._controllers[i].set_affinity(core_idx=self._get_process_affinity(i, core_ids=core_ids))
+
+            process = mp.Process(target=self._controllers[i].solve, name=self.processes_basename + str(i))
+
+            self._processes.append(process)
+
+            self._processes[i].start()
+            
+        self._is_cluster_ready = True
+
+        self.cluster_stats.write_info(dyn_info_name="cluster_ready",
+                                    val=self._is_cluster_ready)
+
+        Journal.log(self.__class__.__name__,
+                    "_spawn_processes",
+                    "Processes spawned.",
+                    LogType.STAT,
+                    throw_when_excep = True)
     
     def pre_init(self):
         
