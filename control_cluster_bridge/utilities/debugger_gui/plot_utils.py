@@ -29,7 +29,9 @@ import pyqtgraph as pg
 from typing import List, Callable, Union
 
 from control_cluster_bridge.utilities.sysutils import PathsGetter
-from control_cluster_bridge.utilities.defs import Journal
+
+from SharsorIPCpp.PySharsorIPC import LogType
+from SharsorIPCpp.PySharsorIPC import Journal
 
 import os
 
@@ -48,9 +50,6 @@ class RtPlotWidget(pg.PlotWidget):
                 ylabel = "", 
                 window_buffer_factor: int = 2):
 
-        self.journal = Journal()
-        self.journal.warning = "warning"
-
         super().__init__(title=base_name,
                     parent=parent)
         
@@ -58,11 +57,12 @@ class RtPlotWidget(pg.PlotWidget):
 
         if legend_list is not None and len(legend_list) != n_dims:
             
-            exception = "[{self.__class__.__name__}]" + f"[{self.journal.exception}]" \
-                + f": provided legend list length {len(legend_list)} does not match data dimension {n_dims}"
+            Journal.log(self.__class__.__name__,
+                "__init__",
+                f"provided legend list length {len(legend_list)} does not match data dimension {n_dims}",
+                LogType.EXCEP,
+                throw_when_excep = True)
             
-            raise Exception(exception)
-
         self.legend_list = legend_list
 
         self.x_label = xlabel
@@ -741,8 +741,6 @@ class SettingsWidget():
             parent: QWidget = None
             ):
 
-        self.journal = Journal()
-
         self.rt_plot_widget = rt_plotter
 
         self.widget_utils = WidgetUtils()
@@ -907,8 +905,6 @@ class RtPlotWindow():
             window_buffer_factor: int = 2, 
             ylabel = ""):
 
-        self.journal = Journal()
-
         self.n_data = n_data
         self.data_dim = data_dim
 
@@ -963,8 +959,6 @@ class GridFrameWidget():
             settings_title = "SETTINGS"):
         
         self.finalized = False
-
-        self.journal = Journal()
 
         self.base_frame = QFrame(parent = parent)
         self.base_frame.setFrameShape(QFrame.StyledPanel)

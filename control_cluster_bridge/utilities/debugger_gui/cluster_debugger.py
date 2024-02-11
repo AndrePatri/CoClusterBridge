@@ -41,7 +41,6 @@ from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWin
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 
 from control_cluster_bridge.utilities.sysutils import PathsGetter
-from control_cluster_bridge.utilities.defs import Journal
 
 import torch
 
@@ -63,8 +62,6 @@ class SharedDataThread(QThread):
                 verbose = True):
         
         super().__init__()
-
-        self.journal = Journal()
 
         self.perf_timer = PerfSleep()
 
@@ -133,8 +130,6 @@ class RtClusterDebugger(QMainWindow):
 
         super().__init__()
         
-        self.journal = Journal()
-
         self.namespace = namespace
         
         self.widget_utils = WidgetUtils()
@@ -777,11 +772,6 @@ class RtClusterDebugger(QMainWindow):
     def closeEvent(self, event):
         # This function is called when the window is being closed
         # You can perform your desired actions here
-
-        message = f"[{self.__class__.__name__}]" + f"[{self.journal.status}]: " \
-                + f"closing debugger and performing some cleanup..."
-            
-        print(message)
 
         self.terminate()
 
