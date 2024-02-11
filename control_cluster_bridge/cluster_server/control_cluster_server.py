@@ -39,18 +39,17 @@ from perf_sleep.pyperfsleep import PerfSleep
 class ControlClusterServer(ABC):
 
     def __init__(self, 
+            namespace: str,
             cluster_size: int, 
             control_dt: float,
             cluster_dt: float,
             jnt_names: List[str],
             n_contact_sensors: int = -1,
             contact_linknames: List[str] = None,
-            backend = "torch", 
-            device = torch.device("cpu"), 
-            np_array_dtype = np.float32, 
+            use_gpu: bool = False, 
             verbose = False, 
             debug = False, 
-            namespace = ""):
+            force_reconnection: bool = False):
 
         self.namespace = namespace
         
@@ -62,20 +61,9 @@ class ControlClusterServer(ABC):
 
         self._debug = debug
 
-        self.np_dtype = np_array_dtype
-        data_aux = np.zeros((1, 1), dtype=self.np_dtype)
-        self.np_array_itemsize = data_aux.itemsize
-
-        if self.np_dtype == np.float64:
-            self.torch_dtype = torch.float64
-        if self.np_dtype == np.float32:
-            self.torch_dtype = torch.float32
-
         self.jnt_names = jnt_names
 
         self.n_dofs = len(self.jnt_names)
-        self.jnt_data_size = np.zeros((self.n_dofs, 1),
-                                    dtype=self.np_dtype).nbytes
         
         self.cluster_size = cluster_size
         
@@ -85,12 +73,8 @@ class ControlClusterServer(ABC):
 
         self.cluster_dt = cluster_dt # dt at which the controllers in the cluster will run 
         self.control_dt = control_dt # dt at which the low level controller or the simulator runs
-
-        self._backend = backend
-        self._device = device
-        self.using_gpu = False
-        if self._device == torch.device("cuda"):
-            self.using_gpu = True
+     
+        self.using_gpu = use_gpu
 
         # shared mem objects
 
@@ -124,7 +108,7 @@ class ControlClusterServer(ABC):
         self.wait_for_sol_counter = 0
         self._print_frequency = 100 # number of "steps" at which sporadic logs are printed
 
-        self._force_reconnection = True
+        self._force_reconnection = force_reconnection
 
     def __del__(self):
                 
