@@ -606,7 +606,15 @@ class RHController(ABC):
         self.cluster_stats.synch_info()
 
         self._register_to_cluster() # registers the controller to the cluster
+
+        self.init_states() # initializes states
+
+        self.create_jnt_maps()
+
+        self.init_rhc_task_cmds() # initializes rhc commands
         
+        self._consinstency_checks()
+
         if self._debug_sol:
             
             # internal solution is published on shared mem
@@ -637,6 +645,7 @@ class RHController(ABC):
                                     rhc_index = self.controller_index,
                                     n_contacts=self.n_contacts,
                                     n_jnts=self.n_dofs,
+                                    jnt_names=self._controller_side_jnt_names,
                                     n_nodes=self._n_nodes,
                                     verbose = self._verbose,
                                     vlevel=VLevel.V2,
@@ -644,14 +653,6 @@ class RHController(ABC):
                                     safe=True)
             
             self.rhc_internal.run()
-
-        self.init_states() # initializes states
-
-        self.create_jnt_maps()
-
-        self.init_rhc_task_cmds() # initializes rhc commands
-        
-        self._consinstency_checks()
 
         self._homer = RobotHomer(self.srdf_path, 
                             self._controller_side_jnt_names)

@@ -5,6 +5,7 @@ from SharsorIPCpp.PySharsor.wrappers.shared_tensor_dict import SharedTensorDict
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import LogType
 from SharsorIPCpp.PySharsorIPC import Journal
+from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 
 from control_cluster_bridge.utilities.shared_data.abstractions import SharedDataBase
 
@@ -1094,6 +1095,7 @@ class RhcInternal(SharedDataBase):
             n_nodes: int = -1, 
             n_contacts: int = -1,
             n_jnts: int = -1,
+            jnt_names: List[str] = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             force_reconnection: bool = False,
@@ -1101,9 +1103,17 @@ class RhcInternal(SharedDataBase):
 
         self.rhc_index = rhc_index
 
-        # appending controller index to namespace
-        self.namespace = namespace + "_n_" + str(self.rhc_index)
+        self._basename = "RhcInternal"
 
+        self._verbose = verbose
+        self._vlevel = vlevel
+
+        self._jnt_names = jnt_names
+        self._n_jnts = n_jnts
+
+        # appending controller index to namespace
+        self.namespace = self._basename + namespace + "_n_" + str(self.rhc_index)
+        
         if config is not None:
 
             self.config = config
@@ -1112,8 +1122,6 @@ class RhcInternal(SharedDataBase):
             
             # use defaults
             self.config = self.Config()
-
-        self.finalized = False
 
         self.q = None
         self.v = None
@@ -1125,6 +1133,8 @@ class RhcInternal(SharedDataBase):
         self.costs = None
         self.cnstr = None
         
+        self._shared_jnt_names = None
+
         self._is_server = config.is_server
 
         if self.config.enable_q:
@@ -1228,12 +1238,32 @@ class RhcInternal(SharedDataBase):
                     force_reconnection=force_reconnection,
                     safe=safe)
         
+        if self._is_server:
+
+            self._shared_jnt_names = StringTensorServer(length = len(self._jnt_names), 
+                                        basename = self._basename + "Names", 
+                                        name_space = self.namespace,
+                                        verbose = self._verbose, 
+                                        vlevel = self._vlevel)
+            
+        else:
+
+            self._shared_jnt_names = StringTensorClient(
+                                        basename = self._basename + "Names", 
+                                        name_space = self.namespace,
+                                        verbose = self._verbose, 
+                                        vlevel = self._vlevel)
+            
         self._is_running = False
     
     def is_running(self):
 
         return self._is_running
     
+    def jnt_names(self):
+
+        return self._jnt_names
+        
     def run(self):
 
         if self.q is not None:
@@ -1272,7 +1302,56 @@ class RhcInternal(SharedDataBase):
 
             self.cnstr.run()
 
-        self.finalized = True
+        self._n_jnts = self.q.n_rows - 7
+
+        self._shared_jnt_names.run()
+
+        if self._is_server:
+            
+            if self._jnt_names is None:
+
+                self._jnt_names = [""] * self._n_jnts
+
+            else:
+
+                if not len(self._jnt_names) == self._n_jnts:
+                    
+                    exception = f"Joint names list length {len(self._jnt_names)} " + \
+                        f"does not match the number of joints {self._n_jnts}"
+
+                    Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+                    
+            jnt_names_written = self._shared_jnt_names.write_vec(self._jnt_names, 0)
+
+            if not jnt_names_written:
+                
+                exception = "Could not write joint names on shared memory!"
+
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+                    
+        else:
+            
+            self._jnt_names = [""] * self._n_jnts
+
+            jnt_names_read = self._shared_jnt_names.read_vec(self._jnt_names, 0)
+
+            if not jnt_names_read:
+                
+                exception = "Could not read joint names on shared memory!"
+
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
 
         self._is_running = True
 
@@ -1355,11 +1434,15 @@ class RhcInternal(SharedDataBase):
         if self.cnstr is not None:
 
             self.cnstr.close()
+        
+        if self._shared_jnt_names is not None:
 
-    def _check_fin_or_throw(self,
+            self._shared_jnt_names.close()
+
+    def _check_running_or_throw(self,
                         name: str):
 
-        if not self.finalized:
+        if not self.is_running():
         
             exception = "RhcInternal not initialized. Did you call the run()?"
 
@@ -1373,7 +1456,7 @@ class RhcInternal(SharedDataBase):
                 data: np.ndarray = None,
                 wait = True):
         
-        self._check_fin_or_throw("write_q")
+        self._check_running_or_throw("write_q")
                     
         if (self.q is not None) and (data is not None):
             
@@ -1390,7 +1473,7 @@ class RhcInternal(SharedDataBase):
             data: np.ndarray = None,
             wait = True):
         
-        self._check_fin_or_throw("write_v")
+        self._check_running_or_throw("write_v")
         
         if (self.v is not None) and (data is not None):
             
@@ -1407,7 +1490,7 @@ class RhcInternal(SharedDataBase):
             data: np.ndarray = None,
             wait = True):
         
-        self._check_fin_or_throw("write_a")
+        self._check_running_or_throw("write_a")
         
         if (self.a is not None) and (data is not None):
             
@@ -1424,7 +1507,7 @@ class RhcInternal(SharedDataBase):
         data: np.ndarray = None,
         wait = True):
 
-        self._check_fin_or_throw("write_a_dot")
+        self._check_running_or_throw("write_a_dot")
         
         if (self.a_dot is not None) and (data is not None):
             
@@ -1441,7 +1524,7 @@ class RhcInternal(SharedDataBase):
         data: np.ndarray = None,
         wait = True):
         
-        self._check_fin_or_throw("write_f")
+        self._check_running_or_throw("write_f")
         
         if (self.f is not None) and (data is not None):
             
@@ -1458,7 +1541,7 @@ class RhcInternal(SharedDataBase):
         data: np.ndarray = None,
         wait = True):
 
-        self._check_fin_or_throw("write_f_dot")
+        self._check_running_or_throw("write_f_dot")
         
         if (self.f is not None) and (data is not None):
             
@@ -1475,7 +1558,7 @@ class RhcInternal(SharedDataBase):
         data: np.ndarray = None,
         wait = True):
 
-        self._check_fin_or_throw("write_eff")
+        self._check_running_or_throw("write_eff")
 
         if (self.eff is not None) and (data is not None):
             
@@ -1493,7 +1576,7 @@ class RhcInternal(SharedDataBase):
                 data: np.ndarray = None,
                 wait = True):
 
-        self._check_fin_or_throw("write_cost")
+        self._check_running_or_throw("write_cost")
         
         if (self.costs is not None) and (data is not None):
 
@@ -1505,7 +1588,7 @@ class RhcInternal(SharedDataBase):
             cost_name: str,
             wait = True):
         
-        self._check_fin_or_throw("read_cost")
+        self._check_running_or_throw("read_cost")
 
         if self.costs is not None:
             
@@ -1526,7 +1609,7 @@ class RhcInternal(SharedDataBase):
                 data: np.ndarray = None,
                 wait = True):
 
-        self._check_fin_or_throw("write_constr")
+        self._check_running_or_throw("write_constr")
         
         if (self.cnstr is not None) and (data is not None):
             
@@ -1538,7 +1621,7 @@ class RhcInternal(SharedDataBase):
             constr_name,
             wait = True):
         
-        self._check_fin_or_throw("read_constr")
+        self._check_running_or_throw("read_constr")
         
         if self.cnstr is not None:
             

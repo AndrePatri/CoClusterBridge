@@ -128,7 +128,7 @@ class JntsState(SharedDataView):
                 exception = "Could not write joint names on shared memory!"
 
                 Journal.log(self.__class__.__name__,
-                    name,
+                    "run",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
@@ -144,7 +144,7 @@ class JntsState(SharedDataView):
                 exception = "Could not read joint names on shared memory!"
 
                 Journal.log(self.__class__.__name__,
-                    name,
+                    "run",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)

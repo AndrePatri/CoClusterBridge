@@ -116,7 +116,7 @@ class RhcRefsFromKeyboard:
 
             self.cluster_idx = self.env_index.torch_view[0, 0].item()
             self.cluster_idx_torch = self.cluster_idx
-
+        
             self.rhc_refs.rob_refs.synch_from_shared_mem()
             self.rhc_refs.contact_flags.synch_all(read=True, wait=True)
             self.rhc_refs.phase_id.synch_all(read=True, wait=True)
