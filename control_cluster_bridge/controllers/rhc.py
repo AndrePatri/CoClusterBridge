@@ -25,7 +25,6 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
-from control_cluster_bridge.utilities.defs import Journal
 from control_cluster_bridge.utilities.homing import RobotHomer
 
 from SharsorIPCpp.PySharsorIPC import VLevel

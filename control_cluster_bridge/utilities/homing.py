@@ -20,16 +20,13 @@ import numpy as np
 import xml.etree.ElementTree as ET
 
 from typing import List
-
-from control_cluster_bridge.utilities.defs import Journal
+from SharsorIPCpp.PySharsorIPC import Journal, LogType
 
 class RobotHomer:
 
     def __init__(self, 
             srdf_path: str, 
             jnt_names_prb: List[str] = None):
-
-        self.journal = Journal()
 
         self.srdf_path = srdf_path
 
@@ -45,9 +42,15 @@ class RobotHomer:
             self._srdf_root = ET.fromstring(self._srdf_content)
 
         except ET.ParseError as e:
-        
-            print(f"[{self.__class__.__name__}]" + f"[{self.journal.exception}]" + ": could not read SRDF properly!!")
+            
+            exception = f"could not read SRDF properly!!"
 
+            Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            
         # Find all the 'joint' elements within 'group_state' with the name attribute and their values
         joints = self._srdf_root.findall(".//group_state[@name='home']/joint")
 
