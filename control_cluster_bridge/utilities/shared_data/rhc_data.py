@@ -295,7 +295,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "ClusterFailFlag" # hardcoded
 
@@ -309,6 +310,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomdic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = False)
     
     class ResetFlagView(SharedDataView):
@@ -319,7 +321,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "ClusterResetFlag" # hardcoded
 
@@ -333,6 +336,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = False)
     
     class TriggerFlagView(SharedDataView):
@@ -343,7 +347,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "ClusterTriggerFlag" # hardcoded
 
@@ -357,6 +362,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = False)
     
     class ActivationFlagView(SharedDataView):
@@ -367,7 +373,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "ClusterActivationFlag" # hardcoded
 
@@ -381,6 +388,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = False)
     
     class RegistrationFlagView(SharedDataView):
@@ -391,7 +399,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "ClusterRegistrationFlag" # hardcoded
 
@@ -405,6 +414,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = False)
             
     class ControllersCounterView(SharedDataView):
@@ -414,7 +424,8 @@ class RhcStatus(SharedDataBase):
                 is_server = False, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "ClusterControllersCounter" # hardcoded
 
@@ -428,6 +439,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = 0)
     
     class RhcCostView(SharedDataView):
@@ -438,7 +450,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "RhcCost" # hardcoded
 
@@ -452,6 +465,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = np.nan)
     
     class RhcCnstrViolationView(SharedDataView):
@@ -462,7 +476,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "RhcCnstrViolation" # hardcoded
 
@@ -476,6 +491,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = np.nan)
     
     class RhcNIterationsView(SharedDataView):
@@ -486,7 +502,8 @@ class RhcStatus(SharedDataBase):
                 cluster_size: int = -1, 
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
             
             basename = "RhcNIterations" # hardcoded
 
@@ -500,6 +517,7 @@ class RhcStatus(SharedDataBase):
                 safe = False, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = np.nan)
             
     class SemView(SharedDataView):
@@ -531,7 +549,8 @@ class RhcStatus(SharedDataBase):
             namespace = "", 
             verbose = False, 
             vlevel: VLevel = VLevel.V0,
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            with_gpu_mirror: bool = False):
 
         self.is_server = is_server
 
@@ -543,67 +562,78 @@ class RhcStatus(SharedDataBase):
 
         self.vlevel = vlevel
 
+        self.with_gpu_mirror = with_gpu_mirror
+
         self.fails = self.FailFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.resets = self.ResetFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.trigger = self.TriggerFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.activation_state = self.ActivationFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.registration = self.RegistrationFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
 
         self.controllers_counter = self.ControllersCounterView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.rhc_cost = self.RhcCostView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
 
         self.rhc_constr_viol = self.RhcCnstrViolationView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
         
         self.rhc_n_iter = self.RhcNIterationsView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
-                                force_reconnection=force_reconnection)
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
 
         self.sem_view = self.SemView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -1302,8 +1332,6 @@ class RhcInternal(SharedDataBase):
 
             self.cnstr.run()
 
-        self._n_jnts = self.q.n_rows - 7
-
         self._shared_jnt_names.run()
 
         if self._is_server:
@@ -1339,19 +1367,23 @@ class RhcInternal(SharedDataBase):
                     
         else:
             
-            self._jnt_names = [""] * self._n_jnts
+            if self.q is not None:
 
-            jnt_names_read = self._shared_jnt_names.read_vec(self._jnt_names, 0)
+                self._n_jnts = self.q.n_rows - 7
 
-            if not jnt_names_read:
-                
-                exception = "Could not read joint names on shared memory!"
+                self._jnt_names = [""] * self._n_jnts
 
-                Journal.log(self.__class__.__name__,
-                    "run",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+                jnt_names_read = self._shared_jnt_names.read_vec(self._jnt_names, 0)
+
+                if not jnt_names_read:
+                    
+                    exception = "Could not read joint names on shared memory!"
+
+                    Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
 
         self._is_running = True
 
