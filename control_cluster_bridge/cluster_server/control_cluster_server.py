@@ -92,6 +92,7 @@ class ControlClusterServer(ABC):
         self._triggered = False
 
         self.now_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
+        self.registered = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
         self.prev_active_controllers = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
         self.failed = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
 
@@ -153,6 +154,9 @@ class ControlClusterServer(ABC):
     def pre_trigger_steps(self):
 
         # first retrive current controllers status
+        self._rhc_status.registration.synch_all(read=True,
+                                        wait=True)
+        
         self._rhc_status.activation_state.synch_all(read=True, 
                                         wait=True)
         
@@ -160,6 +164,8 @@ class ControlClusterServer(ABC):
                                         wait=True)
                 
         # all active controllers will be triggered
+        self.registered[:, :] = self._rhc_status.registration.torch_view
+
         self.now_active[:, :] = self._rhc_status.activation_state.torch_view
 
         self.failed[:, :] = self._rhc_status.fails.torch_view
@@ -370,7 +376,21 @@ class ControlClusterServer(ABC):
             # no controller active
 
             return None
+    
+    def get_registered_controllers(self):
+
+        registered = torch.nonzero(self.registered.squeeze(dim=1)).squeeze(dim=1)
+        
+        if not registered.shape[0] == 0:
+  
+            return registered
+        
+        else:
             
+            # no controller registered
+
+            return None
+        
     def just_started_running(self):
 
         return self.is_running() and (not self._was_running)
@@ -590,8 +610,12 @@ class ControlClusterServer(ABC):
         # only trigger active controllers
         self._rhc_status.activation_state.synch_all(read=True, 
                                         wait=True)
+        self._rhc_status.registration.synch_all(read=True,
+                                        wait=True)
         
-        self.now_active[:, :] = self._rhc_status.activation_state.torch_view
+        self.now_active[:, :] = self._rhc_status.activation_state.torch_view & \
+                            self._rhc_status.registration.torch_view # controllers have to be registered
+                            # to be considered active
 
         self._rhc_status.trigger.write_wait(self._rhc_status.activation_state.torch_view,
                                     0, 0)
