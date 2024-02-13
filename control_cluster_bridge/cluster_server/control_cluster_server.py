@@ -402,7 +402,7 @@ class ControlClusterServer(ABC):
         
         if idxs is not None:
             
-            self._rhc_status.resets.torch_view[idxs, 0] = torch.full(size=(idxs.shape[0], 1), 
+            self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
                                                             fill_value=True)
             
             self._rhc_status.resets.synch_all(read=False, wait=True)
