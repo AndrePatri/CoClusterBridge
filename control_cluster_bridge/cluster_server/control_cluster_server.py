@@ -166,8 +166,10 @@ class ControlClusterServer(ABC):
         # all active controllers will be triggered
         self.registered[:, :] = self._rhc_status.registration.torch_view
 
-        self.now_active[:, :] = self._rhc_status.activation_state.torch_view
-
+        self.now_active[:, :] = self._rhc_status.activation_state.torch_view & \
+                            self._rhc_status.registration.torch_view # controllers have to be registered
+                            # to be considered active
+        
         self.failed[:, :] = self._rhc_status.fails.torch_view
 
         # we handle controller fails, if any
@@ -319,7 +321,7 @@ class ControlClusterServer(ABC):
         not_active_before = ~self.prev_active_controllers.squeeze(dim=1)
 
         just_activated = torch.nonzero(now_active & not_active_before).squeeze(dim=1)
-    
+        
         if not just_activated.shape[0] == 0:
             
             return just_activated
@@ -600,24 +602,8 @@ class ControlClusterServer(ABC):
         self._cluster_stats.run()          
 
     def _trigger_solution(self):
-        
-        # # triggers all controllers
-        # self._rhc_status.trigger.fill_with(True)
-        # # writes whole internal view to shared memory
-        # self._rhc_status.trigger.synch_all(read=False, 
-        #                                 wait=True) # wait for synch to succeed
-        
-        # only trigger active controllers
-        self._rhc_status.activation_state.synch_all(read=True, 
-                                        wait=True)
-        self._rhc_status.registration.synch_all(read=True,
-                                        wait=True)
-        
-        self.now_active[:, :] = self._rhc_status.activation_state.torch_view & \
-                            self._rhc_status.registration.torch_view # controllers have to be registered
-                            # to be considered active
 
-        self._rhc_status.trigger.write_wait(self._rhc_status.activation_state.torch_view,
+        self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
                                     0, 0)
         
     def _wait_for_solution(self):
