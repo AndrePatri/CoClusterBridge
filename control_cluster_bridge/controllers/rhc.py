@@ -320,7 +320,7 @@ class RHController(ABC):
             
             self.set_cmds_to_homing()
 
-            self.fail_n = 0 # resets number of fails
+            # self.n_fails = 0 # reset fail n
 
             self.n_resets += 1
 
@@ -683,6 +683,10 @@ class RHController(ABC):
         self._deactivate()
 
         self.n_fails += 1
+
+        self.rhc_status.controllers_fail_counter.write_wait(self.n_fails,
+                                                    row_index=self.controller_index,
+                                                    col_index=0)
 
     def _init_robot_homer(self):
 

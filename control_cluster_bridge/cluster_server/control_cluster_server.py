@@ -365,6 +365,20 @@ class ControlClusterServer(ABC):
 
             return None
     
+    def get_inactive_controllers(self):
+        
+        not_active = torch.nonzero((~self.now_active).squeeze(dim=1)).squeeze(dim=1)
+        
+        if not not_active.shape[0] == 0:
+  
+            return not_active
+        
+        else:
+            
+            # no controller active
+
+            return None
+
     def get_failed_controllers(self):
         
         failed = torch.nonzero(self.failed.squeeze(dim=1)).squeeze(dim=1)
@@ -402,17 +416,38 @@ class ControlClusterServer(ABC):
         
         if idxs is not None:
             
+            # untrigger, just in case
+            self._rhc_status.trigger.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
+                                                            fill_value=False) 
+            self._rhc_status.trigger.synch_all(read=False, wait=True)
+
+            # reset 
             self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
                                                             fill_value=True)
             
             self._rhc_status.resets.synch_all(read=False, wait=True)
-            
+
         else:
+            
+            # untrigger all controllers
+            self._rhc_status.trigger.torch_view[idxs, :] = torch.full(size=(self.cluster_size, 1), 
+                                                            fill_value=False) 
+            self._rhc_status.trigger.synch_all(read=False, wait=True)
 
             # resets all failed controllers
             self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
                                         0, 0)
+    
+    def activate_controllers(self,
+                    idxs: torch.Tensor = None):
         
+        if idxs is not None:
+
+            self._rhc_status.activation_state.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
+                                                            fill_value=True)
+            
+            self._rhc_status.activation_state.synch_all(read=False, wait=True)
+            
     def is_running(self):
 
         return self._is_running

@@ -442,6 +442,32 @@ class RhcStatus(SharedDataBase):
                 with_gpu_mirror=with_gpu_mirror,
                 fill_value = 0)
     
+    class FailsCounterView(SharedDataView):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False):
+            
+            basename = "ClusterControllerFailsCounter" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Int,
+                force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
+                fill_value = 0)
+            
     class RhcCostView(SharedDataView):
 
         def __init__(self,
@@ -611,6 +637,14 @@ class RhcStatus(SharedDataBase):
                                 force_reconnection=force_reconnection,
                                 with_gpu_mirror=with_gpu_mirror)
         
+        self.controllers_fail_counter = self.FailsCounterView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size,
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror)
+
         self.rhc_cost = self.RhcCostView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
@@ -715,6 +749,7 @@ class RhcStatus(SharedDataBase):
         self.activation_state.run()
         self.registration.run()
         self.controllers_counter.run()
+        self.controllers_fail_counter.run()
         self.rhc_cost.run()
         self.rhc_constr_viol.run()
         self.rhc_n_iter.run()
@@ -739,6 +774,7 @@ class RhcStatus(SharedDataBase):
             self.activation_state.close()
             self.registration.close()
             self.controllers_counter.close()
+            self.controllers_fail_counter.close()
             self.rhc_n_iter.close()
             self.rhc_cost.close()
             self.rhc_constr_viol.close()
