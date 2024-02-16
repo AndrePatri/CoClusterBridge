@@ -89,6 +89,8 @@ class ControlClusterServer(ABC):
         self._is_running = False
         self._is_first_control_step = False
         self._pre_trigger_steps_done = False
+        self._post_wait_steps_done = True
+        
         self._triggered = False
 
         self.now_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool)
@@ -159,9 +161,6 @@ class ControlClusterServer(ABC):
         
         self._rhc_status.activation_state.synch_all(read=True, 
                                         wait=True)
-        
-        self._rhc_status.fails.synch_all(read=True, 
-                                        wait=True)
                 
         # all active controllers will be triggered
         self.registered[:, :] = self._rhc_status.registration.torch_view
@@ -170,10 +169,6 @@ class ControlClusterServer(ABC):
                             self._rhc_status.registration.torch_view # controllers have to be registered
                             # to be considered active
         
-        self.failed[:, :] = self._rhc_status.fails.torch_view
-
-        # we handle controller fails, if any
-        self._on_failure()
         
         self._pre_trigger_steps_done = True
 
@@ -543,18 +538,6 @@ class ControlClusterServer(ABC):
                 logtype,
                 throw_when_excep = True)
                 
-    def _on_failure(self):
-        
-        failed = self.get_failed_controllers()
-
-        if failed is not None:
-
-            msg = f"These controllers in the cluster failed: {failed}"
-                    
-            self._sporadic_log(calling_methd="_on_failure",
-                        msg = msg,
-                        logtype=LogType.WARN)
-
     def _setup(self):
 
         self._compute_n_control_actions() # necessary ti apply control input only at 
@@ -652,20 +635,25 @@ class ControlClusterServer(ABC):
                                         wait=True)
             self._rhc_status.trigger.synch_all(read=True, 
                                         wait=True) # wait for synch to succeed
+            self._rhc_status.fails.synch_all(read=True,
+                                        wait=True)
             
-            active_controllers = self._rhc_status.activation_state.torch_view
+            self.failed[:,:] = self._rhc_status.fails.torch_view 
 
-            # only wait solution from active controllers
-            solved_and_active = ~(self._rhc_status.trigger.torch_view[active_controllers])
+            active_and_not_failed_controllers = torch.logical_and(self._rhc_status.activation_state.torch_view,
+                                                        ~self._rhc_status.fails.torch_view)
+
+            # only wait solution from active (and not failed) controllers
+            solved_and_ok = ~(self._rhc_status.trigger.torch_view[active_and_not_failed_controllers])
 
             active_idxs = torch.nonzero(self.now_active.squeeze(dim=1)).squeeze(dim=1)
 
             if (not self._closed) and \
-                (solved_and_active.shape[0] == active_idxs.shape[0] # all active controllers have solved
+                (solved_and_ok.shape[0] == active_idxs.shape[0] # all active controllers have solved
                 ):
                 
                 # wait for all triggered (i.e. active) controllers to finish
-                solved = (solved_and_active).all()
+                solved = (solved_and_ok).all()
 
                 self.perf_timer.clock_sleep(1000) # nanoseconds (but this
                 # accuracy cannot be reached on a non-rt system)
