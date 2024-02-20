@@ -28,3 +28,11 @@ def get_isolated_cores():
 num_isolated, isolated_core_ids = get_isolated_cores()
 print(f"Number of isolated cores: {num_isolated}")
 print(f"Isolated core IDs: {isolated_core_ids}")
+
+import psutil
+
+def get_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    memory_usage_gb = memory_info.rss / (1024**3)  # Convert bytes to gigabytes
+    return memory_usage_gb
