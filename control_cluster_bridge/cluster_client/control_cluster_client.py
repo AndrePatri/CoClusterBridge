@@ -31,6 +31,8 @@ from typing import List
 import multiprocess as mp
 import os
 
+from perf_sleep.pyperfsleep import PerfSleep
+
 from typing import TypeVar
 
 ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterClient')
@@ -145,9 +147,9 @@ class ControlClusterClient(ABC):
             
         self._spawn_processes()
 
-        for process in self._processes:
+        # for process in self._processes:
 
-            process.join(timeout=None) # wait for childs to terminate
+        #     process.join(timeout=None) # wait for childs to terminate
 
     def terminate(self):
         
