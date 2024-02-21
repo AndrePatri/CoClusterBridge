@@ -15,9 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
-from abc import ABC
-
-from control_cluster_bridge.controllers.rhc import RHChild
+from abc import ABC, abstractmethod
 
 from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
 
@@ -38,6 +36,11 @@ from typing import TypeVar
 ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterClient')
 
 class ControlClusterClient(ABC):
+
+    # This is meant to handle a cluster of controllers for a type of robot, 
+    # where each controller is the same 
+    # Different controllers (e.g. with different formulations, etc..) should
+    # be handled by a separate cluster client 
 
     def __init__(self, 
             namespace: str,
@@ -81,9 +84,7 @@ class ControlClusterClient(ABC):
         self._is_cluster_ready = False
 
         self.pre_init_done = False
-         
-        self._controllers_count = 0
-        
+                 
         self.jnt_names_rhc = None # publishes joint names from controller to shared mem
 
         # shared memory 
@@ -93,7 +94,77 @@ class ControlClusterClient(ABC):
     def __del__(self):
 
         self.terminate()
+    
+    def pre_init(self):
         
+        # to be called before controllers are created/added
+
+        Journal.log(self.__class__.__name__,
+                        "pre_init",
+                        "Performing pre-initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+
+        self.cluster_stats = RhcProfiling(is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self.verbose,
+                                    vlevel=VLevel.V2,
+                                    safe=True)
+        
+        self.cluster_stats.run()
+        
+        self.pre_init_done = True
+
+        Journal.log(self.__class__.__name__,
+                        "pre_init",
+                        "Performing pre-initialization steps...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+
+    def _spawn_controller(self,
+                    idx: int,
+                    core_idxs: List[int]):
+        
+        # this is run in a child process for each controller
+        
+        controller = self._generate_controller(idx=idx)
+
+        controller.set_affinity(core_idx=self._compute_process_affinity(idx, core_ids=core_idxs))
+
+        controller.solve() # runs the solution loop
+
+    def run(self):
+        
+        if not self.pre_init_done:
+
+            Journal.log(self.__class__.__name__,
+                        "launch_controller",
+                        f"pre_init() method has not been called yet!",
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            
+        self._spawn_processes()
+
+        for process in self._processes:
+
+            process.join(timeout=None) # wait for childs to terminate
+
+    def terminate(self):
+        
+        Journal.log(self.__class__.__name__,
+                        "_finalize_init",
+                        "terminating cluster...",
+                        LogType.STAT,
+                        throw_when_excep = True)
+        
+        if self.jnt_names_rhc is not None:
+
+            self.jnt_names_rhc.terminate()
+
+        self._close_processes() # we also terminate all the child processes
+
+        self._close_shared_mem()
+    
     def _close_processes(self):
     
         # Wait for each process to exit gracefully or terminate forcefully
@@ -251,7 +322,7 @@ class ControlClusterClient(ABC):
                         LogType.WARN,
                         throw_when_excep = True)
             
-    def _get_process_affinity(self, 
+    def _compute_process_affinity(self, 
                         process_index: int, 
                         core_ids: List[int]):
 
@@ -276,7 +347,7 @@ class ControlClusterClient(ABC):
             # ini case user wants to set core ids manually
             core_ids = self.core_ids_override_list
 
-        for i in range(0, self._controllers_count):
+        for i in range(0, self.cluster_size):
             
             info = f"Spawning process for controller n.{i}."
 
@@ -285,11 +356,11 @@ class ControlClusterClient(ABC):
                     info,
                     LogType.STAT,
                     throw_when_excep = True)
-            
-            self._controllers[i].set_affinity(core_idx=self._get_process_affinity(i, core_ids=core_ids))
 
-            process = mp.Process(target=self._controllers[i].solve, name=self.processes_basename + str(i))
-
+            process = mp.Process(target=self._spawn_controller, 
+                            name=self.processes_basename + str(i),
+                            args=(i, core_ids))
+                        
             self._processes.append(process)
 
             self._processes[i].start()
@@ -304,77 +375,10 @@ class ControlClusterClient(ABC):
                     "Processes spawned.",
                     LogType.STAT,
                     throw_when_excep = True)
-    
-    def pre_init(self):
-        
-        # to be called before controllers are created/added
 
-        Journal.log(self.__class__.__name__,
-                        "pre_init",
-                        "Performing pre-initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
+    @abstractmethod
+    def _generate_controller(self,
+                        idx: int):
 
-        self.cluster_stats = RhcProfiling(is_server=False, 
-                                    name=self.namespace,
-                                    verbose=self.verbose,
-                                    vlevel=VLevel.V2,
-                                    safe=True)
-        
-        self.cluster_stats.run()
-        
-        self.pre_init_done = True
-
-        Journal.log(self.__class__.__name__,
-                        "pre_init",
-                        "Performing pre-initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-
-    def add_controller(self, controller: RHChild):
-        
-        if not self.pre_init_done:
-
-            Journal.log(self.__class__.__name__,
-                        "add_controller",
-                        f"pre_init() method has not been called yet!",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
-        
-        if self._controllers_count < self.cluster_size:
-
-            self._controllers.append(controller)
-            
-            self._controllers_count += 1
-        
-            return True
-
-        if self._controllers_count > self.cluster_size:
-            
-            Journal.log(self.__class__.__name__,
-                        "_finalize_init",
-                        "The cluster is full. Cannot add any more controllers.",
-                        LogType.WARN,
-                        throw_when_excep = True)
-            
-            return False
-    
-    def run(self):
-
-        self._spawn_processes()
-
-    def terminate(self):
-        
-        Journal.log(self.__class__.__name__,
-                        "_finalize_init",
-                        "terminating cluster...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-        
-        if self.jnt_names_rhc is not None:
-
-            self.jnt_names_rhc.terminate()
-
-        self._close_processes() # we also terminate all the child processes
-
-        self._close_shared_mem()
+        # to be overridden
+        return None

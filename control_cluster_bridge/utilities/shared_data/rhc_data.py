@@ -668,12 +668,6 @@ class RhcStatus(SharedDataBase):
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
                                 with_gpu_mirror=with_gpu_mirror)
-
-        self.sem_view = self.SemView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection)
         
         self._is_runnning = False
 
@@ -687,60 +681,6 @@ class RhcStatus(SharedDataBase):
     
         return self._is_runnning
     
-    def acquire_reg_sem(self):
-
-        if self.is_running():
-            
-            if not self._acquired_reg_sem:
-
-                self.sem_view.synch_all(read=True, wait=True)
-
-                if self.sem_view.torch_view[0, 0] == 0:
-
-                    self.sem_view.torch_view[0, 0] = 1 # acquire sem
-
-                    self.sem_view.synch_all(read=False, wait=True)
-
-                    self._acquired_reg_sem = True
-
-            return self._acquired_reg_sem
-
-    def release_reg_sem(self):
-
-        if self.is_running():
-                        
-            if not self.acquire_reg_sem():
-
-                return False
-            
-            else:
-
-                self.sem_view.synch_all(read=True, wait=True)
-
-                if self.sem_view.torch_view[0, 0] == 0:
-
-                    exception = f"Reg. semaphore was acquired, but seems to be free on shared mem!"
-
-                    Journal.log(self.__class__.__name__,
-                        "run",
-                        exception,
-                        LogType.EXCEP,
-                        throw_when_excep = True)
-                    
-                    exit()
-                
-                self.sem_view.torch_view[0, 0] = 0 # release sem
-
-                self.sem_view.synch_all(read=False, wait=True)
-
-                self._acquired_reg_sem = False
-
-                return True
-
-    def ref_sem_acquired(self):
-
-        return self._acquired_reg_sem
-    
     def run(self):
 
         self.resets.run()
@@ -753,7 +693,6 @@ class RhcStatus(SharedDataBase):
         self.rhc_cost.run()
         self.rhc_constr_viol.run()
         self.rhc_n_iter.run()
-        self.sem_view.run()
 
         if not self.is_server:
     
@@ -765,9 +704,6 @@ class RhcStatus(SharedDataBase):
         
         if self.is_running():
             
-            # we first release it so that other controllers can still register
-            self.release_reg_sem()
-
             self.trigger.close()
             self.resets.close()
             self.fails.close()    
@@ -778,7 +714,6 @@ class RhcStatus(SharedDataBase):
             self.rhc_n_iter.close()
             self.rhc_cost.close()
             self.rhc_constr_viol.close()
-            self.sem_view.close()
 
             self._is_runnning = False
 

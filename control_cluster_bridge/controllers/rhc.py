@@ -38,16 +38,6 @@ import numpy as np
 
 from perf_sleep.pyperfsleep import PerfSleep
 
-class CntrlCmd(ABC):
-
-    pass
-
-class RHCCmd(ABC):
-
-    pass
-
-RHCCmdChild = TypeVar('RHCCmdChild', bound='RHCCmd')
-
 class RHController(ABC):
 
     def __init__(self, 
@@ -175,7 +165,7 @@ class RHController(ABC):
 
             info = f"Affinity ID {os.sched_getaffinity(pid)} was set for controller n.{self.controller_index}."
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_set_affinity",
                         info,
                         LogType.STAT,
@@ -188,7 +178,7 @@ class RHController(ABC):
 
             exception = f"core_idx should be an int"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "solve",
                     exception,
                     LogType.EXCEP,
@@ -206,7 +196,7 @@ class RHController(ABC):
             
             exception = f"Jnt maps not initialized. Did you call the create_jnt_maps()?"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "solve",
                     exception,
                     LogType.EXCEP,
@@ -216,7 +206,7 @@ class RHController(ABC):
 
             exception =f"States not initialized. Did you call the init_states()?"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "solve",
                     exception,
                     LogType.EXCEP,
@@ -226,7 +216,7 @@ class RHController(ABC):
 
             exception = f"RHC task references non initialized. Did you call init_rhc_task_cmds()?"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "solve",
                     exception,
                     LogType.EXCEP,
@@ -296,7 +286,7 @@ class RHController(ABC):
 
                     if self._verbose and self._debug:
                         
-                        Journal.log(self.__class__.__name__ + str(self.controller_index),
+                        Journal.log(f"{self.__class__.__name__}{self.controller_index}" + str(self.controller_index),
                             "solve",
                             f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
                             LogType.INFO,
@@ -346,7 +336,7 @@ class RHController(ABC):
             
             exception = f"Cannot run the solve(). assign_env_side_jnt_names() was not called!"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "create_jnt_maps",
                     exception,
                     LogType.EXCEP,
@@ -427,20 +417,24 @@ class RHController(ABC):
     
     def _register_to_cluster(self):
         
-        # self._acquire_reg_sem()
+        # acquire semaphores since we have to perform compound operations
+        # on the whole memory views
+        self.rhc_status.registration.data_sem_acquire()
+        self.rhc_status.controllers_counter.data_sem_acquire()
 
+        self.rhc_status.controllers_counter.synch_all(wait = True,
+                                                read = True)
+        
         available_spots = self.rhc_status.cluster_size
 
         # incrementing cluster controllers counter
-        self.rhc_status.controllers_counter.synch_all(wait = True,
-                                                read = True)
         
         if self.rhc_status.controllers_counter.torch_view[0, 0] + 1 > available_spots:
 
             exception = "Cannot register to cluster. No space left " + \
                 f"({self.rhc_status.controllers_counter.torch_view[0, 0]} controllers already registered)"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_init",
                     exception,
                     LogType.EXCEP,
@@ -465,7 +459,9 @@ class RHController(ABC):
         self.rhc_status.registration.synch_all(wait = True,
                                                 read = False) # register
 
-        # self._release_reg_sem()
+        # we can now release everything
+        self.rhc_status.registration.data_sem_release()
+        self.rhc_status.controllers_counter.data_sem_release()
 
         self._registered = True
 
@@ -480,7 +476,10 @@ class RHController(ABC):
 
         if self._registered:
 
-            # self._acquire_reg_sem()
+            # acquire semaphores since we have to perform compound operations
+            # on the whole memory views
+            self.rhc_status.registration.data_sem_acquire()
+            self.rhc_status.controllers_counter.data_sem_acquire()
 
             self.rhc_status.registration.write_wait(False, 
                                     row_index=self.controller_index,
@@ -495,7 +494,9 @@ class RHController(ABC):
             self.rhc_status.controllers_counter.synch_all(wait = True,
                                                     read = False)
 
-            # self._release_reg_sem()
+           # we can now release everything
+            self.rhc_status.registration.data_sem_release()
+            self.rhc_status.controllers_counter.data_sem_release()
     
     def _acquire_reg_sem(self):
 
@@ -503,7 +504,7 @@ class RHController(ABC):
 
             warn = "Trying to acquire registration flags, but failed. Retrying.."
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_acquire_reg_sem",
                     warn,
                     LogType.WARN,
@@ -517,7 +518,7 @@ class RHController(ABC):
             
             exception = "Failed to release registration flags."
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_release_reg_sem",
                     exception,
                     LogType.EXCEP,
@@ -539,7 +540,7 @@ class RHController(ABC):
             exception = f"Trying to initialize a controller with control dt {self._dt}, which" + \
                 f"does not match the cluster control dt {server_side_cluster_dt}"
         
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_consinstency_checks",
                         exception,
                         LogType.EXCEP,
@@ -557,7 +558,7 @@ class RHController(ABC):
             warn = f"Controller-side contact names do not match server-side joint names!" + \
                 f"\nServer: {self.robot_state.contact_names()}\n Controller: {self._get_contacts()}"
         
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_consinstency_checks",
                         warn,
                         LogType.WARN,
@@ -568,7 +569,7 @@ class RHController(ABC):
             exception = f"Controller-side n contacts {self._get_contacts()} do not match " + \
                 f"server-side n contacts {len(self.robot_state.contact_names())}!"
         
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_consinstency_checks",
                         exception,
                         LogType.EXCEP,
@@ -580,7 +581,7 @@ class RHController(ABC):
         stat = f"Initializing RHC controller " + \
             f"with dt: {self._dt} s, t_horizon: {self._t_horizon} s, n_intervals: {self._n_intervals}"
         
-        Journal.log(self.__class__.__name__,
+        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_init",
                     stat,
                     LogType.STAT,
@@ -663,7 +664,7 @@ class RHController(ABC):
 
             exception = f"Robot homer not initialized. Did you call the _init_robot_homer() method in the child class?"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "create_jnt_maps",
                     exception,
                     LogType.EXCEP,
@@ -671,7 +672,7 @@ class RHController(ABC):
             
         self.set_cmds_to_homing()
 
-        Journal.log(self.__class__.__name__,
+        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_init",
                     f"RHC controller initialized with index {self.controller_index}",
                     LogType.STAT,
@@ -761,7 +762,7 @@ class RHController(ABC):
 
             exception = "Server-side and client-side joint names do not match!"
 
-            Journal.log(self.__class__.__name__,
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_check_jnt_names_compatibility",
                     exception,
                     LogType.EXCEP,
@@ -970,5 +971,3 @@ class RHController(ABC):
         # initialized horizon's TO problem
 
         pass
-   
-RHChild = TypeVar('RHChild', bound='RHController')
