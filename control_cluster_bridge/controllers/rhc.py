@@ -241,7 +241,7 @@ class RHController(ABC):
             
             try:
                 
-                print(f"{self.controller_index}-th memory usage: {get_memory_usage()} GB")
+                # print(f"{self.controller_index}-th memory usage: {get_memory_usage()} GB")
                 
                 # checks for reset requests
                 if self.rhc_status.resets.read_wait(row_index=self.controller_index,
@@ -412,19 +412,19 @@ class RHController(ABC):
             self.cluster_stats.close()
         
         self._closed = True
-    
+
     def _assign_cntrl_index(self, reg_state: torch.Tensor):
 
         control_index = 0
         
-        state = reg_state.squeeze() # ensure 1D tensor
+        state = reg_state.flatten() # ensure 1D tensor
 
-        free_spots = torch.nonzero(~state)
+        free_spots = torch.nonzero(~state).flatten()
 
         control_index = free_spots[0].item() # just return the first free spot
 
         return control_index
-
+    
     def _register_to_cluster(self):
         
         # self._acquire_reg_sem()
