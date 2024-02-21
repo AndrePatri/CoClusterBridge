@@ -334,19 +334,15 @@ class RhcProfiling(SharedDataBase):
         else:
             
             self.param_keys = [""] * self.shared_datanames.length()
-
-            names_read = self.shared_datanames.read_vec(self.param_keys, 0)
-
-            if not names_read:
-                
-                exception = "Could not read shared sim names on shared memory!"
-
-                Logger.log(self.__class__.__name__,
-                    name,
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
             
+            while not self.shared_datanames.read_vec(self.param_keys, 0):
+
+                Journal.log(self.__class__.__name__,
+                        "run",
+                        "Could not read shared sim names on shared memory. Retrying...",
+                        LogType.WARN,
+                        throw_when_excep = True)
+                    
             self.shared_data.synch_all(read=True, wait=True)
             
             # wait flag since safe = False doesn't do anything

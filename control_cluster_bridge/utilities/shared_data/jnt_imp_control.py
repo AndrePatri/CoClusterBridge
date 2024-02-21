@@ -461,17 +461,13 @@ class JntImpCntrlData(SharedDataBase):
             
             self.jnt_names = [""] * self.n_jnts
 
-            jnt_names_read = self.shared_jnt_names.read_vec(self.jnt_names, 0)
-
-            if not jnt_names_read:
-                
-                exception = f"Could not read joint names on shared memory!"
+            while not self.shared_jnt_names.read_vec(self.jnt_names, 0):
 
                 Journal.log(self.__class__.__name__,
-                    "run",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+                        "run",
+                        "Could not read joint names on shared memory. Retrying...",
+                        LogType.WARN,
+                        throw_when_excep = True)
                 
     def close(self):
         

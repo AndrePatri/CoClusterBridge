@@ -136,18 +136,14 @@ class JntsState(SharedDataView):
         else:
             
             self.jnt_names = [""] * self.n_jnts
-
-            jnt_names_read = self.shared_jnt_names.read_vec(self.jnt_names, 0)
-
-            if not jnt_names_read:
-                
-                exception = "Could not read joint names on shared memory!"
+            
+            while not self.shared_jnt_names.read_vec(self.jnt_names, 0):
 
                 Journal.log(self.__class__.__name__,
-                    "run",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+                        "run",
+                        "Could not read joint names on shared memory. Retrying...",
+                        LogType.WARN,
+                        throw_when_excep = True)
         
         self.set_jnts_remapping(jnts_remapping=jnts_remapping)
 
@@ -1216,17 +1212,13 @@ class ContactWrenches(SharedDataView):
             
             self.contact_names = [""] * self.n_contacts
 
-            written = self.shared_contact_names.read_vec(self.contact_names, 0)
-
-            if not written:
-
-                exception = "Could not read contact names on shared memory!"
+            while not self.shared_contact_names.read_vec(self.contact_names, 0):
 
                 Journal.log(self.__class__.__name__,
-                    name,
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+                        "run",
+                        "Could not read contact names on shared memory. Retrying...",
+                        LogType.WARN,
+                        throw_when_excep = True)
             
     def _init_views(self):
 

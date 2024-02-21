@@ -1344,8 +1344,14 @@ class RhcInternal(SharedDataBase):
 
                 self._jnt_names = [""] * self._n_jnts
 
-                jnt_names_read = self._shared_jnt_names.read_vec(self._jnt_names, 0)
+                while not self._shared_jnt_names.read_vec(self._jnt_names, 0):
 
+                    Journal.log(self.__class__.__name__,
+                            "run",
+                            "Could not read joint names on shared memory. Retrying...",
+                            LogType.WARN,
+                            throw_when_excep = True)
+                
                 if not jnt_names_read:
                     
                     exception = "Could not read joint names on shared memory!"
