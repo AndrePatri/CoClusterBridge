@@ -26,6 +26,7 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 
 from control_cluster_bridge.utilities.homing import RobotHomer
+from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
@@ -239,6 +240,8 @@ class RHController(ABC):
             # or a reset signal
             
             try:
+                
+                print(f"{self.controller_index}-th memory usage: {get_memory_usage()} GB")
                 
                 # checks for reset requests
                 if self.rhc_status.resets.read_wait(row_index=self.controller_index,
