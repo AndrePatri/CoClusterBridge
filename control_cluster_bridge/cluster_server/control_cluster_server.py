@@ -25,7 +25,6 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
 
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
 
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
 
@@ -236,8 +235,6 @@ class ControlClusterServer(ABC):
             
             self._require_trigger() # we force sequentiality between triggering and
             # solution retrieval
-
-            print(f"Memory usage: {get_memory_usage()} GB")
             
             # we wait for all controllers to finish      
             done = self._wait_for_solution() # this is blocking if at least a controller
