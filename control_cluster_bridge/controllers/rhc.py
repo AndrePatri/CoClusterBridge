@@ -593,7 +593,7 @@ class RHController(ABC):
         stat = f"Initializing RHC controller " + \
             f"with dt: {self._dt} s, t_horizon: {self._t_horizon} s, n_intervals: {self._n_intervals}"
         
-        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+        Journal.log(f"{self.__class__.__name__}",
                     "_init",
                     stat,
                     LogType.STAT,
@@ -684,7 +684,7 @@ class RHController(ABC):
             
         self.set_cmds_to_homing()
 
-        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+        Journal.log(f"{self.__class__.__name__}",
                     "_init",
                     f"RHC controller initialized with index {self.controller_index}",
                     LogType.STAT,
