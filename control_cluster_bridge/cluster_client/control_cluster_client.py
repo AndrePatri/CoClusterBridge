@@ -173,7 +173,7 @@ class ControlClusterClient(ABC):
                 
         for process in self._processes:
 
-            # process.join(timeout=0.2)  # Wait for 5 seconds for each process to exit gracefully
+            process.join(timeout=0.2)  # Wait for 5 seconds for each process to exit gracefully
 
             if process.is_alive():
                 

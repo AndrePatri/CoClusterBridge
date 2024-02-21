@@ -435,7 +435,7 @@ class RHController(ABC):
                 f"({self.rhc_status.controllers_counter.torch_view[0, 0]} controllers already registered)"
 
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                    "_init",
+                    "_register_to_cluster",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = False)
@@ -458,6 +458,12 @@ class RHController(ABC):
         self.rhc_status.registration.torch_view[self.controller_index, 0] = True
         self.rhc_status.registration.synch_all(wait = True,
                                                 read = False) # register
+
+        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+                    "_register_to_cluster",
+                    "Done",
+                    LogType.STAT,
+                    throw_when_excep = True)
 
         # we can now release everything
         self.rhc_status.registration.data_sem_release()
@@ -494,7 +500,13 @@ class RHController(ABC):
             self.rhc_status.controllers_counter.synch_all(wait = True,
                                                     read = False)
 
-           # we can now release everything
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+                    "_unregister_from_cluster",
+                    "Done",
+                    LogType.STAT,
+                    throw_when_excep = True)
+            
+            # we can now release everything
             self.rhc_status.registration.data_sem_release()
             self.rhc_status.controllers_counter.data_sem_release()
     

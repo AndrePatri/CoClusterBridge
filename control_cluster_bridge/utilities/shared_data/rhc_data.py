@@ -1351,16 +1351,6 @@ class RhcInternal(SharedDataBase):
                             "Could not read joint names on shared memory. Retrying...",
                             LogType.WARN,
                             throw_when_excep = True)
-                
-                if not jnt_names_read:
-                    
-                    exception = "Could not read joint names on shared memory!"
-
-                    Journal.log(self.__class__.__name__,
-                        "run",
-                        exception,
-                        LogType.EXCEP,
-                        throw_when_excep = True)
 
         self._is_running = True
 
