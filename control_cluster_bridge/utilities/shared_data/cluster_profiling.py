@@ -325,7 +325,7 @@ class RhcProfiling(SharedDataBase):
 
                 exception = "Could not write shared sim names on shared memory!"
 
-                Logger.log(self.__class__.__name__,
+                Journal.log(self.__class__.__name__,
                     name,
                     exception,
                     LogType.EXCEP,
@@ -386,7 +386,7 @@ class RhcProfiling(SharedDataBase):
                 
                 exception = "The provided val should be a list of values!"
 
-                Logger.log(self.__class__.__name__,
+                Journal.log(self.__class__.__name__,
                     name,
                     exception,
                     LogType.EXCEP,
@@ -396,7 +396,7 @@ class RhcProfiling(SharedDataBase):
 
                 exception = "Name list and values length mismatch!"
 
-                Logger.log(self.__class__.__name__,
+                Journal.log(self.__class__.__name__,
                     name,
                     exception,
                     LogType.EXCEP,
@@ -459,7 +459,7 @@ class RhcProfiling(SharedDataBase):
 
             exception = "The provided info_name should be a list strings or a string!"
 
-            Logger.log(self.__class__.__name__,
+            Journal.log(self.__class__.__name__,
                 name,
                 exception,
                 LogType.EXCEP,
