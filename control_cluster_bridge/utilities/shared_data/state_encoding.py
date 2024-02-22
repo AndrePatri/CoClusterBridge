@@ -50,7 +50,9 @@ class JntsState(SharedDataView):
                                         basename = basename + "Names", 
                                         name_space = namespace,
                                         verbose = verbose, 
-                                        vlevel = vlevel)
+                                        vlevel = vlevel,
+                                        safe = safe,
+                                        force_reconnection = force_reconnection)
 
         else:
 
@@ -58,7 +60,8 @@ class JntsState(SharedDataView):
                                         basename = basename + "Names", 
                                         name_space = namespace,
                                         verbose = verbose, 
-                                        vlevel = vlevel)
+                                        vlevel = vlevel,
+                                        safe = safe)
             
         super().__init__(namespace = namespace,
             basename = basename,
@@ -1134,7 +1137,9 @@ class ContactWrenches(SharedDataView):
                                         basename = basename + "Names", 
                                         name_space = namespace,
                                         verbose = verbose, 
-                                        vlevel = vlevel)
+                                        vlevel = vlevel,
+                                        safe = safe,
+                                        force_reconnection = force_reconnection)
 
         else:
 
@@ -1142,7 +1147,8 @@ class ContactWrenches(SharedDataView):
                                         basename = basename + "Names", 
                                         name_space = namespace,
                                         verbose = verbose, 
-                                        vlevel = vlevel)
+                                        vlevel = vlevel,
+                                        safe = safe)
             
         n_cols = self.n_contacts * 6 # cart. force + torques
 

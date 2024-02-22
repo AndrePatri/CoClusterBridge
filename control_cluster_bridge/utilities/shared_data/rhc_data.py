@@ -1245,7 +1245,9 @@ class RhcInternal(SharedDataBase):
                                         basename = self._basename + "Names", 
                                         name_space = self.namespace,
                                         verbose = self._verbose, 
-                                        vlevel = self._vlevel)
+                                        vlevel = self._vlevel,
+                                        safe = safe,
+                                        force_reconnection = force_reconnection)
             
         else:
 
@@ -1253,7 +1255,8 @@ class RhcInternal(SharedDataBase):
                                         basename = self._basename + "Names", 
                                         name_space = self.namespace,
                                         verbose = self._verbose, 
-                                        vlevel = self._vlevel)
+                                        vlevel = self._vlevel,
+                                        safe = safe)
             
         self._is_running = False
     
