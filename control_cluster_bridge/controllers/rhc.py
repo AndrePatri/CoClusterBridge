@@ -466,18 +466,11 @@ class RHController(ABC):
                     throw_when_excep = True)
 
         # we can now release everything
-        self.rhc_status.registration.data_sem_release()
         self.rhc_status.controllers_counter.data_sem_release()
-
+        self.rhc_status.registration.data_sem_release()
+        
         self._registered = True
-
-    def _deactivate(self):
-
-        # signal controller deactivation over shared mem
-            self.rhc_status.activation_state.write_wait(False, 
-                                    row_index=self.controller_index,
-                                    col_index=0)
-                                    
+                              
     def _unregister_from_cluster(self):
 
         if self._registered:
@@ -510,6 +503,13 @@ class RHController(ABC):
             self.rhc_status.registration.data_sem_release()
             self.rhc_status.controllers_counter.data_sem_release()
     
+    def _deactivate(self):
+
+        # signal controller deactivation over shared mem
+            self.rhc_status.activation_state.write_wait(False, 
+                                    row_index=self.controller_index,
+                                    col_index=0)
+      
     def _acquire_reg_sem(self):
 
         while not self.rhc_status.acquire_reg_sem():
