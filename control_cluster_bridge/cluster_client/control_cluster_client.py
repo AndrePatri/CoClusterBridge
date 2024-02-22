@@ -92,10 +92,16 @@ class ControlClusterClient(ABC):
         # shared memory 
 
         self.cluster_stats = None
+
+        self._perf_timer = PerfSleep()
+
+        self._terminated = False
     
     def __del__(self):
 
-        self.terminate()
+        if not self._terminated:
+
+            self.terminate()
     
     def pre_init(self):
         
@@ -147,9 +153,20 @@ class ControlClusterClient(ABC):
             
         self._spawn_processes()
 
-        # for process in self._processes:
+        while True:
 
-        #     process.join(timeout=None) # wait for childs to terminate
+            try:
+
+                nsecs = int(0.1 * 1e9)
+                self._perf_timer.thread_sleep(nsecs) 
+
+                continue
+
+            except KeyboardInterrupt:
+
+                self.terminate() # closes all processes
+                
+                break
 
     def terminate(self):
         
@@ -166,6 +183,8 @@ class ControlClusterClient(ABC):
         self._close_processes() # we also terminate all the child processes
 
         self._close_shared_mem()
+
+        self._terminated = True
     
     def _close_processes(self):
     
