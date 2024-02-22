@@ -76,6 +76,8 @@ class SharedSimInfo(SharedDataBase):
                 is_server = False, 
                 sim_params_dict: Dict = None,
                 safe: bool = True,
+                verbose = True, 
+                vlevel = VLevel.V2,
                 force_reconnection: bool = True):
         
         self.namespace = namespace + "SharedSimInfo"
@@ -103,8 +105,8 @@ class SharedSimInfo(SharedDataBase):
         self.shared_sim_data = SimData(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = len(self.param_keys), 
-                    verbose = True, 
-                    vlevel = VLevel.V2,
+                    verbose = verbose, 
+                    vlevel = vlevel,
                     safe = safe, 
                     force_reconnection = force_reconnection)
         
@@ -114,8 +116,8 @@ class SharedSimInfo(SharedDataBase):
             self.shared_sim_datanames = StringTensorServer(length = len(self.param_keys), 
                                         basename = "SimDataNames", 
                                         name_space = self.namespace,
-                                        verbose = True, 
-                                        vlevel = VLevel.V2, 
+                                        verbose = verbose, 
+                                        vlevel = vlevel, 
                                         force_reconnection = force_reconnection)
 
         else:
@@ -123,8 +125,8 @@ class SharedSimInfo(SharedDataBase):
             self.shared_sim_datanames = StringTensorClient(
                                         basename = "SimDataNames", 
                                         name_space = self.namespace,
-                                        verbose = True, 
-                                        vlevel = VLevel.V2)
+                                        verbose = verbose, 
+                                        vlevel = vlevel)
             
         self._is_running = False
     
