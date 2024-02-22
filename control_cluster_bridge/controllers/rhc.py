@@ -296,7 +296,7 @@ class RHController(ABC):
                     
                     # we avoid busy waiting and CPU saturation by sleeping for a small amount of time
 
-                    self.perf_timer.clock_sleep(1000000) # nanoseconds (actually resolution is much
+                    self.perf_timer.thread_sleep(1000000) # nanoseconds (actually resolution is much
                     # poorer)
 
             except KeyboardInterrupt:
@@ -522,7 +522,7 @@ class RHController(ABC):
                     LogType.WARN,
                     throw_when_excep = True)
             
-            self.perf_timer.clock_sleep(1000000)
+            self.perf_timer.thread_sleep(1000000)
             
     def _release_reg_sem(self):
 

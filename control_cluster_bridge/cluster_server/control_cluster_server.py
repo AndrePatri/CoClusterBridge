@@ -655,7 +655,7 @@ class ControlClusterServer(ABC):
                 # wait for all triggered (i.e. active) controllers to finish
                 solved = (solved_and_ok).all()
 
-                self.perf_timer.clock_sleep(1000) # nanoseconds (but this
+                self.perf_timer.thread_sleep(1000) # nanoseconds (but this
                 # accuracy cannot be reached on a non-rt system)
                 # on a modern laptop, this sleeps for about 5e-5s, but it does
                 # so in a CPU-cheap manner

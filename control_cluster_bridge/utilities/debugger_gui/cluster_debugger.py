@@ -104,7 +104,7 @@ class SharedDataThread(QThread):
 
         if (actual_sleep > 0):
             
-            # self.perf_timer.clock_sleep(int(actual_sleep * 1e9)) # from a child thread doesn't work
+            # self.perf_timer.thread_sleep(int(actual_sleep * 1e9)) # from a child thread doesn't work
 
             time.sleep(actual_sleep)
         

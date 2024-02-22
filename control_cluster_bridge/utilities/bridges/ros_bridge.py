@@ -136,7 +136,7 @@ class RosBridge():
 #                         LogType.WARN,
 #                         throw_when_excep = True)
 
-#         perf_timer.clock_sleep(time_to_sleep_ns) 
+#         perf_timer.thread_sleep(time_to_sleep_ns) 
 
 #         # loop_rate.sleep()
 
