@@ -34,7 +34,7 @@ rhc_internal = RhcInternal(config=config,
                         namespace=namespace,
                         rhc_index = 0,
                         is_server=False,
-                        vlevel=VLevel.V3,
+                        vlevel=VLevel.V2,
                         verbose=True)
 
 rhc_internal.run()

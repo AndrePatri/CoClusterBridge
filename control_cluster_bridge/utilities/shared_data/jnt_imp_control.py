@@ -303,7 +303,9 @@ class JntImpCntrlData(SharedDataBase):
                                         basename = "JntImpCntrlSharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
-                                        vlevel = self.vlevel)
+                                        vlevel = self.vlevel,
+                                        force_reconnection = force_reconnection,
+                                        safe = safe)
 
         else:
 
@@ -311,7 +313,8 @@ class JntImpCntrlData(SharedDataBase):
                                         basename = "JntImpCntrlSharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
-                                        vlevel = self.vlevel)
+                                        vlevel = self.vlevel,
+                                        safe = safe)
 
         self.pos_err_view = self.PosErrView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 

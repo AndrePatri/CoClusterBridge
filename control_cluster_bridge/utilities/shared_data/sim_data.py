@@ -102,6 +102,7 @@ class SharedSimInfo(SharedDataBase):
             self.param_keys = self.dynamic_info.get() + list(self.sim_params_dict.keys())
 
         # actual data
+            
         self.shared_sim_data = SimData(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = len(self.param_keys), 
