@@ -106,8 +106,6 @@ class RHController(ABC):
 
         self.array_dtype = array_dtype
 
-        self.add_data_lenght = 0
-
         self.n_resets = 0
         self.n_fails = 0
         self._failed = False
