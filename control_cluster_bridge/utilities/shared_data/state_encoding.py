@@ -1705,7 +1705,7 @@ class FullRobState(SharedDataBase):
                 self.jnts_state.synch_mirror(from_gpu=False)
                 self.contact_wrenches.synch_mirror(from_gpu=False)
 
-            torch.cuda.synchronize() # this way we ensure that after this the state on GPU
+            #torch.cuda.synchronize() # this way we ensure that after this the state on GPU
             # is fully updated
     
     def synch_from_shared_mem(self):
