@@ -234,7 +234,7 @@ class RHController(ABC):
                 # checks for reset requests
                 if self.rhc_status.resets.read_wait(row_index=self.controller_index,
                                             col_index=0)[0]:
-
+                    
                     self.reset()
 
                 # checks for trigger requests
@@ -304,7 +304,7 @@ class RHController(ABC):
     def reset(self):
         
         if not self._closed:
-
+                        
             self._reset()
 
             self._failed = False # allow triggering
