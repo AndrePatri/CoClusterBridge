@@ -228,7 +228,7 @@ class ControlClusterServer(ABC):
     def triggered(self):
 
         return self._triggered
-
+    
     def wait_for_solution(self):
 
         if self.is_running():
@@ -245,15 +245,7 @@ class ControlClusterServer(ABC):
 
             if done:
 
-                if self.using_gpu:
-                    
-                    # first reads cmds from shared memory and then synchs gpu mirror with the read data
-                    self._rhc_cmds.synch_mirror(from_gpu=False) 
-
-                else:
-                    
-                    # only read cmds from shared mem
-                    self._rhc_cmds.synch_from_shared_mem()
+                self._get_rhc_sol()
 
                 # print("########### self._rhc_cmds")
                 # print(self._rhc_cmds.jnts_state.get_q()[0, :])
@@ -416,7 +408,7 @@ class ControlClusterServer(ABC):
                                                             fill_value=False) 
             self._rhc_status.trigger.synch_all(read=False, wait=True)
 
-            # reset 
+            # reset
             self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
                                                             fill_value=True)
             
@@ -432,7 +424,12 @@ class ControlClusterServer(ABC):
             # resets all failed controllers
             self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
                                         0, 0)
-    
+        
+        self._wait_for_reset_done() # wait for any pending reset request to be completed
+
+        self._get_rhc_sol() # not efficient: in theory we should only update the 
+        # sol of the reset controllers
+
     def activate_controllers(self,
                     idxs: torch.Tensor = None):
         
@@ -451,6 +448,18 @@ class ControlClusterServer(ABC):
 
         return self._is_first_control_step
     
+    def _get_rhc_sol(self):
+
+        if self.using_gpu:
+                    
+            # first reads cmds from shared memory and then synchs gpu mirror with the read data
+            self._rhc_cmds.synch_mirror(from_gpu=False) 
+
+        else:
+            
+            # only read cmds from shared mem
+            self._rhc_cmds.synch_from_shared_mem()
+
     def _require_pretrigger(self):
 
         if not self.pretriggered():
@@ -669,7 +678,34 @@ class ControlClusterServer(ABC):
                 break
         
         return solved
+    
+    def _wait_for_reset_done(self):
+
+        # waits for requested controller resets to be completed
+
+        done = False
+        
+        while not done: 
+            
+            # fills views reading from shared memory
+            self._rhc_status.resets.synch_all(read=True, 
+                                        wait=True)
+            
+            resets = self._rhc_status.resets.get_torch_view(gpu=False)
+
+            if resets.any().item(): # controllers reset their 
+                # correspoding reset flags to false when the reset is done
                 
+                self.perf_timer.thread_sleep(1000) # nanoseconds
+
+                continue
+
+            else:
+
+                done = True
+            
+        return done
+    
     def _compute_n_control_actions(self):
 
         if self.cluster_dt < self.control_dt:
