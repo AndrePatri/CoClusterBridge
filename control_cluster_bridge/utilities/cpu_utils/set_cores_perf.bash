@@ -92,13 +92,18 @@ if [[ "$mode" != "performance" ]] && [[ "$mode" != "powersave" ]]; then
     exit 1
 fi
 
+# Read the boost argument
+read -p "To boost the cores, enter 'bOOst' (without quotes), otherwise press Enter: " boost_input
+
 # Set the specified cores to the chosen mode and boost their maximum frequency
 for ((core=start_idx; core<=end_idx; core++)); do
     if is_number "$core"; then
         set_core_mode "$core" "$mode"
 
-        # Boost only for performance mode
-        if [ "$mode" == "performance" ]; then
+        # Boost only if the correct boost argument is provided
+        if [ "$mode" == "performance" ] && [ "$boost_input" == "bOOst" ]; then
+
+            echo "Danger: boosting frequency for core $core"
             boost_core "$core"
         fi
     else
