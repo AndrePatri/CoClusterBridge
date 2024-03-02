@@ -118,4 +118,4 @@ for ((core=start_idx; core<=end_idx; core++)); do
     fi
 done
 
-echo "Mode set and cores boosted for specified cores. You may need to reboot your system for changes to take effect."
+echo "You may need to reboot your system for changes to take effect."
