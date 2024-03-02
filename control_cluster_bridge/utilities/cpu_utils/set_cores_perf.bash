@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Script Name: set_isolated_cores_mode.bash
-
 # Function to check if a number is valid
 is_number() {
     [[ $1 =~ ^[0-9]+$ ]]
@@ -36,7 +34,9 @@ set_core_mode() {
 
         echo $mode | sudo tee "$governor_path"
 
-        if [ "$mode" == "performance" ]; then
+        # Check Ubuntu release version
+        ubuntu_version=$(lsb_release -rs)
+        if [ "$ubuntu_version" == "20.04" ]; then
             sudo cpufreq-set -c $core -g performance
             echo "Setting maximum frequency for core $core to: $actual_max_freq kHz"
         elif [ "$mode" == "powersave" ] && [ -f "$base_freq_path" ]; then
@@ -57,7 +57,14 @@ set_core_mode() {
 boost_core() {
     core=$1
     echo "Boosting core $core to maximum performance."
-    sudo cpufreq-set -c $core -g performance
+
+    # Check Ubuntu release version
+    ubuntu_version=$(lsb_release -rs)
+    if [ "$ubuntu_version" == "20.04" ]; then
+        sudo cpufreq-set -c $core -g performance
+    else
+        sudo cpupower frequency-set -c $core -g performance
+    fi
 }
 
 # Read the core range (start_idx end_idx, press Enter for all cores)
