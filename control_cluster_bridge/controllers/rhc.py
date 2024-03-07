@@ -284,7 +284,7 @@ class RHController(ABC):
 
                     if self._verbose and self._debug:
                         
-                        Journal.log(f"{self.__class__.__name__}{self.controller_index}" + str(self.controller_index),
+                        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                             "solve",
                             f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
                             LogType.INFO,

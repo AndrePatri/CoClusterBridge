@@ -43,7 +43,7 @@ class RhcRefsFromKeyboard:
         self._closed = False
         
         self.enable_heightchange = False
-        self.height_dh = 0.008 # [m]
+        self.height_dh = 0.02 # [m]
 
         self.enable_navigation = False
         self.dxy = 0.05 # [m]
