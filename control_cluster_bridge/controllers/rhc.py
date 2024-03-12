@@ -262,11 +262,11 @@ class RHController(ABC):
                     self._write_cmds_from_sol() # we update update the views of the cmd
                     # from the latest solution
 
-                    # if self._debug_sol:
+                    if self._debug_sol:
                         
-                    #     # if in debug, rhc internal state is streamed over 
-                    #     # shared mem.
-                    #     self._update_rhc_internal()
+                        # if in debug, rhc internal state is streamed over 
+                        # shared mem.
+                        self._update_rhc_internal()
 
                     # we signal the client this controller has finished its job by
                     # resetting the flag
