@@ -93,8 +93,6 @@ class ControlClusterClient(ABC):
 
         self.cluster_stats = None
 
-        self._perf_timer = PerfSleep()
-
         self._terminated = False
     
     def __del__(self):
@@ -157,8 +155,8 @@ class ControlClusterClient(ABC):
 
             try:
 
-                nsecs = int(0.1 * 1e9)
-                self._perf_timer.thread_sleep(nsecs) 
+                nsecs =  1000000000 # 1 sec
+                PerfSleep.thread_sleep(nsecs) # we just keep it alive
 
                 continue
 
