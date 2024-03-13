@@ -87,7 +87,7 @@ class RHController(ABC):
         self.rhc_refs = None
 
         self._remote_triggerer = None
-        self._remote_triggerer_timeout = 10000 # [ns]
+        self._remote_triggerer_timeout = 60000 # [ns]
         
         # jnt names
         self._env_side_jnt_names = []
@@ -186,75 +186,6 @@ class RHController(ABC):
 
         return self._core_idx
     
-    # def solve_withpollingwait(self):
-        
-    #     # run the solution loop using polling to 
-    #     # wait for trigger signals (not efficient)
-    #     self._set_affinity() # set affinity, if core ids was provided
-
-    #     while True:
-    #         # we are always listening for a trigger signal from the server 
-    #         # or a reset signal
-    #         try:
-                
-    #             # print(f"{self.controller_index}-th memory usage: {get_memory_usage()} GB")
-                
-    #             # checks for reset requests
-    #             if self.rhc_status.resets.read_wait(row_index=self.controller_index,
-    #                                         col_index=0)[0]:
-    #                 self.reset()
-
-    #             # checks for trigger requests
-    #             if self.rhc_status.trigger.read_wait(row_index=self.controller_index,
-    #                                                 col_index=0)[0]:
-    #                 if self._debug:
-    #                     self._start_time = time.perf_counter()
-
-    #                 self.robot_state.synch_from_shared_mem() # updates robot state with
-    #                 # latest data on shared mem
-    #                 # latest state is employed
-
-    #                 if not self.failed():
-    #                     # we can solve only if not in failure state
-    #                     self._failed = not self._solve() # solve actual TO
-    #                 else:
-    #                     # perform failure procedure
-    #                     self._on_failure()                       
-
-    #                 self._write_cmds_from_sol() # we update update the views of the cmd
-    #                 # from the latest solution
-
-    #                 # if self._debug_sol:
-                        
-    #                 #     # if in debug, rhc internal state is streamed over 
-    #                 #     # shared mem.
-    #                 #     self._update_rhc_internal()
-
-    #                 # we signal the client this controller has finished its job by
-    #                 # resetting the flag
-    #                 self.rhc_status.trigger.write_wait(False, 
-    #                                                 row_index=self.controller_index,
-    #                                                 col_index=0)
-
-    #                 if self._debug:
-    #                     self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
-    #                     self._update_profiling_data() # updates all profiling data
-
-    #                 if self._verbose and self._debug:
-    #                     Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-    #                         "solve",
-    #                         f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
-    #                         LogType.INFO,
-    #                         throw_when_excep = True)
-                
-    #             else:
-    #                 # we avoid busy waiting and CPU saturation by sleeping for a small amount of time
-    #                 PerfSleep.thread_sleep(1000) # nanoseconds (actually resolution is much
-    #                 # poorer)
-
-    #         except KeyboardInterrupt:
-    #             break
-    
     def solve(self):
         
         # run the solution loop and wait for trigger signals
@@ -280,15 +211,6 @@ class RHController(ABC):
                                                 col_index=0)[0]:
                     self.reset()
 
-                # we check that this is actually a trigger request from the server
-                if not self.rhc_status.trigger.read_wait(row_index=self.controller_index,
-                                                        col_index=0)[0]:
-                    Journal.log(self.__class__.__name__,
-                        "solve",
-                        "Remote trigger req received but trigger flag was not set to True!",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
-                
                 if self._debug:
                     self._start_time = time.perf_counter()
 
@@ -312,11 +234,6 @@ class RHController(ABC):
                 self._write_cmds_from_sol() # we update update the views of the cmds
                 # from the latest solution
             
-                # we reset the trigger flag
-                self.rhc_status.trigger.write_wait(False, 
-                    row_index=self.controller_index,
-                    col_index=0)
-
                 # if self._debug_sol:
                 #     # if in debug, rhc internal state is streamed over 
                 #     # shared mem.
@@ -665,7 +582,7 @@ class RHController(ABC):
                                         verbose=self._verbose,
                                         vlevel=VLevel.V2)
         self._remote_triggerer.run()
-        
+
         self.create_jnt_maps()
 
         self.init_rhc_task_cmds() # initializes rhc commands

@@ -85,7 +85,7 @@ class ControlClusterServer(ABC):
         self._rhc_status = None
         self._cluster_stats = None 
         self._remote_triggerer = None
-        self._remote_triggerer_ack_timeout = 10000 # [ns]
+        self._remote_triggerer_ack_timeout = 60000 # [ns]
 
         # flags
         self._was_running = False
@@ -243,21 +243,14 @@ class ControlClusterServer(ABC):
             self._require_trigger() # we force sequentiality between triggering and
             # solution retrieval
 
-            done = False
             # we wait for controllers to finish   
-            if not self._use_pollingbased_waiting:
-                done = self._wait_for_solution()
-            else:
-                done = self._wait_for_solution_withpolling() # this is blocking if at least a controller
-            # is active
-
+            self._wait_for_solution()
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
 
-            if done:
-                self._get_rhc_sol()
-                self.solution_counter += 1
-            
+            self._get_rhc_sol()
+            self.solution_counter += 1
+        
             self._triggered = False # allow next trigger
 
             if self._debug:
@@ -637,90 +630,22 @@ class ControlClusterServer(ABC):
 
     def _trigger_solution(self):
 
-        self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
-                                    0, 0)
-        if not self._use_pollingbased_waiting:
-            self._remote_triggerer.trigger() # trigger all listening consumers
+        self._remote_triggerer.trigger() # trigger all listening consumers
         
-    def _wait_for_solution_withpolling(self):
-
-        solved = False
-        
-        while not solved: 
-            
-            # fills views reading from shared memory
-            self._rhc_status.activation_state.synch_all(read=True, 
-                                        wait=True)
-            self._rhc_status.trigger.synch_all(read=True, 
-                                        wait=True) # wait for synch to succeed
-            self._rhc_status.fails.synch_all(read=True,
-                                        wait=True)
-            
-            self.failed[:,:] = self._rhc_status.fails.torch_view 
-
-            active_and_not_failed_controllers = torch.logical_and(self._rhc_status.activation_state.torch_view,
-                                                        ~self._rhc_status.fails.torch_view)
-
-            # only wait solution from active (and not failed) controllers
-            solved_and_ok = ~(self._rhc_status.trigger.torch_view[active_and_not_failed_controllers])
-
-            active_idxs = torch.nonzero(self.now_active.squeeze(dim=1)).squeeze(dim=1)
-
-            if (not self._closed) and \
-                (solved_and_ok.shape[0] == active_idxs.shape[0] # all active controllers have solved
-                ):
-                
-                # wait for all triggered (i.e. active) controllers to finish
-                solved = (solved_and_ok).all()
-
-                PerfSleep.thread_sleep(1000) # nanoseconds (but this
-                # accuracy cannot be reached on a non-rt system)
-                # on a modern laptop, this sleeps for about 5e-5s, but it does
-                # so in a CPU-cheap manner
-
-                continue
-
-            else:
-
-                # if no controller is active or the cluster is terminated we exit 
-
-                break
-        
-        return solved
-
     def _wait_for_solution(self):
 
-        # active controllers were triggered -> we
-        # wait for a response from them
-        active_idxs = self.get_active_controllers()
-        if active_idxs is not None:
-            if not self._remote_triggerer.wait_ack_from(active_idxs.shape[0], 
-                                    self._remote_triggerer_ack_timeout):
-                Journal.log(self.__class__.__name__,
-                    "_wait_for_solution",
-                    f"Didn't receive any or all acks from controllers (expected {active_idxs.shape[0]})!",
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+        if not self._remote_triggerer.wait_ack_from(self.cluster_size, 
+                                self._remote_triggerer_ack_timeout):
+            Journal.log(self.__class__.__name__,
+                "_wait_for_solution",
+                f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
+                LogType.EXCEP,
+                throw_when_excep = True)
             
-            self._rhc_status.activation_state.synch_all(read=True, 
-                                        wait=True)
-            self._rhc_status.trigger.synch_all(read=True, 
-                                        wait=True) # wait for synch to succeed
-            self._rhc_status.fails.synch_all(read=True,
-                                        wait=True)
-            
-            self.failed[:,:] = self._rhc_status.fails.torch_view 
-
-            active_and_not_failed_controllers = torch.logical_and(self._rhc_status.activation_state.torch_view,
-                                                        ~self._rhc_status.fails.torch_view)
-            
-            solved_and_ok = ~(self._rhc_status.trigger.torch_view[active_and_not_failed_controllers])
-
-            return (solved_and_ok).all()
-        
-        else:
-
-            return False
+        self._rhc_status.activation_state.synch_all(read=True, 
+                                    wait=True)
+        self._rhc_status.fails.synch_all(read=True,
+                                    wait=True)
     
     def _wait_for_reset_done(self):
 
