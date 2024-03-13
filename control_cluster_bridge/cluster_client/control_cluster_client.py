@@ -75,7 +75,7 @@ class ControlClusterClient(ABC):
 
         self._device = "cpu"
 
-        self._controllers: List[RHChild] = [] # list of controllers (must inherit from
+        self._controllers = [] # list of controllers (must inherit from
         # RHController)
 
         # self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 

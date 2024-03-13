@@ -23,8 +23,8 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
-
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
+from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererSrvr
 
 from SharsorIPCpp.PySharsorIPC import VLevel, Journal, LogType
 
@@ -49,7 +49,8 @@ class ControlClusterServer(ABC):
             use_gpu: bool = False, 
             verbose = False, 
             debug = False, 
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            use_pollingbased_waiting: bool = False):
 
         self.namespace = namespace
         
@@ -58,6 +59,8 @@ class ControlClusterServer(ABC):
         self._closed = False
 
         self._debug = debug
+        
+        self._use_pollingbased_waiting = use_pollingbased_waiting
 
         self.jnt_names = jnt_names
 
@@ -81,7 +84,9 @@ class ControlClusterServer(ABC):
         self._rhc_refs = None
         self._rhc_status = None
         self._cluster_stats = None 
-                
+        self._remote_triggerer = None
+        self._remote_triggerer_ack_timeout = 10000 # [ns]
+
         # flags
         self._was_running = False
         self._is_running = False
@@ -146,6 +151,10 @@ class ControlClusterServer(ABC):
             if self._cluster_stats is not None:
 
                 self._cluster_stats.close()
+
+            if self._remote_triggerer is not None:
+                
+                self._remote_triggerer.close()
 
     def n_controllers(self):
 
@@ -233,33 +242,27 @@ class ControlClusterServer(ABC):
             
             self._require_trigger() # we force sequentiality between triggering and
             # solution retrieval
-            
-            # we wait for all controllers to finish      
-            done = self._wait_for_solution() # this is blocking if at least a controller
+
+            done = False
+            # we wait for controllers to finish   
+            if not self._use_pollingbased_waiting:
+                done = self._wait_for_solution()
+            else:
+                done = self._wait_for_solution_withpolling() # this is blocking if at least a controller
             # is active
 
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
 
             if done:
-
                 self._get_rhc_sol()
-
-                # print("########### self._rhc_cmds")
-                # print(self._rhc_cmds.jnts_state.get_q()[0, :])
-                # print(self._rhc_cmds.jnts_state.get_v()[0, :])
-                # print(self._rhc_cmds.jnts_state.get_eff()[0, :])
-
                 self.solution_counter += 1
             
             self._triggered = False # allow next trigger
 
             if self._debug:
-            
                 self.solution_time = time.perf_counter() - self.start_time # we profile the whole solution pipeline
-
                 # update shared debug info
-
                 self._cluster_stats.write_info(dyn_info_name=["cluster_sol_time", 
                                             "cluster_rt_factor",
                                             "cluster_ready"],
@@ -616,6 +619,12 @@ class ControlClusterServer(ABC):
                                     safe=True,
                                     force_reconnection=self._force_reconnection)
 
+        self._remote_triggerer = RemoteTriggererSrvr(namespace=self.namespace,
+                                            verbose=self._verbose,
+                                            vlevel=VLevel.V2,
+                                            force_reconnection=self._force_reconnection)
+        self._remote_triggerer.run()
+        
         self._robot_states.run()
 
         self._rhc_cmds.run()
@@ -630,8 +639,10 @@ class ControlClusterServer(ABC):
 
         self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
                                     0, 0)
+        if not self._use_pollingbased_waiting:
+            self._remote_triggerer.trigger() # trigger all listening consumers
         
-    def _wait_for_solution(self):
+    def _wait_for_solution_withpolling(self):
 
         solved = False
         
@@ -676,6 +687,40 @@ class ControlClusterServer(ABC):
                 break
         
         return solved
+
+    def _wait_for_solution(self):
+
+        # active controllers were triggered -> we
+        # wait for a response from them
+        active_idxs = self.get_active_controllers()
+        if active_idxs is not None:
+            if not self._remote_triggerer.wait_ack_from(active_idxs.shape[0], 
+                                    self._remote_triggerer_ack_timeout):
+                Journal.log(self.__class__.__name__,
+                    "_wait_for_solution",
+                    f"Didn't receive any or all acks from controllers (expected {active_idxs.shape[0]})!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            
+            self._rhc_status.activation_state.synch_all(read=True, 
+                                        wait=True)
+            self._rhc_status.trigger.synch_all(read=True, 
+                                        wait=True) # wait for synch to succeed
+            self._rhc_status.fails.synch_all(read=True,
+                                        wait=True)
+            
+            self.failed[:,:] = self._rhc_status.fails.torch_view 
+
+            active_and_not_failed_controllers = torch.logical_and(self._rhc_status.activation_state.torch_view,
+                                                        ~self._rhc_status.fails.torch_view)
+            
+            solved_and_ok = ~(self._rhc_status.trigger.torch_view[active_and_not_failed_controllers])
+
+            return (solved_and_ok).all()
+        
+        else:
+
+            return False
     
     def _wait_for_reset_done(self):
 
