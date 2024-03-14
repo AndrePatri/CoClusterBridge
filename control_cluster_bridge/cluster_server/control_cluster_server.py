@@ -643,7 +643,7 @@ class ControlClusterServer(ABC):
         self._remote_triggerer = RemoteTriggererSrvr(namespace=self.namespace,
                                             verbose=self._verbose,
                                             vlevel=self._vlevel,
-                                            force_reconnection=self._force_reconnection)
+                                            force_reconnection=False)
         self._remote_triggerer.run()
                 
         self._robot_states.run()
