@@ -202,7 +202,7 @@ class RHController(ABC):
                 # perform failure procedure
                 self._on_failure()                       
         else:
-            Journal.log(self.__class__.__name__,
+            Journal.log(self.__class__.__name__ + f"{self.controller_index}",
                 "solve",
                 "Received solution req, but controller is in failure state. " + \
                     " You should have reset the controller!",
@@ -217,10 +217,14 @@ class RHController(ABC):
         #     # shared mem.
         #     self._update_rhc_internal()
 
+        self.rhc_status.trigger.write_wait(False, 
+                                row_index=self.controller_index,
+                                col_index=0) # allow next solution trigger 
+        
         if self._debug:
             self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
             self._update_profiling_data() # updates all profiling data
-
+        
         if self._verbose and self._debug:
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                 "solve",
@@ -254,18 +258,12 @@ class RHController(ABC):
                 if self.rhc_status.resets.read_wait(row_index=self.controller_index,
                                                 col_index=0)[0]:
                     self.reset() # rhc is reset
-                    self.rhc_status.resets.write_wait(False, 
-                                row_index=self.controller_index,
-                                col_index=0) # allow next solution trigger
 
                 # check if a trigger request was received
                 if self.rhc_status.trigger.read_wait(row_index=self.controller_index,
                             col_index=0)[0]:
                     self._rhc() # run solution
-                    self.rhc_status.trigger.write_wait(False, 
-                                row_index=self.controller_index,
-                                col_index=0) # allow next solution trigger                    
-
+                                       
                 self._remote_triggerer.ack() # send ack signal to server
 
                 self._received_trigger = False
@@ -417,10 +415,8 @@ class RHController(ABC):
                     "_register_to_cluster",
                     exception,
                     LogType.EXCEP,
-                    throw_when_excep = False)
-            
-            exit()
-        
+                    throw_when_excep = True)
+                    
         # increment controllers counter
         self.rhc_status.controllers_counter.torch_view += 1 
         self.rhc_status.controllers_counter.synch_all(wait = True,
@@ -536,9 +532,7 @@ class RHController(ABC):
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
-            
-            exit()
-        
+                    
         # check contact names
         
         server_side_contact_names = set(self.robot_state.contact_names())
@@ -565,7 +559,6 @@ class RHController(ABC):
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
-            exit()
             
     def _init(self):
 

@@ -234,15 +234,24 @@ class ControlClusterServer(ABC):
 
             self._triggered = True
 
+    # def _trigger_solution(self):
+        
+    #     active_idxs = self.get_active_controllers()
+    #     if active_idxs is not None:
+    #         # at least one controller is active
+    #         self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
+    #                                 0, 0)
+    #         self._remote_triggerer.trigger() # signal to listening controllers
+    
     def _trigger_solution(self):
         
-        active_idxs = self.get_active_controllers()
-        if active_idxs is not None:
-            # at least one controller is active
-            self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
-                                    0, 0)
-            self._remote_triggerer.trigger() # signal to listening controllers
+        # trigger all
+        trigger = self._rhc_status.trigger.get_torch_view()
+        trigger[:, :] = True
+        self._rhc_status.trigger.synch_all(read=False, wait=True)
         
+        self._remote_triggerer.trigger() # signal to listening controllers
+
     def triggered(self):
 
         return self._triggered
@@ -278,50 +287,63 @@ class ControlClusterServer(ABC):
 
         self._update_mem_flags() # used to keep track of previous flag states
     
+    # def _wait_for_solution(self):
+
+    #     active_idxs = self.get_active_controllers()
+
+    #     if active_idxs is not None: # at least 1 controller active
+    #         if not self._remote_triggerer.wait_ack_from(active_idxs.shape[0], 
+    #                                 self._remote_triggerer_ack_timeout):
+    #             Journal.log(self.__class__.__name__,
+    #                 "_wait_for_solution",
+    #                 f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
+    #                 LogType.EXCEP,
+    #                 throw_when_excep = True)
+        
+    #     # update flags (written by controllers upon solution request)
+    #     self._rhc_status.fails.synch_all(read=True,
+    #                                 wait=True)
+        
+    #     self.failed[:,:] = self._rhc_status.fails.torch_view
+    
     def _wait_for_solution(self):
 
-        active_idxs = self.get_active_controllers()
-
-        if active_idxs is not None: # at least 1 controller active
-            if not self._remote_triggerer.wait_ack_from(active_idxs.shape[0], 
-                                    self._remote_triggerer_ack_timeout):
-                Journal.log(self.__class__.__name__,
-                    "_wait_for_solution",
-                    f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
-                    LogType.EXCEP,
-                    throw_when_excep = True)
+        if not self._remote_triggerer.wait_ack_from(self.cluster_size, 
+                                self._remote_triggerer_ack_timeout):
+            Journal.log(self.__class__.__name__,
+                "_wait_for_solution",
+                f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
+                LogType.EXCEP,
+                throw_when_excep = True)
         
         # update flags (written by controllers upon solution request)
-        self._rhc_status.activation_state.synch_all(read=True, 
-                                    wait=True)
         self._rhc_status.fails.synch_all(read=True,
                                     wait=True)
         
+        self.failed[:,:] = self._rhc_status.fails.torch_view
+
     def reset_controllers(self,
                     idxs: torch.Tensor = None):
         
-        wait_from = 0
         if idxs is not None:
-            wait_from = idxs.shape[0]
             # write a reset request
-            self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(wait_from, 1), 
+            self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
                                                             fill_value=True)
             self._rhc_status.resets.synch_all(read=False, wait=True)
         else:
-            wait_from = self.cluster_size
             # resets all controllers
             self._rhc_status.resets.torch_view[:, :] = True
             self._rhc_status.resets.synch_all(read=False, wait=True)
         
         self._remote_triggerer.trigger() # signal to listening controllers
-        if not self._remote_triggerer.wait_ack_from(wait_from, 
+        if not self._remote_triggerer.wait_ack_from(self.cluster_size, 
                                     self._remote_triggerer_ack_timeout):
             Journal.log(self.__class__.__name__,
                 "reset_controllers",
                 f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
                 LogType.EXCEP,
                 throw_when_excep = True)
-                
+        
         self._get_rhc_sol() # not super efficient, but safe: in theory we should only update the 
         # sol of the controllers which where reset 
 
@@ -643,7 +665,7 @@ class ControlClusterServer(ABC):
         self._remote_triggerer = RemoteTriggererSrvr(namespace=self.namespace,
                                             verbose=self._verbose,
                                             vlevel=self._vlevel,
-                                            force_reconnection=False)
+                                            force_reconnection=self._force_reconnection)
         self._remote_triggerer.run()
                 
         self._robot_states.run()
