@@ -234,6 +234,15 @@ class ControlClusterServer(ABC):
 
             self._triggered = True
 
+    def _trigger_solution(self):
+        
+        active_idxs = self.get_active_controllers()
+        if active_idxs is not None:
+            # at least one controller is active
+            self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
+                                    0, 0)
+            self._remote_triggerer.trigger() # signal to listening controllers
+        
     def triggered(self):
 
         return self._triggered
@@ -250,7 +259,9 @@ class ControlClusterServer(ABC):
             # at this point all controllers are done -> we synchronize the control commands on GPU
             # with the ones written by each controller on CPU
 
-            self._get_rhc_sol()
+            self._get_rhc_sol() # not super efficient, but safe: in theory we should read only from 
+            # controllers which where triggered 
+
             self.solution_counter += 1
         
             self._triggered = False # allow next trigger
@@ -267,6 +278,63 @@ class ControlClusterServer(ABC):
 
         self._update_mem_flags() # used to keep track of previous flag states
     
+    def _wait_for_solution(self):
+
+        active_idxs = self.get_active_controllers()
+
+        if active_idxs is not None: # at least 1 controller active
+            if not self._remote_triggerer.wait_ack_from(active_idxs.shape[0], 
+                                    self._remote_triggerer_ack_timeout):
+                Journal.log(self.__class__.__name__,
+                    "_wait_for_solution",
+                    f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+        
+        # update flags (written by controllers upon solution request)
+        self._rhc_status.activation_state.synch_all(read=True, 
+                                    wait=True)
+        self._rhc_status.fails.synch_all(read=True,
+                                    wait=True)
+        
+    def reset_controllers(self,
+                    idxs: torch.Tensor = None):
+        
+        wait_from = 0
+        if idxs is not None:
+            wait_from = idxs.shape[0]
+            # write a reset request
+            self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(wait_from, 1), 
+                                                            fill_value=True)
+            self._rhc_status.resets.synch_all(read=False, wait=True)
+        else:
+            wait_from = self.cluster_size
+            # resets all controllers
+            self._rhc_status.resets.torch_view[:, :] = True
+            self._rhc_status.resets.synch_all(read=False, wait=True)
+        
+        self._remote_triggerer.trigger() # signal to listening controllers
+        if not self._remote_triggerer.wait_ack_from(wait_from, 
+                                    self._remote_triggerer_ack_timeout):
+            Journal.log(self.__class__.__name__,
+                "reset_controllers",
+                f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
+                LogType.EXCEP,
+                throw_when_excep = True)
+                
+        self._get_rhc_sol() # not super efficient, but safe: in theory we should only update the 
+        # sol of the controllers which where reset 
+
+    def activate_controllers(self,
+                    idxs: torch.Tensor = None):
+        
+        if idxs is not None:
+
+            self._rhc_status.activation_state.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
+                                                            fill_value=True)
+            
+            self._rhc_status.activation_state.synch_all(read=False, wait=True)
+      
     def get_actions(self):
 
         return self._rhc_cmds
@@ -393,49 +461,7 @@ class ControlClusterServer(ABC):
     def just_started_running(self):
 
         return self.is_running() and (not self._was_running)
-    
-    def reset_controllers(self,
-                    idxs: torch.Tensor = None):
-        
-        if idxs is not None:
-            
-            # untrigger, just in case
-            self._rhc_status.trigger.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
-                                                            fill_value=False) 
-            self._rhc_status.trigger.synch_all(read=False, wait=True)
-
-            # reset
-            self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
-                                                            fill_value=True)
-            
-            self._rhc_status.resets.synch_all(read=False, wait=True)
-
-        else:
-            
-            # untrigger all controllers
-            self._rhc_status.trigger.torch_view[idxs, :] = torch.full(size=(self.cluster_size, 1), 
-                                                            fill_value=False) 
-            self._rhc_status.trigger.synch_all(read=False, wait=True)
-
-            # resets all failed controllers
-            self._rhc_status.resets.write_wait(self._rhc_status.fails.torch_view,
-                                        0, 0)
-        
-        self._wait_for_reset_done() # wait for any pending reset request to be completed
-
-        self._get_rhc_sol() # not efficient: in theory we should only update the 
-        # sol of the reset controllers
-
-    def activate_controllers(self,
-                    idxs: torch.Tensor = None):
-        
-        if idxs is not None:
-
-            self._rhc_status.activation_state.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
-                                                            fill_value=True)
-            
-            self._rhc_status.activation_state.synch_all(read=False, wait=True)
-            
+          
     def is_running(self):
 
         return self._is_running
@@ -629,52 +655,6 @@ class ControlClusterServer(ABC):
         self._rhc_status.run()
         
         self._cluster_stats.run()          
-
-    def _trigger_solution(self):
-
-        self._remote_triggerer.trigger() # trigger all listening consumers
-        
-    def _wait_for_solution(self):
-
-        if not self._remote_triggerer.wait_ack_from(self.cluster_size, 
-                                self._remote_triggerer_ack_timeout):
-            Journal.log(self.__class__.__name__,
-                "_wait_for_solution",
-                f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
-                LogType.EXCEP,
-                throw_when_excep = True)
-            
-        self._rhc_status.activation_state.synch_all(read=True, 
-                                    wait=True)
-        self._rhc_status.fails.synch_all(read=True,
-                                    wait=True)
-    
-    def _wait_for_reset_done(self):
-
-        # waits for requested controller resets to be completed
-
-        done = False
-        
-        while not done: 
-            
-            # fills views reading from shared memory
-            self._rhc_status.resets.synch_all(read=True, 
-                                        wait=True)
-            
-            resets = self._rhc_status.resets.get_torch_view(gpu=False)
-
-            if resets.any().item(): # controllers reset their 
-                # correspoding reset flags to false when the reset is done
-                
-                PerfSleep.thread_sleep(1000) # nanoseconds
-
-                continue
-
-            else:
-
-                done = True
-            
-        return done
     
     def _compute_n_control_actions(self):
 

@@ -101,7 +101,7 @@ class RHController(ABC):
 
         self._got_contact_names = False
 
-        self._solving = False # used for proper termination 
+        self._received_trigger = False # used for proper termination 
 
         self.array_dtype = array_dtype
 
@@ -186,6 +186,48 @@ class RHController(ABC):
 
         return self._core_idx
     
+    def _rhc(self):
+
+        if self._debug:
+
+            self._start_time = time.perf_counter()
+
+        self.robot_state.synch_from_shared_mem() # updates robot state with
+        # latest data on shared mem
+        
+        if not self.failed():
+            # we can solve only if not in failure state
+            self._failed = not self._solve() # solve actual TO
+            if (self._failed):  
+                # perform failure procedure
+                self._on_failure()                       
+        else:
+            Journal.log(self.__class__.__name__,
+                "solve",
+                "Received solution req, but controller is in failure state. " + \
+                    " You should have reset the controller!",
+                LogType.EXCEP,
+                throw_when_excep = True)
+            
+        self._write_cmds_from_sol() # we update update the views of the cmds
+        # from the latest solution
+    
+        # if self._debug_sol:
+        #     # if in debug, rhc internal state is streamed over 
+        #     # shared mem.
+        #     self._update_rhc_internal()
+
+        if self._debug:
+            self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
+            self._update_profiling_data() # updates all profiling data
+
+        if self._verbose and self._debug:
+            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+                "solve",
+                f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
+                LogType.INFO,
+                throw_when_excep = True)  
+
     def solve(self):
         
         # run the solution loop and wait for trigger signals
@@ -205,61 +247,32 @@ class RHController(ABC):
                         LogType.EXCEP,
                         throw_when_excep = True)
                     
-                self._solving = True
-
-                # trigger received -> we run a solution step 
+                self._received_trigger = True
+                # signal received -> we incoming request
                 
                 # perform reset, if required
                 if self.rhc_status.resets.read_wait(row_index=self.controller_index,
                                                 col_index=0)[0]:
-                    self.reset()
+                    self.reset() # rhc is reset
+                    self.rhc_status.resets.write_wait(False, 
+                                row_index=self.controller_index,
+                                col_index=0) # allow next solution trigger
 
-                if self._debug:
-                    self._start_time = time.perf_counter()
+                # check if a trigger request was received
+                if self.rhc_status.trigger.read_wait(row_index=self.controller_index,
+                            col_index=0)[0]:
+                    self._rhc() # run solution
+                    self.rhc_status.trigger.write_wait(False, 
+                                row_index=self.controller_index,
+                                col_index=0) # allow next solution trigger                    
 
-                self.robot_state.synch_from_shared_mem() # updates robot state with
-                # latest data on shared mem
-                
-                if not self.failed():
-                    # we can solve only if not in failure state
-                    self._failed = not self._solve() # solve actual TO
-                    if (self._failed):  
-                        # perform failure procedure
-                        self._on_failure()                       
-                else:
-                    Journal.log(self.__class__.__name__,
-                        "solve",
-                        "Received solution req, but controller is in failure state. " + \
-                            " You should have reset the controller!",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
-                    
-                self._write_cmds_from_sol() # we update update the views of the cmds
-                # from the latest solution
-            
-                # if self._debug_sol:
-                #     # if in debug, rhc internal state is streamed over 
-                #     # shared mem.
-                #     self._update_rhc_internal()
-
-                if self._debug:
-                    self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
-                    self._update_profiling_data() # updates all profiling data
-
-                if self._verbose and self._debug:
-                    Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                        "solve",
-                        f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
-                        LogType.INFO,
-                        throw_when_excep = True)  
-                
                 self._remote_triggerer.ack() # send ack signal to server
 
-                self._solving = False
+                self._received_trigger = False
 
             except (KeyboardInterrupt):
 
-                if self._solving:
+                if self._received_trigger:
                     # received interrupt during solution
                     self._remote_triggerer.ack() 
 
