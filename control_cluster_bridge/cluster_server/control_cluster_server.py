@@ -48,6 +48,7 @@ class ControlClusterServer(ABC):
             contact_linknames: List[str] = None,
             use_gpu: bool = False, 
             verbose = False, 
+            vlevel: VLevel = VLevel.V1,
             debug = False, 
             force_reconnection: bool = False,
             use_pollingbased_waiting: bool = False):
@@ -55,6 +56,7 @@ class ControlClusterServer(ABC):
         self.namespace = namespace
         
         self._verbose = verbose
+        self._vlevel = vlevel
 
         self._closed = False
 
@@ -561,7 +563,7 @@ class ControlClusterServer(ABC):
                                 with_gpu_mirror=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
-                                vlevel=VLevel.V2,
+                                vlevel=self._vlevel,
                                 safe=False)
 
         self._rhc_cmds = RhcCmds(namespace=self.namespace,
@@ -574,7 +576,7 @@ class ControlClusterServer(ABC):
                                 with_gpu_mirror=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
-                                vlevel=VLevel.V2,
+                                vlevel=self._vlevel,
                                 safe=False)
 
         self._rhc_refs = RhcRefs(namespace=self.namespace,
@@ -588,14 +590,14 @@ class ControlClusterServer(ABC):
                             force_reconnection = self._force_reconnection,
                             safe = False,
                             verbose = True,
-                            vlevel = VLevel.V2,
+                            vlevel = self._vlevel,
                             fill_value=np.nan)
         
         self._rhc_status = RhcStatus(is_server=True,
                             cluster_size=self.cluster_size,
                             namespace=self.namespace, 
                             verbose=self._verbose, 
-                            vlevel=VLevel.V2,
+                            vlevel=self._vlevel,
                             force_reconnection=self._force_reconnection)
         
         cluster_info_dict = {}
@@ -608,16 +610,16 @@ class ControlClusterServer(ABC):
                                     is_server=True, 
                                     name=self.namespace,
                                     verbose=self._verbose,
-                                    vlevel=VLevel.V2, 
+                                    vlevel=self._vlevel, 
                                     safe=True,
                                     force_reconnection=self._force_reconnection)
 
         self._remote_triggerer = RemoteTriggererSrvr(namespace=self.namespace,
                                             verbose=self._verbose,
-                                            vlevel=VLevel.V2,
+                                            vlevel=self._vlevel,
                                             force_reconnection=self._force_reconnection)
         self._remote_triggerer.run()
-        
+                
         self._robot_states.run()
 
         self._rhc_cmds.run()
