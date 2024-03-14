@@ -101,7 +101,7 @@ class RHController(ABC):
 
         self._got_contact_names = False
 
-        self._trigger_flag = False
+        self._solving = False # used for proper termination 
 
         self.array_dtype = array_dtype
 
@@ -204,6 +204,9 @@ class RHController(ABC):
                         "Didn't receive any remote trigger req within timeout!",
                         LogType.EXCEP,
                         throw_when_excep = True)
+                    
+                self._solving = True
+
                 # trigger received -> we run a solution step 
                 
                 # perform reset, if required
@@ -252,7 +255,15 @@ class RHController(ABC):
                 
                 self._remote_triggerer.ack() # send ack signal to server
 
+                self._solving = False
+
             except (KeyboardInterrupt):
+
+                if self._solving:
+                    # received interrupt during solution
+                    self._remote_triggerer.ack() 
+
+                    self._close()
 
                 break
                 
