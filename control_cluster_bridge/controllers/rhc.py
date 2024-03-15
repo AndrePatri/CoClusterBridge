@@ -270,11 +270,7 @@ class RHController(ABC):
 
             except (KeyboardInterrupt):
 
-                if self._received_trigger:
-                    # received interrupt during solution
-                    self._remote_triggerer.ack() 
-
-                    self._close()
+                self._close()
 
                 break
                 
@@ -447,10 +443,15 @@ class RHController(ABC):
         self._registered = True
                               
     def _unregister_from_cluster(self):
+        
+        if self._received_trigger:
+            # received interrupt during solution --> 
+            # send ack signal to server anyway
+            self._remote_triggerer.ack() 
 
         if self._registered:
 
-            # acquire semaphores since we have to perform compound operations
+            # acquire semaphores since we have to perform operations
             # on the whole memory views
             self.rhc_status.registration.data_sem_acquire()
             self.rhc_status.controllers_counter.data_sem_acquire()
