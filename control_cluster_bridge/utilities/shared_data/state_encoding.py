@@ -699,7 +699,6 @@ class RootState(SharedDataView):
         
         # overriding parent 
 
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAA")        
         super().run()
         
         if not self.is_server:
