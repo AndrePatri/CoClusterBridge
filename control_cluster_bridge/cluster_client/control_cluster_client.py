@@ -48,18 +48,18 @@ class ControlClusterClient(ABC):
             namespace: str,
             cluster_size: int,
             processes_basename: str = "Controller", 
+            set_affinity: bool = False,
             isolated_cores_only: bool = False,
-            use_only_physical_cores: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False):
 
         # ciao :D
         #        CR 
 
+        self.set_affinity = set_affinity
+
         self.isolated_cores_only = isolated_cores_only # will spawn each controller
         # in a isolated core, if they fit
-
-        self.use_only_physical_cores = use_only_physical_cores
 
         self.core_ids_override_list = core_ids_override_list
 
@@ -135,7 +135,8 @@ class ControlClusterClient(ABC):
         
         controller = self._generate_controller(idx=idx)
 
-        controller.set_affinity(core_idx=self._compute_process_affinity(idx, core_ids=core_idxs))
+        if self.set_affinity:
+            controller.set_affinity(core_idx=self._compute_process_affinity(idx, core_ids=core_idxs))
 
         controller.solve() # runs the solution loop
 
@@ -211,66 +212,18 @@ class ControlClusterClient(ABC):
 
         cores = None
 
-        if not self.isolated_cores_only and not self.use_only_physical_cores:
+        if not self.isolated_cores_only:
 
             # distribute processes over all system cores and
             # over both physical and virtual cores
 
             cores = list(range(psutil.cpu_count()))
 
-        elif not self.isolated_cores_only and self.use_only_physical_cores:
-
-            # distribute processes over all physical cores
-
-            physical_cores_n = psutil.cpu_count(logical=False)
-
-            all_cores_n = psutil.cpu_count()
-
-            all_cores = list(range(all_cores_n))
-
-            core_ratio = all_cores_n/physical_cores_n
-
-            cores = []
-
-            for i in range(0, all_cores_n):
-                
-                if (i % core_ratio) == 0:
-
-                    cores.append(i)
-            
-        elif self.isolated_cores_only and not self.use_only_physical_cores:
+        else:
 
             # distribute processes over isolated cores only,
             # both physical and virtual
             cores = get_isolated_cores()[1]
-
-        elif self.isolated_cores_only and self.use_only_physical_cores:
-            # distribute processes over isolated and physical
-            # cores only
-
-            physical_cores_n = psutil.cpu_count(logical=False)
-            all_cores_n = psutil.cpu_count()
-            core_ratio = all_cores_n/physical_cores_n
-
-            isolated_cores = get_isolated_cores()[1]
-
-            isolated_cores_n = len(isolated_cores)
-
-            cores = []
-
-            for i in range(0, isolated_cores_n):
-                
-                if (i % core_ratio) == 0:
-
-                    cores.append(isolated_cores[i])
-
-        else:
-
-            Journal.log(self.__class__.__name__,
-                "_get_cores",
-                "Invalid combination of flags for core distribution",
-                LogType.EXCEP,
-                throw_when_excep = True)
 
         return cores
  
@@ -307,18 +260,7 @@ class ControlClusterClient(ABC):
                         throw_when_excep = False)
 
                     raise Exception(exception)
-                        
-                # we distribute the controllers over the available ones
-                warning = "Will distribute controllers over physical cores only"
-                
-                Journal.log(self.__class__.__name__,
-                            "_debug_prints",
-                            warning,
-                            LogType.WARN,
-                            throw_when_excep = True)
-                
-            if self.isolated_cores_only:
-                
+                                    
                 # we distribute the controllers over the available ones
                 warning = "Will distribute controllers over isolated cores only"
                 
