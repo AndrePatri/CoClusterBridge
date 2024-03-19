@@ -32,7 +32,7 @@ from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usa
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 
-from typing import List, TypeVar
+from typing import List, TypeVar, Union
 
 import torch
 import numpy as np
@@ -118,8 +118,6 @@ class RHController(ABC):
 
         self._homer = None
 
-        self._core_idx = None
-
         self._init()
 
     def init_rhc_task_cmds(self):
@@ -147,44 +145,6 @@ class RHController(ABC):
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
         self.robot_cmds.run()
-        
-    
-    def _set_affinity(self):
-
-        if self._core_idx is not None:
-        
-            import os
-
-            pid = os.getpid()  
-
-            os.sched_setaffinity(pid, {self._core_idx})
-
-            info = f"Affinity ID {os.sched_getaffinity(pid)} was set for controller n.{self.controller_index}."
-
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                        "_set_affinity",
-                        info,
-                        LogType.STAT,
-                        throw_when_excep = True)
-
-    def set_affinity(self, 
-                core_idx: int):
-        
-        if not isinstance(core_idx, int):
-
-            exception = f"core_idx should be an int"
-
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                    "solve",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
-
-        self._core_idx = core_idx
-
-    def get_core_idx(self):
-
-        return self._core_idx
     
     def _rhc(self):
 
@@ -237,8 +197,6 @@ class RHController(ABC):
         # run the solution loop and wait for trigger signals
         # using cond. variables (efficient)
         
-        self._set_affinity() # set affinity, if core ids was provided
-
         while True:
             
             try: 

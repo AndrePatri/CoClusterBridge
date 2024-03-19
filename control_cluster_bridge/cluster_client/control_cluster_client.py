@@ -126,17 +126,55 @@ class ControlClusterClient(ABC):
                         "Performing pre-initialization steps...",
                         LogType.STAT,
                         throw_when_excep = True)
+        
+    def _set_affinity(self, 
+                core_idxs: List[int], 
+                controller_idx: int):
+        
+        if not isinstance(core_idxs, List):
+            
+            exception = f"core_idx should be a List"
+            Journal.log(f"{self.__class__.__name__}{controller_idx}",
+                    "solve",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+
+        if not isinstance(core_idxs[0], int):
+            
+            exception = f"core_idx should be a List of integeters"
+            Journal.log(f"{self.__class__.__name__}{controller_idx}",
+                    "solve",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+
+        import os
+        pid = os.getpid()  
+        os.sched_setaffinity(pid, core_idxs)
+
+        info = f"Affinity ID {os.sched_getaffinity(pid)} was set for controller n.{controller_idx}."
+        Journal.log(f"{self.__class__.__name__}{controller_idx}",
+                    "_set_affinity",
+                    info,
+                    LogType.STAT,
+                    throw_when_excep = True)
 
     def _spawn_controller(self,
                     idx: int,
-                    core_idxs: List[int]):
+                    available_cores: List[int]):
         
         # this is run in a child process for each controller
-        
-        controller = self._generate_controller(idx=idx)
 
         if self.set_affinity:
-            controller.set_affinity(core_idx=self._compute_process_affinity(idx, core_ids=core_idxs))
+            # put rhc controller on a single specific core 
+            self._set_affinity(core_idxs=[self._compute_process_affinity(idx, core_ids=available_cores)],
+                        controller_idx=idx)
+        else:
+            # use all available cores
+            self._set_affinity(core_idxs=available_cores,
+                        controller_idx=idx)
+        controller = self._generate_controller(idx=idx)
 
         controller.solve() # runs the solution loop
 
@@ -287,6 +325,8 @@ class ControlClusterClient(ABC):
                         process_index: int, 
                         core_ids: List[int]):
 
+        # assign process_index to a single core 
+        # in the core ids list
         num_cores = len(core_ids)
 
         return core_ids[process_index % num_cores]
