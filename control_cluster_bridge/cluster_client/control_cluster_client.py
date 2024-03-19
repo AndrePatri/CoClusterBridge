@@ -84,8 +84,6 @@ class ControlClusterClient(ABC):
         self._processes: List[mp.Process] = [] 
 
         self._is_cluster_ready = False
-
-        self.pre_init_done = False
                  
         self.jnt_names_rhc = None # publishes joint names from controller to shared mem
 
@@ -100,32 +98,6 @@ class ControlClusterClient(ABC):
         if not self._terminated:
 
             self.terminate()
-    
-    def pre_init(self):
-        
-        # to be called before controllers are created/added
-
-        Journal.log(self.__class__.__name__,
-                        "pre_init",
-                        "Performing pre-initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-
-        self.cluster_stats = RhcProfiling(is_server=False, 
-                                    name=self.namespace,
-                                    verbose=self.verbose,
-                                    vlevel=VLevel.V2,
-                                    safe=True)
-        
-        self.cluster_stats.run()
-        
-        self.pre_init_done = True
-
-        Journal.log(self.__class__.__name__,
-                        "pre_init",
-                        "Performing pre-initialization steps...",
-                        LogType.STAT,
-                        throw_when_excep = True)
         
     def _set_affinity(self, 
                 core_idxs: List[int], 
@@ -170,25 +142,28 @@ class ControlClusterClient(ABC):
             # put rhc controller on a single specific core 
             self._set_affinity(core_idxs=[self._compute_process_affinity(idx, core_ids=available_cores)],
                         controller_idx=idx)
-        else:
+        # else:
             # use all available cores
-            self._set_affinity(core_idxs=available_cores,
-                        controller_idx=idx)
+            # self._set_affinity(core_idxs=available_cores,
+            #             controller_idx=idx)
+            
         controller = self._generate_controller(idx=idx)
 
         controller.solve() # runs the solution loop
 
     def run(self):
-        
-        if not self.pre_init_done:
-
-            Journal.log(self.__class__.__name__,
-                        "launch_controller",
-                        f"pre_init() method has not been called yet!",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
             
         self._spawn_processes()
+
+        self.cluster_stats = RhcProfiling(is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self.verbose,
+                                    vlevel=VLevel.V2,
+                                    safe=True)
+        
+        self.cluster_stats.run()
+        self.cluster_stats.write_info(dyn_info_name="cluster_ready",
+                                    val=self._is_cluster_ready)
 
         while True:
 
@@ -333,6 +308,9 @@ class ControlClusterClient(ABC):
 
     def _spawn_processes(self):
         
+        ctx = mp.get_context('spawn')
+        # ctx = mp.get_context('forkserver')
+
         Journal.log(self.__class__.__name__,
                         "_spawn_processes",
                         "spawning processes...",
@@ -358,7 +336,7 @@ class ControlClusterClient(ABC):
                     LogType.STAT,
                     throw_when_excep = True)
 
-            process = mp.Process(target=self._spawn_controller, 
+            process = ctx.Process(target=self._spawn_controller, 
                             name=self.processes_basename + str(i),
                             args=(i, core_ids))
                         
@@ -367,9 +345,6 @@ class ControlClusterClient(ABC):
             self._processes[i].start()
             
         self._is_cluster_ready = True
-
-        self.cluster_stats.write_info(dyn_info_name="cluster_ready",
-                                    val=self._is_cluster_ready)
 
         Journal.log(self.__class__.__name__,
                     "_spawn_processes",
