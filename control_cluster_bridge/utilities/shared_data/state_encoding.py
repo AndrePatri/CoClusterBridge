@@ -28,7 +28,7 @@ class JntsState(SharedDataView):
             fill_value: float = 0.0,
             safe: bool = True,
             force_reconnection: bool = False,
-            with_gpu_mirror: bool = True):
+            with_gpu_mirror: bool = False):
         
         basename = "JntsState" 
 
@@ -648,7 +648,7 @@ class RootState(SharedDataView):
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
             force_reconnection: bool = False,
-            with_gpu_mirror: bool = True,
+            with_gpu_mirror: bool = False,
             fill_value = 0):
         
         basename = "RootState" 
@@ -699,6 +699,7 @@ class RootState(SharedDataView):
         
         # overriding parent 
 
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAA")        
         super().run()
         
         if not self.is_server:
@@ -1122,7 +1123,7 @@ class ContactWrenches(SharedDataView):
             vlevel: VLevel = VLevel.V0,
             safe: bool = True,
             force_reconnection: bool = False,
-            with_gpu_mirror: bool = True,
+            with_gpu_mirror: bool = False,
             fill_value = 0):
         
         basename = "ContactWrenches"
@@ -1546,7 +1547,7 @@ class FullRobState(SharedDataBase):
             jnt_names: List[str] = None,
             contact_names: List[str] = None,
             q_remapping: List[int] = None,
-            with_gpu_mirror: bool = True,
+            with_gpu_mirror: bool = False,
             force_reconnection: bool = False,
             safe: bool = True,
             verbose: bool = False,
