@@ -17,25 +17,12 @@
 # 
 from abc import ABC, abstractmethod
 
-from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
-
-from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-
-from SharsorIPCpp.PySharsorIPC import Journal, LogType
-from SharsorIPCpp.PySharsorIPC import VLevel
-
-import psutil
-
 from typing import List
 
 import multiprocess as mp
-import os
 
-from perf_sleep.pyperfsleep import PerfSleep
-
-from typing import TypeVar
-
-ClusterSrvrChild = TypeVar('ClusterSrvrChild', bound='ControlClusterClient')
+from SharsorIPCpp.PySharsorIPC import Journal, LogType
+from SharsorIPCpp.PySharsorIPC import VLevel
 
 class ControlClusterClient(ABC):
 
@@ -60,10 +47,11 @@ class ControlClusterClient(ABC):
 
         self.isolated_cores_only = isolated_cores_only # will spawn each controller
         # in a isolated core, if they fit
-
         self.core_ids_override_list = core_ids_override_list
 
-        self.isolated_cores = []
+        from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
+        self.isolated_cores = get_isolated_cores()[1] # available isolated
+        # cores 
 
         self.namespace = namespace
         
@@ -81,7 +69,7 @@ class ControlClusterClient(ABC):
         # self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
         #                                 namespace=self.namespace)
         # self.handshake_srvr.handshake()
-        self._processes: List[mp.Process] = [] 
+        self._processes = [] 
 
         self._is_cluster_ready = False
                  
@@ -90,7 +78,7 @@ class ControlClusterClient(ABC):
         # shared memory 
 
         self.cluster_stats = None
-
+        
         self._terminated = False
     
     def __del__(self):
@@ -136,7 +124,7 @@ class ControlClusterClient(ABC):
                     idx: int,
                     available_cores: List[int]):
         
-        # this is run in a child process for each controller
+        # this runs in a child process for each controller
 
         if self.set_affinity:
             # put rhc controller on a single specific core 
@@ -154,6 +142,9 @@ class ControlClusterClient(ABC):
     def run(self):
             
         self._spawn_processes()
+        
+        from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
+        from perf_sleep.pyperfsleep import PerfSleep
 
         self.cluster_stats = RhcProfiling(is_server=False, 
                                     name=self.namespace,
@@ -230,13 +221,14 @@ class ControlClusterClient(ABC):
             # distribute processes over all system cores and
             # over both physical and virtual cores
 
+            import psutil
             cores = list(range(psutil.cpu_count()))
 
         else:
 
             # distribute processes over isolated cores only,
             # both physical and virtual
-            cores = get_isolated_cores()[1]
+            cores = self.isolated_cores
 
         return cores
  
@@ -257,10 +249,6 @@ class ControlClusterClient(ABC):
 
             if self.isolated_cores_only:
 
-                self.isolated_cores = get_isolated_cores()[1] # available isolated
-                # cores -> if possible we spawn a controller for each isolated 
-                # core
-
                 if not len(self.isolated_cores) > 0: 
                     
                     exception ="No isolated cores found on this machine. Either isolate some cores or " + \
@@ -270,9 +258,7 @@ class ControlClusterClient(ABC):
                         "_debug_prints",
                         exception,
                         LogType.EXCEP,
-                        throw_when_excep = False)
-
-                    raise Exception(exception)
+                        throw_when_excep = True)
                                     
                 # we distribute the controllers over the available ones
                 warning = "Will distribute controllers over isolated cores only"
