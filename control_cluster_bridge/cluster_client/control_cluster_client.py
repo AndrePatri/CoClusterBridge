@@ -36,6 +36,7 @@ class ControlClusterClient(ABC):
             cluster_size: int,
             processes_basename: str = "Controller", 
             set_affinity: bool = False,
+            use_mp_fork: bool = False,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False):
@@ -45,6 +46,8 @@ class ControlClusterClient(ABC):
 
         self.set_affinity = set_affinity
 
+        self.use_mp_fork = use_mp_fork
+        
         self.isolated_cores_only = isolated_cores_only # will spawn each controller
         # in a isolated core, if they fit
         self.core_ids_override_list = core_ids_override_list
@@ -130,10 +133,11 @@ class ControlClusterClient(ABC):
             # put rhc controller on a single specific core 
             self._set_affinity(core_idxs=[self._compute_process_affinity(idx, core_ids=available_cores)],
                         controller_idx=idx)
-        # else:
+            
+        if self.use_mp_fork: # that's an hack
             # use all available cores
-            # self._set_affinity(core_idxs=available_cores,
-            #             controller_idx=idx)
+            self._set_affinity(core_idxs=available_cores,
+                        controller_idx=idx)
             
         controller = self._generate_controller(idx=idx)
 
@@ -294,9 +298,13 @@ class ControlClusterClient(ABC):
 
     def _spawn_processes(self):
         
-        ctx = mp.get_context('spawn')
-        # ctx = mp.get_context('forkserver')
-
+        ctx = None
+        if self.use_mp_fork:
+            ctx = mp.get_context('fork')
+        else:
+            ctx = mp.get_context('spawn')
+            # ctx = mp.get_context('forkserver')
+        
         Journal.log(self.__class__.__name__,
                         "_spawn_processes",
                         "spawning processes...",
