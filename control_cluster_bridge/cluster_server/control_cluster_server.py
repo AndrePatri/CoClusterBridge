@@ -166,16 +166,16 @@ class ControlClusterServer(ABC):
 
         # first retrive current controllers status
         self._rhc_status.registration.synch_all(read=True,
-                                        wait=True)
+                                        retry=True)
         
         self._rhc_status.activation_state.synch_all(read=True, 
-                                        wait=True)
+                                        retry=True)
                 
         # all active controllers will be triggered
-        self.registered[:, :] = self._rhc_status.registration.torch_view
+        self.registered[:, :] = self._rhc_status.registration.get_torch_view()
 
-        self.now_active[:, :] = self._rhc_status.activation_state.torch_view & \
-                            self._rhc_status.registration.torch_view # controllers have to be registered
+        self.now_active[:, :] = self._rhc_status.activation_state.get_torch_view() & \
+                            self._rhc_status.registration.get_torch_view() # controllers have to be registered
                             # to be considered active
         
         
@@ -199,7 +199,7 @@ class ControlClusterServer(ABC):
             self._require_pretrigger() # we force sequentiality between pretriggering and
             # solution triggering
 
-            self._rhc_status.controllers_counter.synch_all(wait = True,
+            self._rhc_status.controllers_counter.synch_all(retry = True,
                                                         read = True)
 
             self._pre_trigger_logs() # debug info
@@ -239,7 +239,7 @@ class ControlClusterServer(ABC):
     #     active_idxs = self.get_active_controllers()
     #     if active_idxs is not None:
     #         # at least one controller is active
-    #         self._rhc_status.trigger.write_wait(self.now_active, # trigger active controllers
+    #         self._rhc_status.trigger.write_retry(self.now_active, # trigger active controllers
     #                                 0, 0)
     #         self._remote_triggerer.trigger() # signal to listening controllers
     
@@ -248,7 +248,7 @@ class ControlClusterServer(ABC):
         # trigger all
         trigger = self._rhc_status.trigger.get_torch_view()
         trigger[:, :] = True
-        self._rhc_status.trigger.synch_all(read=False, wait=True)
+        self._rhc_status.trigger.synch_all(read=False, retry=True)
         
         self._remote_triggerer.trigger() # signal to listening controllers
 
@@ -302,9 +302,9 @@ class ControlClusterServer(ABC):
         
     #     # update flags (written by controllers upon solution request)
     #     self._rhc_status.fails.synch_all(read=True,
-    #                                 wait=True)
+    #                                 retry=True)
         
-    #     self.failed[:,:] = self._rhc_status.fails.torch_view
+    #     self.failed[:,:] = self._rhc_status.fails.get_torch_view()
     
     def _wait_for_solution(self):
 
@@ -318,22 +318,22 @@ class ControlClusterServer(ABC):
         
         # update flags (written by controllers upon solution request)
         self._rhc_status.fails.synch_all(read=True,
-                                    wait=True)
+                                    retry=True)
         
-        self.failed[:,:] = self._rhc_status.fails.torch_view
+        self.failed[:,:] = self._rhc_status.fails.get_torch_view()
 
     def reset_controllers(self,
                     idxs: torch.Tensor = None):
         
         if idxs is not None:
             # write a reset request
-            self._rhc_status.resets.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
+            self._rhc_status.resets.get_torch_view()[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
                                                             fill_value=True)
-            self._rhc_status.resets.synch_all(read=False, wait=True)
+            self._rhc_status.resets.synch_all(read=False, retry=True)
         else:
             # resets all controllers
-            self._rhc_status.resets.torch_view[:, :] = True
-            self._rhc_status.resets.synch_all(read=False, wait=True)
+            self._rhc_status.resets.get_torch_view()[:, :] = True
+            self._rhc_status.resets.synch_all(read=False, retry=True)
         
         self._remote_triggerer.trigger() # signal to listening controllers
         if not self._remote_triggerer.wait_ack_from(self.cluster_size, 
@@ -352,10 +352,10 @@ class ControlClusterServer(ABC):
         
         if idxs is not None:
 
-            self._rhc_status.activation_state.torch_view[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
+            self._rhc_status.activation_state.get_torch_view()[idxs, :] = torch.full(size=(idxs.shape[0], 1), 
                                                             fill_value=True)
             
-            self._rhc_status.activation_state.synch_all(read=False, wait=True)
+            self._rhc_status.activation_state.synch_all(read=False, retry=True)
       
     def get_actions(self):
 
@@ -540,7 +540,7 @@ class ControlClusterServer(ABC):
 
     def _pre_trigger_logs(self):
 
-        self._n_controllers_connected = self._rhc_status.controllers_counter.torch_view[0, 0].item()
+        self._n_controllers_connected = self._rhc_status.controllers_counter.get_torch_view()[0, 0].item()
 
         if self._n_controllers_connected == 0:
             
@@ -568,10 +568,10 @@ class ControlClusterServer(ABC):
 
     def _post_trigger_logs(self):
 
-        if not self._rhc_status.activation_state.torch_view.all():
+        if not self._rhc_status.activation_state.get_torch_view().all():
                 
                 msg = f"Controllers waiting to be activated... (" + \
-                    f"{self._rhc_status.activation_state.torch_view.sum().item()}/{self.cluster_size} active)"
+                    f"{self._rhc_status.activation_state.get_torch_view().sum().item()}/{self.cluster_size} active)"
                 
                 self._sporadic_log(calling_methd="trigger_solution",
                             msg = msg,
@@ -609,6 +609,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self.contact_linknames,
                                 with_gpu_mirror=True,
+                                with_torch_view=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
@@ -622,6 +623,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self.contact_linknames,
                                 with_gpu_mirror=True,
+                                with_torch_view=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
@@ -634,7 +636,8 @@ class ControlClusterServer(ABC):
                             n_contacts=self.n_contact_sensors,
                             jnt_names=self.jnt_names,
                             contact_names=self.contact_linknames,
-                            with_gpu_mirror = True,
+                            with_gpu_mirror = False,
+                            with_torch_view=False,
                             force_reconnection = self._force_reconnection,
                             safe = False,
                             verbose = True,
@@ -646,7 +649,9 @@ class ControlClusterServer(ABC):
                             namespace=self.namespace, 
                             verbose=self._verbose, 
                             vlevel=self._vlevel,
-                            force_reconnection=self._force_reconnection)
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=False,
+                            with_torch_view=True)
         
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size

@@ -31,7 +31,7 @@ from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCStatus
 
 from SharsorIPCpp.PySharsorIPC import dtype
-from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal
 
@@ -467,7 +467,7 @@ class RtClusterDebugger(QMainWindow):
         self.rhc_status.run()
         self.cluster_size = self.rhc_status.cluster_size
 
-        self.env_index = SharedDataView(namespace = self.namespace,
+        self.env_index = SharedTWrapper(namespace = self.namespace,
                 basename = "EnvSelector",
                 is_server = True, 
                 n_rows = 1, 
@@ -481,7 +481,7 @@ class RtClusterDebugger(QMainWindow):
         
         self.env_index.run()
 
-        self.launch_keyboard_cmds = SharedDataView(namespace = self.namespace,
+        self.launch_keyboard_cmds = SharedTWrapper(namespace = self.namespace,
                 basename = "KeyboardCmdsLauncher",
                 is_server = True, 
                 n_rows = 1, 
@@ -594,10 +594,10 @@ class RtClusterDebugger(QMainWindow):
 
             # activation state
             
-            self.rhc_status.activation_state.synch_all(read=True, wait=True)
+            self.rhc_status.activation_state.synch_all(read=True, retry=True)
 
             # we switch the icon
-            if self.rhc_status.activation_state.torch_view[self.cluster_index, 0].item():
+            if self.rhc_status.activation_state.get_numpy_view()[self.cluster_index, 0].item():
                 
                 self.trigger_controllers_button.iconed_button.setIcon(self.trigger_controllers_button.triggered_icone_button)
 
@@ -610,8 +610,8 @@ class RtClusterDebugger(QMainWindow):
 
         self.cluster_idx_slider.current_val.setText(f'{idx}')
 
-        self.env_index.torch_view[0, 0] = idx
-        self.env_index.synch_all(read=False, wait = True)
+        self.env_index.get_numpy_view()[0, 0] = idx
+        self.env_index.synch_all(read=False, retry = True)
 
         self.cluster_index = idx
 
@@ -623,23 +623,23 @@ class RtClusterDebugger(QMainWindow):
 
     def _toggle_controllers(self):
         
-        self.rhc_status.activation_state.synch_all(read=True, wait=True)
+        self.rhc_status.activation_state.synch_all(read=True, retry=True)
             
-        controller_active = self.rhc_status.activation_state.torch_view[self.cluster_index, 0].item()
+        controller_active = self.rhc_status.activation_state.get_numpy_view()[self.cluster_index, 0].item()
 
         controller_active = not controller_active # flipping activation state
 
-        self.rhc_status.activation_state.torch_view[self.cluster_index, 0] = controller_active
+        self.rhc_status.activation_state.get_numpy_view()[self.cluster_index, 0] = controller_active
 
-        self.rhc_status.activation_state.synch_all(read=False, wait=True)
+        self.rhc_status.activation_state.synch_all(read=False, retry=True)
 
     def _toggle_keyboard_cmds(self):
 
         self._keyboard_cmds_triggered = not self._keyboard_cmds_triggered
 
-        self.launch_keyboard_cmds.torch_view[0, 0] = self._keyboard_cmds_triggered
+        self.launch_keyboard_cmds.get_numpy_view()[0, 0] = self._keyboard_cmds_triggered
 
-        self.launch_keyboard_cmds.synch_all(read=False, wait=True)
+        self.launch_keyboard_cmds.synch_all(read=False, retry=True)
         
         if self._keyboard_cmds_triggered:
             

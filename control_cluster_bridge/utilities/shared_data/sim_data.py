@@ -1,4 +1,4 @@
-from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype, toNumpyDType
@@ -12,7 +12,7 @@ import numpy as np
 
 # Simulator info
 
-class SimData(SharedDataView):
+class SimData(SharedTWrapper):
                  
     def __init__(self,
         namespace = "",
@@ -201,7 +201,7 @@ class SharedSimInfo(SharedDataBase):
                         LogType.WARN,
                         throw_when_excep = True)
             
-            self.shared_sim_data.synch_all(read=True, wait=True)
+            self.shared_sim_data.synch_all(read=True, retry=True)
         
         self.param_values = np.full((len(self.param_keys), 1), 
                                 fill_value=np.nan, 
@@ -219,7 +219,7 @@ class SharedSimInfo(SharedDataBase):
                 self.param_values[dyn_info_size + i, 0] = \
                     self.sim_params_dict[self.param_keys[dyn_info_size + i]]
                                         
-            self.shared_sim_data.write_wait(row_index=0,
+            self.shared_sim_data.write_retry(row_index=0,
                                     col_index=0,
                                     data=self.param_values)
             
@@ -259,7 +259,7 @@ class SharedSimInfo(SharedDataBase):
                 
                 self.param_values[idx, 0] = val[i]
                 
-                self.shared_sim_data.write_wait(data=self.param_values[idx, 0],
+                self.shared_sim_data.write_retry(data=self.param_values[idx, 0],
                                 row_index=idx, col_index=0) 
             
         elif isinstance(dyn_info_name, str):
@@ -268,18 +268,18 @@ class SharedSimInfo(SharedDataBase):
 
             self.param_values[idx, 0] = val
         
-            self.shared_sim_data.write_wait(data=self.param_values[idx, 0],
+            self.shared_sim_data.write_retry(data=self.param_values[idx, 0],
                                 row_index=idx, col_index=0) 
     
     def synch(self):
 
-        self.shared_sim_data.synch_all(read=True, wait = True)
+        self.shared_sim_data.synch_all(read=True, retry = True)
     
     def get(self):
 
         self.synch()
 
-        return self.shared_sim_data.numpy_view.copy()
+        return self.shared_sim_data.get_numpy_view().copy()
     
     def close(self):
 

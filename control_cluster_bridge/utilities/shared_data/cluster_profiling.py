@@ -1,4 +1,4 @@
-from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import dtype as sharsor_dtype, toNumpyDType
@@ -12,7 +12,7 @@ import numpy as np
 
 # Control cluster profiling data
 
-class ClusterCumulativeData(SharedDataView):
+class ClusterCumulativeData(SharedTWrapper):
                  
     def __init__(self,
         namespace = "",
@@ -36,7 +36,7 @@ class ClusterCumulativeData(SharedDataView):
             safe = True,
             force_reconnection=force_reconnection)
         
-class RtiSolTime(SharedDataView):
+class RtiSolTime(SharedTWrapper):
                  
     def __init__(self,
         cluster_size: int, 
@@ -61,7 +61,7 @@ class RtiSolTime(SharedDataView):
             safe = safe,
             force_reconnection=force_reconnection)
 
-class SolveLoopDt(SharedDataView):
+class SolveLoopDt(SharedTWrapper):
                  
     def __init__(self,
         cluster_size: int, 
@@ -86,7 +86,7 @@ class SolveLoopDt(SharedDataView):
             safe = safe,
             force_reconnection=force_reconnection)
      
-class PrbUpdateDt(SharedDataView):
+class PrbUpdateDt(SharedTWrapper):
                  
     def __init__(self,
         cluster_size: int, 
@@ -111,7 +111,7 @@ class PrbUpdateDt(SharedDataView):
             safe = safe,
             force_reconnection=force_reconnection)
 
-class PhasesShiftDt(SharedDataView):
+class PhasesShiftDt(SharedTWrapper):
                  
     def __init__(self,
         cluster_size: int, 
@@ -136,7 +136,7 @@ class PhasesShiftDt(SharedDataView):
             safe = safe,
             force_reconnection=force_reconnection)
 
-class TaskRefUpdateDt(SharedDataView):
+class TaskRefUpdateDt(SharedTWrapper):
                  
     def __init__(self,
         cluster_size: int, 
@@ -318,37 +318,30 @@ class RhcProfiling(SharedDataBase):
         self.task_ref_update_dt.run()
             
         if self.is_server:
-            
             names_written = self.shared_datanames.write_vec(self.param_keys, 0)
-
             if not names_written:
-
                 exception = "Could not write shared sim names on shared memory!"
-
                 Journal.log(self.__class__.__name__,
-                    name,
+                    "run",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
                                         
         else:
-            
             self.param_keys = [""] * self.shared_datanames.length()
-            
             while not self.shared_datanames.read_vec(self.param_keys, 0):
-
                 Journal.log(self.__class__.__name__,
                         "run",
                         "Could not read shared sim names on shared memory. Retrying...",
                         LogType.WARN,
                         throw_when_excep = True)
                     
-            self.shared_data.synch_all(read=True, wait=True)
+            self.shared_data.synch_all(read=True, retry=True)
             
             # wait flag since safe = False doesn't do anything
-            self.rti_sol_time.synch_all(read=True, wait=True)
+            self.rti_sol_time.synch_all(read=True, retry=True)
 
-            self.solve_loop_dt.synch_all(read=True, wait=True)
+            self.solve_loop_dt.synch_all(read=True, retry=True)
 
             self.cluster_size = self.rti_sol_time.n_rows
             
@@ -368,7 +361,7 @@ class RhcProfiling(SharedDataBase):
                 self.param_values[dyn_info_size + i, 0] = \
                     self.static_param_dict[self.param_keys[dyn_info_size + i]]
                                         
-            self.shared_data.write_wait(row_index=0,
+            self.shared_data.write_retry(row_index=0,
                                     col_index=0,
                                     data=self.param_values)
 
@@ -381,23 +374,17 @@ class RhcProfiling(SharedDataBase):
         # always writes to shared memory
         
         if isinstance(dyn_info_name, list):
-            
             if not isinstance(val, list):
-                
                 exception = "The provided val should be a list of values!"
-
                 Journal.log(self.__class__.__name__,
-                    name,
+                    "write_info",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-                            
             if len(val) != len(dyn_info_name):
-
                 exception = "Name list and values length mismatch!"
-
                 Journal.log(self.__class__.__name__,
-                    name,
+                    "write_info",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
@@ -405,19 +392,15 @@ class RhcProfiling(SharedDataBase):
             for i in range(len(val)):
                 
                 idx = self.runtime_info.get_idx(dyn_info_name[i])
-                
                 self.param_values[idx, 0] = val[i]
-                
-                self.shared_data.write_wait(data=self.param_values[idx, 0],
+                self.shared_data.write_retry(data=self.param_values[idx, 0],
                                 row_index=idx, col_index=0) 
             
         elif isinstance(dyn_info_name, str):
             
             idx = self.runtime_info.get_idx(dyn_info_name)
-
             self.param_values[idx, 0] = val
-        
-            self.shared_data.write_wait(data=self.param_values[idx, 0],
+            self.shared_data.write_retry(data=self.param_values[idx, 0],
                                 row_index=idx, col_index=0) 
     
     def get_static_info_idx(self, name: str):
@@ -428,59 +411,42 @@ class RhcProfiling(SharedDataBase):
             info_name: Union[str, List[str]]):
         
         if isinstance(info_name, list):
-            
             return_list = []
-
             for i in range(len(info_name)):
-                
                 try:
-                    
                     return_list.append(self.param_values[idx, 0].item())
-
                 except ValueError:
-
                     pass
-
             return return_list
         
-        elif isinstance(info_name, str):
-            
+        elif isinstance(info_name, str):    
             try:
-
-                idx = self.param_keys.index(info_name)
-            
+                idx = self.param_keys.index(info_name)           
                 return self.param_values[idx, 0].item()
-
             except ValueError:
-
                 pass
-        
+
         else:
-
             exception = "The provided info_name should be a list strings or a string!"
-
             Journal.log(self.__class__.__name__,
-                name,
+                "get_info",
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
             
     def synch_info(self):
 
-        self.shared_data.synch_all(read=True, wait = True)
-
-        self.param_values[:, :] = self.shared_data.numpy_view
+        self.shared_data.synch_all(read=True, retry = True)
+        self.param_values[:, :] = self.shared_data.get_numpy_view()
 
     def synch_all(self):
 
-        self.rti_sol_time.synch_all(read=True, wait = True)
-
-        self.solve_loop_dt.synch_all(read=True, wait = True)
+        self.rti_sol_time.synch_all(read=True, retry = True)
+        self.solve_loop_dt.synch_all(read=True, retry = True)
 
     def get_all_info(self):
 
         self.synch_info()
-
         return self.param_values
     
     def close(self):

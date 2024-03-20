@@ -34,7 +34,6 @@ from SharsorIPCpp.PySharsorIPC import Journal, LogType
 
 from typing import List, TypeVar, Union
 
-import torch
 import numpy as np
 
 from perf_sleep.pyperfsleep import PerfSleep
@@ -48,14 +47,14 @@ class RHController(ABC):
             dt: float,
             verbose = False, 
             debug = False,
-            array_dtype = torch.float32, 
+            array_dtype = np.float32, 
             namespace = "",
             debug_sol = False):
         
         self.namespace = namespace
         
         self.controller_index = None 
-        self.controller_index_torch = None 
+        self.controller_index_np = None 
 
         self.srdf_path = srdf_path
 
@@ -132,6 +131,7 @@ class RHController(ABC):
                                 is_server=False,
                                 q_remapping=quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
+                                with_torch_view=False, 
                                 safe=False,
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
@@ -141,6 +141,7 @@ class RHController(ABC):
                                 is_server=False,
                                 q_remapping=quat_remap, # remapping from environment to controller
                                 with_gpu_mirror=False,
+                                with_torch_view=False, 
                                 safe=False,
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
@@ -177,7 +178,7 @@ class RHController(ABC):
         #     # shared mem.
         #     self._update_rhc_internal()
 
-        self.rhc_status.trigger.write_wait(False, 
+        self.rhc_status.trigger.write_retry(False, 
                                 row_index=self.controller_index,
                                 col_index=0) # allow next solution trigger 
         
@@ -213,12 +214,12 @@ class RHController(ABC):
                 # signal received -> we incoming request
                 
                 # perform reset, if required
-                if self.rhc_status.resets.read_wait(row_index=self.controller_index,
+                if self.rhc_status.resets.read_retry(row_index=self.controller_index,
                                                 col_index=0)[0]:
                     self.reset() # rhc is reset
 
                 # check if a trigger request was received
-                if self.rhc_status.trigger.read_wait(row_index=self.controller_index,
+                if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
                             col_index=0)[0]:
                     self._rhc() # run solution
                                        
@@ -246,11 +247,11 @@ class RHController(ABC):
 
             self.n_resets += 1
 
-            self.rhc_status.fails.write_wait(False, 
+            self.rhc_status.fails.write_retry(False, 
                                         row_index=self.controller_index,
                                         col_index=0)
             
-            self.rhc_status.resets.write_wait(False, 
+            self.rhc_status.resets.write_retry(False, 
                                             row_index=self.controller_index,
                                             col_index=0)
 
@@ -279,20 +280,18 @@ class RHController(ABC):
 
     def set_cmds_to_homing(self):
 
-        homing = torch.tensor(self._homer.get_homing()).reshape(1, 
+        homing = self._homer.get_homing().reshape(1, 
                             self.robot_cmds.n_jnts())
         
-        null_action = torch.zeros((1, self.robot_cmds.n_jnts()), 
+        null_action = np.zeros((1, self.robot_cmds.n_jnts()), 
                         dtype=self.array_dtype)
         
-        self.robot_cmds.jnts_state.set_q(q = homing, robot_idxs=self.controller_index_torch)
+        self.robot_cmds.jnts_state.set(data=homing, data_type="q", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=null_action, data_type="v", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=null_action, data_type="eff", robot_idxs=self.controller_index_np)
 
-        self.robot_cmds.jnts_state.set_v(v = null_action, robot_idxs=self.controller_index_torch)
-
-        self.robot_cmds.jnts_state.set_eff(eff = null_action, robot_idxs=self.controller_index_torch)
-
-        self.robot_cmds.jnts_state.synch_wait(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
-                                read=False)
+        self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
+                                read=False) # only write data corresponding to this controller
     
     def failed(self):
 
@@ -334,17 +333,13 @@ class RHController(ABC):
 
         self._closed = True
 
-    def _assign_cntrl_index(self, reg_state: torch.Tensor):
-
-        control_index = 0
+    def _assign_cntrl_index(self, reg_state: np.ndarray):
         
         state = reg_state.flatten() # ensure 1D tensor
 
-        free_spots = torch.nonzero(~state).flatten()
+        free_spots = np.nonzero(~state.flatten())[0]
 
-        control_index = free_spots[0].item() # just return the first free spot
-
-        return control_index
+        return free_spots[0].item()  # just return the first free spot
     
     def _register_to_cluster(self):
         
@@ -353,18 +348,18 @@ class RHController(ABC):
         self.rhc_status.registration.data_sem_acquire()
         self.rhc_status.controllers_counter.data_sem_acquire()
 
-        self.rhc_status.controllers_counter.synch_all(wait = True,
+        self.rhc_status.controllers_counter.synch_all(retry = True,
                                                 read = True)
         
         available_spots = self.rhc_status.cluster_size
 
         # incrementing cluster controllers counter
         
-        if self.rhc_status.controllers_counter.torch_view[0, 0] + 1 > available_spots:
+        controllers_counter = self.rhc_status.controllers_counter.get_numpy_view()
 
+        if controllers_counter[0, 0] + 1 > available_spots:
             exception = "Cannot register to cluster. No space left " + \
-                f"({self.rhc_status.controllers_counter.torch_view[0, 0]} controllers already registered)"
-
+                f"({controllers_counter[0, 0]} controllers already registered)"
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_register_to_cluster",
                     exception,
@@ -372,21 +367,20 @@ class RHController(ABC):
                     throw_when_excep = True)
                     
         # increment controllers counter
-        self.rhc_status.controllers_counter.torch_view += 1 
-        self.rhc_status.controllers_counter.synch_all(wait = True,
+        controllers_counter += 1 
+        self.rhc_status.controllers_counter.synch_all(retry = True,
                                                 read = False) # writes to shared mem
         
         # read current registration state
-        self.rhc_status.registration.synch_all(wait = True,
+        self.rhc_status.registration.synch_all(retry = True,
                                                 read = True)
-        
-        self.controller_index = self._assign_cntrl_index(self.rhc_status.registration.torch_view)
+        registrations = self.rhc_status.registration.get_numpy_view()
+        self.controller_index = self._assign_cntrl_index(registrations)
+        self.controller_index_np = np.array(self.controller_index)
 
-        self.controller_index_torch = torch.tensor(self.controller_index)
-
-        self.rhc_status.registration.torch_view[self.controller_index, 0] = True
-        self.rhc_status.registration.synch_all(wait = True,
-                                                read = False) # register
+        registrations[self.controller_index, 0] = True
+        self.rhc_status.registration.synch_all(retry = True,
+                                read = False) # register
 
         Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_register_to_cluster",
@@ -414,17 +408,18 @@ class RHController(ABC):
             self.rhc_status.registration.data_sem_acquire()
             self.rhc_status.controllers_counter.data_sem_acquire()
 
-            self.rhc_status.registration.write_wait(False, 
+            self.rhc_status.registration.write_retry(False, 
                                     row_index=self.controller_index,
                                     col_index=0)
             
             self._deactivate()
             
             # decrementing controllers counter
-            self.rhc_status.controllers_counter.synch_all(wait = True,
+            self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = True)
-            self.rhc_status.controllers_counter.torch_view -= 1 
-            self.rhc_status.controllers_counter.synch_all(wait = True,
+            controllers_counter = self.rhc_status.controllers_counter.get_numpy_view()
+            controllers_counter -= 1 
+            self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = False)
 
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
@@ -440,35 +435,9 @@ class RHController(ABC):
     def _deactivate(self):
 
         # signal controller deactivation over shared mem
-            self.rhc_status.activation_state.write_wait(False, 
+            self.rhc_status.activation_state.write_retry(False, 
                                     row_index=self.controller_index,
                                     col_index=0)
-      
-    def _acquire_reg_sem(self):
-
-        while not self.rhc_status.acquire_reg_sem():
-
-            warn = "Trying to acquire registration flags, but failed. Retrying.."
-
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                    "_acquire_reg_sem",
-                    warn,
-                    LogType.WARN,
-                    throw_when_excep = True)
-            
-            PerfSleep.thread_sleep(1000)
-            
-    def _release_reg_sem(self):
-
-        if not self.rhc_status.release_reg_sem():
-            
-            exception = "Failed to release registration flags."
-
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                    "_release_reg_sem",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
     
     def _get_quat_remap(self):
 
@@ -482,10 +451,8 @@ class RHController(ABC):
         server_side_cluster_dt = self.cluster_stats.get_info(info_name="cluster_dt")
   
         if not (abs(server_side_cluster_dt - self._dt) < 1e-8):
-
             exception = f"Trying to initialize a controller with control dt {self._dt}, which" + \
                 f"does not match the cluster control dt {server_side_cluster_dt}"
-        
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_consinstency_checks",
                         exception,
@@ -498,10 +465,8 @@ class RHController(ABC):
         control_side_contact_names = set(self._get_contacts())
 
         if not server_side_contact_names == control_side_contact_names:
-
             warn = f"Controller-side contact names do not match server-side joint names!" + \
                 f"\nServer: {self.robot_state.contact_names()}\n Controller: {self._get_contacts()}"
-        
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_consinstency_checks",
                         warn,
@@ -509,10 +474,8 @@ class RHController(ABC):
                         throw_when_excep = True)
         
         if not len(self.robot_state.contact_names()) == len(self._get_contacts()):
-
             exception = f"Controller-side n contacts {self._get_contacts()} do not match " + \
                 f"server-side n contacts {len(self.robot_state.contact_names())}!"
-        
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                         "_consinstency_checks",
                         exception,
@@ -523,7 +486,6 @@ class RHController(ABC):
 
         stat = f"Initializing RHC controller " + \
             f"with dt: {self._dt} s, t_horizon: {self._t_horizon} s, n_intervals: {self._n_intervals}"
-        
         Journal.log(f"{self.__class__.__name__}",
                     "_init",
                     stat,
@@ -535,7 +497,9 @@ class RHController(ABC):
         self.rhc_status = RhcStatus(is_server=False,
                                     namespace=self.namespace, 
                                     verbose=self._verbose, 
-                                    vlevel=VLevel.V2)
+                                    vlevel=VLevel.V2,
+                                    with_torch_view=False, 
+                                    with_gpu_mirror=False)
 
         self.rhc_status.run()
 
@@ -601,16 +565,12 @@ class RHController(ABC):
                                     vlevel=VLevel.V2,
                                     force_reconnection=True,
                                     safe=True)
-            
             self.rhc_internal.run()
 
         self._homer = RobotHomer(self.srdf_path, 
                             self._controller_side_jnt_names)
-
         if self._homer is None:
-
             exception = f"Robot homer not initialized. Did you call the _init_robot_homer() method in the child class?"
-
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "create_jnt_maps",
                     exception,
@@ -627,15 +587,12 @@ class RHController(ABC):
 
     def _on_failure(self):
         
-        self.rhc_status.fails.write_wait(True, 
+        self.rhc_status.fails.write_retry(True, 
                                         row_index=self.controller_index,
                                         col_index=0)
-        
         self._deactivate()
-
         self.n_fails += 1
-
-        self.rhc_status.controllers_fail_counter.write_wait(self.n_fails,
+        self.rhc_status.controllers_fail_counter.write_retry(self.n_fails,
                                                     row_index=self.controller_index,
                                                     col_index=0)
 
@@ -648,23 +605,19 @@ class RHController(ABC):
 
         # updated debug data on shared memory
         # with the latest info available
-        self.cluster_stats.solve_loop_dt.write_wait(self._profiling_data_dict["full_solve_dt"], 
+        self.cluster_stats.solve_loop_dt.write_retry(self._profiling_data_dict["full_solve_dt"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
-        
-        self.cluster_stats.rti_sol_time.write_wait(self._profiling_data_dict["rti_solve_dt"], 
+        self.cluster_stats.rti_sol_time.write_retry(self._profiling_data_dict["rti_solve_dt"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
-        
-        self.cluster_stats.prb_update_dt.write_wait(self._profiling_data_dict["problem_update_dt"], 
+        self.cluster_stats.prb_update_dt.write_retry(self._profiling_data_dict["problem_update_dt"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
-        
-        self.cluster_stats.phase_shift_dt.write_wait(self._profiling_data_dict["phases_shift_dt"], 
+        self.cluster_stats.phase_shift_dt.write_retry(self._profiling_data_dict["phases_shift_dt"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
-        
-        self.cluster_stats.task_ref_update_dt.write_wait(self._profiling_data_dict["task_ref_update"], 
+        self.cluster_stats.task_ref_update_dt.write_retry(self._profiling_data_dict["task_ref_update"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
        
@@ -672,24 +625,22 @@ class RHController(ABC):
 
         # gets data from the solution and updates the view on the shared data
 
-        self.robot_cmds.jnts_state.set_q(q = self._get_cmd_jnt_q_from_sol(), robot_idxs=self.controller_index_torch)
-
-        self.robot_cmds.jnts_state.set_v(v = self._get_cmd_jnt_v_from_sol(), robot_idxs=self.controller_index_torch)
-
-        self.robot_cmds.jnts_state.set_eff(eff = self._get_cmd_jnt_eff_from_sol(), robot_idxs=self.controller_index_torch)
+        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_q_from_sol(), data_type="q", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_v_from_sol(), data_type="v", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_eff_from_sol(), data_type="eff", robot_idxs=self.controller_index_np)
         
         # write to shared mem
-        self.robot_cmds.jnts_state.synch_wait(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
+        self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False)
         
         # we also fill other data (cost, constr. violation, etc..)
-        self.rhc_status.rhc_cost.write_wait(self._get_rhc_cost(), 
+        self.rhc_status.rhc_cost.write_retry(self._get_rhc_cost(), 
                                     row_index=self.controller_index,
                                     col_index=0)
-        self.rhc_status.rhc_constr_viol.write_wait(self._get_rhc_residual(), 
+        self.rhc_status.rhc_constr_viol.write_retry(self._get_rhc_residual(), 
                                     row_index=self.controller_index,
                                     col_index=0)
-        self.rhc_status.rhc_n_iter.write_wait(self._get_rhc_niter_to_sol(), 
+        self.rhc_status.rhc_n_iter.write_retry(self._get_rhc_niter_to_sol(), 
                                     row_index=self.controller_index,
                                     col_index=0)
     
@@ -731,25 +682,25 @@ class RHController(ABC):
         # written so overhead is minimal in for non-enabled data
 
         self.rhc_internal.write_q(data= self._get_q_from_sol(),
-                            wait=True)
+                            retry=True)
 
         self.rhc_internal.write_v(data= self._get_v_from_sol(),
-                            wait=True)
+                            retry=True)
         
         self.rhc_internal.write_a(data= self._get_a_from_sol(),
-                            wait=True)
+                            retry=True)
         
         self.rhc_internal.write_a_dot(data= self._get_a_dot_from_sol(),
-                            wait=True)
+                            retry=True)
         
         self.rhc_internal.write_f(data= self._get_f_from_sol(),
-                            wait=True)
+                            retry=True)
         
         self.rhc_internal.write_f_dot(data= self._get_f_dot_from_sol(),
-                            wait=True)
+                            retry=True)
         
         self.rhc_internal.write_eff(data= self._get_eff_from_sol(),
-                            wait=True)
+                            retry=True)
 
         for cost_idx in range(self.rhc_internal.config.n_costs):
             
@@ -758,7 +709,7 @@ class RHController(ABC):
 
             self.rhc_internal.write_cost(data= self._get_cost_from_sol(cost_name = cost_name),
                                 cost_name = cost_name,
-                                wait=True)
+                                retry=True)
         
         for constr_idx in range(self.rhc_internal.config.n_constr):
 
@@ -767,7 +718,7 @@ class RHController(ABC):
 
             self.rhc_internal.write_constr(data= self._get_constr_from_sol(constr_name=constr_name),
                                 constr_name = constr_name,
-                                wait=True)
+                                retry=True)
     
     def _get_contacts(self):
         
@@ -854,33 +805,33 @@ class RHController(ABC):
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_q_from_sol(self) -> torch.Tensor:
+    def _get_cmd_jnt_q_from_sol(self) -> np.ndarray:
 
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_v_from_sol(self) -> torch.Tensor:
+    def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
 
         pass
     
     @abstractmethod
-    def _get_cmd_jnt_eff_from_sol(self) -> torch.Tensor:
+    def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
 
         pass
 
-    def _get_rhc_cost(self) -> torch.Tensor:
+    def _get_rhc_cost(self) -> np.ndarray:
 
         # to be overridden
 
         return np.nan
     
-    def _get_rhc_residual(self) -> torch.Tensor:
+    def _get_rhc_residual(self) -> np.ndarray:
         
         # to be overridden
 
         return np.nan
 
-    def _get_rhc_niter_to_sol(self) -> torch.Tensor:
+    def _get_rhc_niter_to_sol(self) -> np.ndarray:
         
         # to be overridden
         

@@ -113,7 +113,7 @@ class RosBridge():
 
 #         start_time = time.perf_counter() 
 
-#         # server.numpy_view[:, :] = np.random.rand(server.n_rows, server.n_cols)
+#         # server.get_numpy_view()[:, :] = np.random.rand(server.n_rows, server.n_cols)
 
 #         bridge.update()
         

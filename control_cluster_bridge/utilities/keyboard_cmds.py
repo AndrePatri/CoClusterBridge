@@ -21,7 +21,7 @@ from pynput import keyboard
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
 
-from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import dtype
@@ -60,7 +60,7 @@ class RhcRefsFromKeyboard:
 
     def _init_shared_data(self):
 
-        self.launch_keyboard_cmds = SharedDataView(namespace = self.namespace,
+        self.launch_keyboard_cmds = SharedTWrapper(namespace = self.namespace,
                 basename = "KeyboardCmdsLauncher",
                 is_server = False, 
                 verbose = True, 
@@ -70,7 +70,7 @@ class RhcRefsFromKeyboard:
         
         self.launch_keyboard_cmds.run()
 
-        self.env_index = SharedDataView(namespace = self.namespace,
+        self.env_index = SharedTWrapper(namespace = self.namespace,
                 basename = "EnvSelector",
                 is_server = False, 
                 verbose = True, 
@@ -87,6 +87,7 @@ class RhcRefsFromKeyboard:
         self.rhc_refs = RhcRefs(namespace=self.namespace,
                                 is_server=False, 
                                 with_gpu_mirror=False, 
+                                with_torch_view=False,
                                 safe=False, 
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2)
@@ -112,26 +113,26 @@ class RhcRefsFromKeyboard:
         
         if read:
 
-            self.env_index.synch_all(read=True, wait=True)
+            self.env_index.synch_all(read=True, retry=True)
 
-            self.cluster_idx = self.env_index.torch_view[0, 0].item()
+            self.cluster_idx = self.env_index.get_numpy_view()[0, 0].item()
             self.cluster_idx_torch = self.cluster_idx
         
             self.rhc_refs.rob_refs.synch_from_shared_mem()
-            self.rhc_refs.contact_flags.synch_all(read=True, wait=True)
-            self.rhc_refs.phase_id.synch_all(read=True, wait=True)
+            self.rhc_refs.contact_flags.synch_all(read=True, retry=True)
+            self.rhc_refs.phase_id.synch_all(read=True, retry=True)
         
         else:
             
-            self.rhc_refs.rob_refs.root_state.synch_wait(row_index=self.cluster_idx, col_index=0, 
+            self.rhc_refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self.rhc_refs.rob_refs.root_state.n_cols,
                                                 read=False)
 
-            self.rhc_refs.contact_flags.synch_wait(row_index=self.cluster_idx, col_index=0, 
+            self.rhc_refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self.rhc_refs.contact_flags.n_cols,
                                                 read=False)
             
-            self.rhc_refs.phase_id.synch_wait(row_index=self.cluster_idx, col_index=0, 
+            self.rhc_refs.phase_id.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self.rhc_refs.phase_id.n_cols,
                                                 read=False)
                                                 
@@ -205,7 +206,7 @@ class RhcRefsFromKeyboard:
     def _update_phase_id(self,
                 phase_id: int = -1):
 
-        self.rhc_refs.phase_id.torch_view[self.cluster_idx, 0] = phase_id
+        self.rhc_refs.phase_id.get_numpy_view()[self.cluster_idx, 0] = phase_id
 
     def _set_contacts(self,
                 key,
@@ -213,19 +214,19 @@ class RhcRefsFromKeyboard:
         
         if key.char == "7":
                     
-            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 0] = is_contact
+            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 0] = is_contact
 
         if key.char == "9":
             
-            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 1] = is_contact
+            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 1] = is_contact
 
         if key.char == "1":
             
-            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 2] = is_contact
+            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 2] = is_contact
 
         if key.char == "3":
             
-            self.rhc_refs.contact_flags.torch_view[self.cluster_idx, 3] = is_contact
+            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 3] = is_contact
     
     def _set_phase_id(self,
                     key):
@@ -344,7 +345,7 @@ class RhcRefsFromKeyboard:
                 
     def _on_press(self, key):
 
-        if self.launch_keyboard_cmds.read_wait(row_index=0,
+        if self.launch_keyboard_cmds.read_retry(row_index=0,
                                             col_index=0)[0]:
             
             self._synch(read=True) # updates  data like
@@ -371,7 +372,7 @@ class RhcRefsFromKeyboard:
 
     def _on_release(self, key):
 
-        if self.launch_keyboard_cmds.read_wait(row_index=0,
+        if self.launch_keyboard_cmds.read_retry(row_index=0,
                                             col_index=0)[0]:
             
             if hasattr(key, 'char'):

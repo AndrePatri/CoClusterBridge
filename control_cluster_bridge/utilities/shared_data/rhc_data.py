@@ -1,6 +1,6 @@
 from SharsorIPCpp.PySharsorIPC import dtype
 
-from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedDataView
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsor.wrappers.shared_tensor_dict import SharedTensorDict
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import LogType
@@ -8,14 +8,11 @@ from SharsorIPCpp.PySharsorIPC import Journal
 from SharsorIPCpp.PySharsorIPC import StringTensorServer, StringTensorClient
 
 from control_cluster_bridge.utilities.shared_data.abstractions import SharedDataBase
-
 from control_cluster_bridge.utilities.shared_data.state_encoding import FullRobState
+
 import numpy as np
 
 from typing import List
-
-# implementations for robot state and 
-# commands from rhc controller
         
 class RobotState(FullRobState):
 
@@ -29,6 +26,7 @@ class RobotState(FullRobState):
             contact_names: List[str] = None,
             q_remapping: List[int] = None,
             with_gpu_mirror: bool = False,
+            with_torch_view: bool = False,
             force_reconnection: bool = False,
             safe: bool = True,
             verbose: bool = False,
@@ -47,6 +45,7 @@ class RobotState(FullRobState):
             contact_names=contact_names,
             q_remapping=q_remapping,
             with_gpu_mirror=with_gpu_mirror,
+            with_torch_view=with_torch_view,
             force_reconnection=force_reconnection,
             safe=safe,
             verbose=verbose,
@@ -65,6 +64,7 @@ class RhcCmds(FullRobState):
             contact_names: List[str] = None,
             q_remapping: List[int] = None,
             with_gpu_mirror: bool = False,
+            with_torch_view: bool = False,
             force_reconnection: bool = False,
             safe: bool = True,
             verbose: bool = False,
@@ -83,6 +83,7 @@ class RhcCmds(FullRobState):
             contact_names=contact_names,
             q_remapping=q_remapping,
             with_gpu_mirror=with_gpu_mirror,
+            with_torch_view=with_torch_view,
             force_reconnection=force_reconnection,
             safe=safe,
             verbose=verbose,
@@ -104,6 +105,7 @@ class RhcRefs(SharedDataBase):
                 contact_names: List[str] = None,
                 q_remapping: List[int] = None,
                 with_gpu_mirror: bool = False,
+                with_torch_view: bool = False,
                 force_reconnection: bool = False,
                 safe: bool = True,
                 verbose: bool = False,
@@ -123,13 +125,14 @@ class RhcRefs(SharedDataBase):
                 contact_names=contact_names,
                 q_remapping=q_remapping,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 force_reconnection=force_reconnection,
                 safe=safe,
                 verbose=verbose,
                 vlevel=vlevel,
                 fill_value=fill_value)
     
-    class Phase(SharedDataView):
+    class Phase(SharedTWrapper):
 
         def __init__(self,
             namespace = "",
@@ -139,6 +142,8 @@ class RhcRefs(SharedDataBase):
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             force_reconnection: bool = False,
+            with_torch_view: bool = False,
+            with_gpu_mirror: bool = False,
             safe: bool = True):
         
             basename = basename + "Phase" # hardcoded
@@ -153,9 +158,11 @@ class RhcRefs(SharedDataBase):
                 safe = safe, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
+                with_torch_view=with_torch_view,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = -1)
             
-    class ContactFlag(SharedDataView):
+    class ContactFlag(SharedTWrapper):
 
         def __init__(self,
             namespace = "",
@@ -166,6 +173,8 @@ class RhcRefs(SharedDataBase):
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             force_reconnection: bool = False,
+            with_torch_view: bool = False,
+            with_gpu_mirror: bool = False,
             safe: bool = True):
         
             basename = basename + "ContactFlag" # hardcoded
@@ -180,6 +189,8 @@ class RhcRefs(SharedDataBase):
                 safe = safe, # boolean operations are atomic on 64 bit systems
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
+                with_torch_view=with_torch_view,
+                with_gpu_mirror=with_gpu_mirror,
                 fill_value = True)
 
     def __init__(self,
@@ -193,6 +204,7 @@ class RhcRefs(SharedDataBase):
                 contact_names: List[str] = None,
                 q_remapping: List[int] = None,
                 with_gpu_mirror: bool = False,
+                with_torch_view: bool = False,
                 force_reconnection: bool = False,
                 safe: bool = False,
                 verbose: bool = False,
@@ -202,6 +214,9 @@ class RhcRefs(SharedDataBase):
         self.basename = "Rhc"
 
         self.is_server = is_server
+
+        self._with_gpu_mirror = with_gpu_mirror
+        self._with_torch_view = with_torch_view
 
         self.n_robots = n_robots
 
@@ -225,6 +240,7 @@ class RhcRefs(SharedDataBase):
                                     contact_names=contact_names,
                                     q_remapping=q_remapping,
                                     with_gpu_mirror=with_gpu_mirror,
+                                    with_torch_view=with_torch_view,
                                     force_reconnection=force_reconnection,
                                     safe=safe,
                                     verbose=verbose,
@@ -238,6 +254,8 @@ class RhcRefs(SharedDataBase):
                             verbose=verbose,
                             vlevel=vlevel,
                             force_reconnection=force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror,
+                            with_torch_view=with_torch_view,
                             safe=safe)
 
         self.contact_flags = None
@@ -269,8 +287,9 @@ class RhcRefs(SharedDataBase):
                             verbose=self.verbose,
                             vlevel=self.vlevel,
                             force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
                             safe=self.safe)
-
         self.contact_flags.run()
 
         self._is_runnning = True
@@ -287,7 +306,7 @@ class RhcRefs(SharedDataBase):
 
 class RhcStatus(SharedDataBase):
     
-    class FailFlagView(SharedDataView):
+    class FailFlagView(SharedTWrapper):
         
         def __init__(self,
                 namespace = "",
@@ -296,7 +315,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterFailFlag" # hardcoded
 
@@ -311,9 +331,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = False)
     
-    class ResetFlagView(SharedDataView):
+    class ResetFlagView(SharedTWrapper):
         
         def __init__(self,
                 namespace = "",
@@ -322,7 +343,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterResetFlag" # hardcoded
 
@@ -337,9 +359,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = False)
     
-    class TriggerFlagView(SharedDataView):
+    class TriggerFlagView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -348,7 +371,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterTriggerFlag" # hardcoded
 
@@ -363,9 +387,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = False)
     
-    class ActivationFlagView(SharedDataView):
+    class ActivationFlagView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -374,7 +399,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterActivationFlag" # hardcoded
 
@@ -389,9 +415,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = False)
     
-    class RegistrationFlagView(SharedDataView):
+    class RegistrationFlagView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -400,7 +427,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterRegistrationFlag" # hardcoded
 
@@ -415,9 +443,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Bool,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = False)
             
-    class ControllersCounterView(SharedDataView):
+    class ControllersCounterView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -425,7 +454,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterControllersCounter" # hardcoded
 
@@ -440,9 +470,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = 0)
     
-    class FailsCounterView(SharedDataView):
+    class FailsCounterView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -451,7 +482,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ClusterControllerFailsCounter" # hardcoded
 
@@ -466,9 +498,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Int,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = 0)
             
-    class RhcCostView(SharedDataView):
+    class RhcCostView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -477,7 +510,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "RhcCost" # hardcoded
 
@@ -492,9 +526,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = np.nan)
     
-    class RhcCnstrViolationView(SharedDataView):
+    class RhcCnstrViolationView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -503,7 +538,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "RhcCnstrViolation" # hardcoded
 
@@ -518,9 +554,10 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = np.nan)
     
-    class RhcNIterationsView(SharedDataView):
+    class RhcNIterationsView(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -529,7 +566,8 @@ class RhcStatus(SharedDataBase):
                 verbose: bool = False, 
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "RhcNIterations" # hardcoded
 
@@ -544,31 +582,9 @@ class RhcStatus(SharedDataBase):
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
                 fill_value = np.nan)
-            
-    class SemView(SharedDataView):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False):
-            
-            basename = "SemView" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = 1, 
-                n_cols = 1, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                safe = True, # boolean operations are atomic on 64 bit systems
-                dtype=dtype.Int,
-                force_reconnection=force_reconnection,
-                fill_value = 0)
-            
+                    
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
@@ -576,7 +592,8 @@ class RhcStatus(SharedDataBase):
             verbose = False, 
             vlevel: VLevel = VLevel.V0,
             force_reconnection: bool = False,
-            with_gpu_mirror: bool = False):
+            with_gpu_mirror: bool = False,
+            with_torch_view: bool = False):
 
         self.is_server = is_server
 
@@ -596,7 +613,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self.resets = self.ResetFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -604,7 +622,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self.trigger = self.TriggerFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -612,7 +631,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self.activation_state = self.ActivationFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -620,7 +640,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self.registration = self.RegistrationFlagView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -628,14 +649,16 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
 
         self.controllers_counter = self.ControllersCounterView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self.controllers_fail_counter = self.FailsCounterView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -643,7 +666,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
 
         self.rhc_cost = self.RhcCostView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -651,7 +675,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
 
         self.rhc_constr_viol = self.RhcCnstrViolationView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -659,7 +684,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self.rhc_n_iter = self.RhcNIterationsView(namespace=self.namespace, 
                                 is_server=self.is_server, 
@@ -667,7 +693,8 @@ class RhcStatus(SharedDataBase):
                                 verbose=self.verbose, 
                                 vlevel=vlevel,
                                 force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror)
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
         
         self._is_runnning = False
 
@@ -722,7 +749,7 @@ class RhcInternal(SharedDataBase):
     # class for sharing internal data of a 
     # receding-horizon controller
 
-    class Q(SharedDataView):
+    class Q(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -748,7 +775,7 @@ class RhcInternal(SharedDataBase):
                 safe = safe,
                 force_reconnection=force_reconnection)
     
-    class V(SharedDataView):
+    class V(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -774,7 +801,7 @@ class RhcInternal(SharedDataBase):
                 safe = safe,
                 force_reconnection=force_reconnection)
     
-    class A(SharedDataView):
+    class A(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -800,7 +827,7 @@ class RhcInternal(SharedDataBase):
                 safe = safe,
                 force_reconnection=force_reconnection)
     
-    class ADot(SharedDataView):
+    class ADot(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -826,7 +853,7 @@ class RhcInternal(SharedDataBase):
                 safe = safe,
                 force_reconnection=force_reconnection)
     
-    class F(SharedDataView):
+    class F(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -852,7 +879,7 @@ class RhcInternal(SharedDataBase):
                 safe = safe,
                 force_reconnection=force_reconnection)
             
-    class FDot(SharedDataView):
+    class FDot(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -878,7 +905,7 @@ class RhcInternal(SharedDataBase):
                 safe = safe,
                 force_reconnection=force_reconnection)
             
-    class Eff(SharedDataView):
+    class Eff(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -1103,7 +1130,6 @@ class RhcInternal(SharedDataBase):
             safe: bool = True):
 
         self.rhc_index = rhc_index
-
         self._basename = "RhcInternal"
 
         self._verbose = verbose
@@ -1116,11 +1142,8 @@ class RhcInternal(SharedDataBase):
         self.namespace = self._basename + namespace + "_n_" + str(self.rhc_index)
         
         if config is not None:
-
             self.config = config
-        
         else:
-            
             # use defaults
             self.config = self.Config()
 
@@ -1139,7 +1162,6 @@ class RhcInternal(SharedDataBase):
         self._is_server = config.is_server
 
         if self.config.enable_q:
-            
             self.q = self.Q(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 3 + 4 + n_jnts, 
@@ -1150,7 +1172,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self.config.enable_v:
-
             self.v = self.V(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
@@ -1161,7 +1182,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self.config.enable_a:
-
             self.a = self.A(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
@@ -1172,7 +1192,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self.config.enable_a_dot:
-
             self.a_dot = self.ADot(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
@@ -1183,7 +1202,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self.config.enable_f:
-
             self.f = self.F(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 6 * n_contacts, 
@@ -1194,7 +1212,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
             
         if self.config.enable_f_dot:
-
             self.f_dot = self.FDot(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 6 * n_contacts, 
@@ -1205,7 +1222,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self.config.enable_eff:
-
             self.eff = self.Eff(namespace = self.namespace,
                     is_server = self._is_server, 
                     n_dims = 3 + 3 + n_jnts, 
@@ -1216,7 +1232,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
             
         if self.config.enable_costs:
-
             self.costs = self.RHCosts(names = self.config.cost_names, # not needed if client
                     dimensions = self.config.cost_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
@@ -1228,7 +1243,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self.config.enable_constr:
-
             self.cnstr = self.RHConstr(names = self.config.constr_names, # not needed if client
                     dimensions = self.config.constr_dims, # not needed if client
                     n_nodes = n_nodes, # not needed if client 
@@ -1240,7 +1254,6 @@ class RhcInternal(SharedDataBase):
                     safe=safe)
         
         if self._is_server:
-
             self._shared_jnt_names = StringTensorServer(length = len(self._jnt_names), 
                                         basename = self._basename + "Names", 
                                         name_space = self.namespace,
@@ -1248,9 +1261,7 @@ class RhcInternal(SharedDataBase):
                                         vlevel = self._vlevel,
                                         safe = safe,
                                         force_reconnection = force_reconnection)
-            
         else:
-
             self._shared_jnt_names = StringTensorClient(
                                         basename = self._basename + "Names", 
                                         name_space = self.namespace,
@@ -1271,39 +1282,30 @@ class RhcInternal(SharedDataBase):
     def run(self):
 
         if self.q is not None:
-
             self.q.run()
-        
+    
         if self.v is not None:
-
             self.v.run()
         
         if self.a is not None:
-
             self.a.run()
         
         if self.a_dot is not None:
-
             self.a_dot.run()
         
         if self.f is not None:
-
             self.f.run()
             
         if self.f_dot is not None:
-
             self.f_dot.run()
         
         if self.eff is not None:
-
             self.eff.run()
             
         if self.costs is not None:
-
             self.costs.run()
         
         if self.cnstr is not None:
-
             self.cnstr.run()
 
         self._shared_jnt_names.run()
@@ -1311,28 +1313,19 @@ class RhcInternal(SharedDataBase):
         if self._is_server:
             
             if self._jnt_names is None:
-
                 self._jnt_names = [""] * self._n_jnts
-
             else:
-
                 if not len(self._jnt_names) == self._n_jnts:
-                    
                     exception = f"Joint names list length {len(self._jnt_names)} " + \
                         f"does not match the number of joints {self._n_jnts}"
-
                     Journal.log(self.__class__.__name__,
                         "run",
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
-                    
             jnt_names_written = self._shared_jnt_names.write_vec(self._jnt_names, 0)
-
             if not jnt_names_written:
-                
                 exception = "Could not write joint names on shared memory!"
-
                 Journal.log(self.__class__.__name__,
                     "run",
                     exception,
@@ -1344,16 +1337,13 @@ class RhcInternal(SharedDataBase):
             if self.q is not None:
 
                 self._n_jnts = self.q.n_rows - 7
-
                 self._jnt_names = [""] * self._n_jnts
-
                 while not self._shared_jnt_names.read_vec(self._jnt_names, 0):
-
                     Journal.log(self.__class__.__name__,
-                            "run",
-                            "Could not read joint names on shared memory. Retrying...",
-                            LogType.WARN,
-                            throw_when_excep = True)
+                        "run",
+                        "Could not read joint names on shared memory. Retrying...",
+                        LogType.WARN,
+                        throw_when_excep = True)
 
         self._is_running = True
 
@@ -1364,90 +1354,69 @@ class RhcInternal(SharedDataBase):
         # it synchs all available data
         
         if self.q is not None:
-
-            self.q.synch_all(read=read, wait=True)
+            self.q.synch_all(read=read, retry=True)
         
         if self.v is not None:
-
-            self.v.synch_all(read=read, wait=True)
+            self.v.synch_all(read=read, retry=True)
         
         if self.a is not None:
-
-            self.a.synch_all(read=read, wait=True)
+            self.a.synch_all(read=read, retry=True)
         
         if self.a_dot is not None:
-
-            self.a_dot.synch_all(read=read, wait=True)
+            self.a_dot.synch_all(read=read, retry=True)
         
         if self.f is not None:
-
-            self.f.synch_all(read=read, wait=True)
+            self.f.synch_all(read=read, retry=True)
             
         if self.f_dot is not None:
-
-            self.f_dot.synch_all(read=read, wait=True)
+            self.f_dot.synch_all(read=read, retry=True)
         
         if self.eff is not None:
-
-            self.eff.synch_all(read=read, wait=True)
+            self.eff.synch_all(read=read, retry=True)
             
         if self.costs is not None:
-
             self.costs.synch()
         
         if self.cnstr is not None:
-
             self.cnstr.synch()
 
     def close(self):
 
         if self.q is not None:
-
             self.q.close()
         
         if self.v is not None:
-
             self.v.close()
         
         if self.a is not None:
-
             self.a.close()
         
         if self.a_dot is not None:
-
             self.a_dot.close()
         
         if self.f is not None:
-
             self.f.close()
             
         if self.f_dot is not None:
-
             self.f_dot.close()
         
         if self.eff is not None:
-
             self.eff.close()
             
         if self.costs is not None:
-
             self.costs.close()
         
         if self.cnstr is not None:
-
             self.cnstr.close()
         
         if self._shared_jnt_names is not None:
-
             self._shared_jnt_names.close()
 
     def _check_running_or_throw(self,
                         name: str):
 
         if not self.is_running():
-        
             exception = "RhcInternal not initialized. Did you call the run()?"
-
             Journal.log(self.__class__.__name__,
                 name,
                 exception,
@@ -1456,32 +1425,26 @@ class RhcInternal(SharedDataBase):
         
     def write_q(self, 
                 data: np.ndarray = None,
-                wait = True):
+                retry = True):
         
         self._check_running_or_throw("write_q")
-                    
         if (self.q is not None) and (data is not None):
             
-            if wait:
-                
-                self.q.write_wait(data=data,
+            if retry:
+                self.q.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
-
                 self.q.write(data=data,
                         row_index=0, col_index=0)
     
     def write_v(self, 
             data: np.ndarray = None,
-            wait = True):
+            retry = True):
         
         self._check_running_or_throw("write_v")
-        
         if (self.v is not None) and (data is not None):
-            
-            if wait:
-                
-                self.v.write_wait(data=data,
+            if retry:
+                self.v.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
 
@@ -1490,118 +1453,91 @@ class RhcInternal(SharedDataBase):
 
     def write_a(self, 
             data: np.ndarray = None,
-            wait = True):
+            retry = True):
         
         self._check_running_or_throw("write_a")
-        
-        if (self.a is not None) and (data is not None):
-            
-            if wait:
-                
-                self.a.write_wait(data=data,
+        if (self.a is not None) and (data is not None):    
+            if retry:
+                self.a.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
-
                 self.a.write(data=data,
                         row_index=0, col_index=0)
             
     def write_a_dot(self, 
         data: np.ndarray = None,
-        wait = True):
+        retry = True):
 
         self._check_running_or_throw("write_a_dot")
-        
         if (self.a_dot is not None) and (data is not None):
-            
-            if wait:
-                
-                self.a_dot.write_wait(data=data,
+            if retry:
+                self.a_dot.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
-
                 self.a_dot.write(data=data,
                         row_index=0, col_index=0)
     
     def write_f(self, 
         data: np.ndarray = None,
-        wait = True):
+        retry = True):
         
-        self._check_running_or_throw("write_f")
-        
-        if (self.f is not None) and (data is not None):
-            
-            if wait:
-                
-                self.f.write_wait(data=data,
+        self._check_running_or_throw("write_f")  
+        if (self.f is not None) and (data is not None): 
+            if retry:
+                self.f.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
-
                 self.f.write(data=data,
                         row_index=0, col_index=0)
     
     def write_f_dot(self, 
         data: np.ndarray = None,
-        wait = True):
+        retry = True):
 
         self._check_running_or_throw("write_f_dot")
-        
         if (self.f is not None) and (data is not None):
-            
-            if wait:
-                
-                self.f_dot.write_wait(data=data,
+            if retry:
+                self.f_dot.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
-
                 self.f_dot.write(data=data,
                         row_index=0, col_index=0)
     
     def write_eff(self, 
         data: np.ndarray = None,
-        wait = True):
+        retry = True):
 
         self._check_running_or_throw("write_eff")
-
         if (self.eff is not None) and (data is not None):
-            
-            if wait:
-                
-                self.eff.write_wait(data=data,
+            if retry:
+                self.eff.write_retry(data=data,
                         row_index=0, col_index=0)
             else:
-
                 self.eff.write(data=data,
                         row_index=0, col_index=0)
                 
     def write_cost(self, 
                 cost_name: str,
                 data: np.ndarray = None,
-                wait = True):
+                retry = True):
 
         self._check_running_or_throw("write_cost")
-        
         if (self.costs is not None) and (data is not None):
-
             self.costs.write(data = data, 
                             name=cost_name,
-                            wait=wait)
+                            retry=retry)
     
     def read_cost(self, 
             cost_name: str,
-            wait = True):
+            retry = True):
         
         self._check_running_or_throw("read_cost")
-
         if self.costs is not None:
-            
             return self.costs.get(cost_name)
-        
         else:
-            
             exception = "Cannot retrieve costs. Make sure to provide cost names and dims to Config."
-
             Journal.log(self.__class__.__name__,
-                name,
+                "read_cost",
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
@@ -1609,32 +1545,25 @@ class RhcInternal(SharedDataBase):
     def write_constr(self, 
                 constr_name: str,
                 data: np.ndarray = None,
-                wait = True):
-
-        self._check_running_or_throw("write_constr")
+                retry = True):
         
+        self._check_running_or_throw("write_constr")
         if (self.cnstr is not None) and (data is not None):
-            
             self.cnstr.write(data = data, 
                             name=constr_name,
-                            wait=wait)
+                            retry=retry)
             
     def read_constr(self, 
             constr_name,
-            wait = True):
+            retry = True):
         
         self._check_running_or_throw("read_constr")
-        
         if self.cnstr is not None:
-            
             return self.cnstr.get(constr_name)
-        
         else:
-            
             exception = "Cannot retrieve constraints. Make sure to provide cost names and dims to Config."
-
             Journal.log(self.__class__.__name__,
-                name,
+                "read_constr",
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
