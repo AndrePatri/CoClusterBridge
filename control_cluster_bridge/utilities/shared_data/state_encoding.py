@@ -31,8 +31,6 @@ class JntsState(SharedTWrapper):
         
         basename = "JntsState" 
 
-        self._with_torch_view = with_torch_view
-
         n_cols = None
         if n_jnts is not None:
             n_cols = 4 * n_jnts # jnts config., vel., acc., torques
@@ -42,7 +40,8 @@ class JntsState(SharedTWrapper):
         self.jnt_names = jnt_names
 
         self._jnts_remapping = None
-        
+        self._jnts_remapping_gpu = None
+
         if is_server:
             self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
                                         basename = basename + "Names", 
@@ -142,12 +141,13 @@ class JntsState(SharedTWrapper):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-                
             if self._with_torch_view:
                 import torch
-                self._jnts_remapping = torch.tensor(jnts_remapping)
+                self._jnts_remapping = torch.tensor(jnts_remapping, dtype=torch.int64)
+                if self.with_gpu_mirror:
+                    self._jnts_remapping_gpu = torch.tensor(jnts_remapping, dtype=torch.int64, device="cuda")
             else:
-                self._jnts_remapping = np.array(jnts_remapping)
+                self._jnts_remapping = np.array(jnts_remapping, dtype=np.int64)
         
     def _check_running(self,
                 calling_method: str):
@@ -270,18 +270,15 @@ class RootState(SharedTWrapper):
             fill_value = 0):
         
         basename = "RootState" 
-
-        self._with_torch_view = with_torch_view
         
         n_cols = 13 # p, q, v, omega + 
 
         self.n_robots = n_robots
 
         self._q_remapping = None
-
-        if q_remapping is not None:
-
-            self.set_q_remapping(q_remapping)
+        self._q_full_remapping = None
+        self._q_remapping_gpu = None
+        self._q_full_remapping_gpu = None
 
         super().__init__(namespace = namespace,
             basename = basename,
@@ -296,7 +293,10 @@ class RootState(SharedTWrapper):
             force_reconnection=force_reconnection,
             with_gpu_mirror=with_gpu_mirror,
             with_torch_view=with_torch_view)
-
+        
+        if q_remapping is not None:
+            self.set_q_remapping(q_remapping)
+            
         # views of the underlying memory view of the 
         # actual shared memory (crazy, eh?)
 
@@ -340,22 +340,27 @@ class RootState(SharedTWrapper):
         if q_remapping is not None:
 
             if not len(q_remapping) == 4:
-
                 exception = f"Provided q remapping length {len(q_remapping)}" + \
                     f"is not 4!"
-
                 Journal.log(self.__class__.__name__,
                     "update_jnts_remapping",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
 
+            q_remap_full_list = [0, 1, 2] + (np.array(q_remapping)+3).tolist()
+
             if self._with_torch_view:
                 import torch
-                self._q_remapping = torch.tensor(q_remapping)
+                self._q_remapping = torch.tensor(q_remapping, dtype=torch.int64)
+                self._q_full_remapping = torch.tensor(q_remap_full_list, dtype=torch.int64)
+                if self._with_gpu_mirror:
+                    self._q_remapping_gpu = torch.tensor(q_remapping, dtype=torch.int64, device="cuda")
+                    self._q_full_remapping_gpu = torch.tensor(q_remap_full_list, dtype=torch.int64, device="cuda")
             else:
-                self._q_remapping = np.array(q_remapping)
-                
+                self._q_remapping = np.array(q_remapping, dtype=np.int64)
+                self._q_full_remapping = np.array(q_remap_full_list, dtype=np.int64)
+
     def _init_views(self):
 
         # root
@@ -393,34 +398,34 @@ class RootState(SharedTWrapper):
         
         if not gpu:
             if name == "p":
-                return self._p
+                return self._p, None
             elif name == "q":
-                return self._q
+                return self._q, self._q_remapping
             elif name == "q_full":
-                return self._q_full
+                return self._q_full, self._q_full_remapping
             elif name == "v":
-                return self._v
+                return self._v, None
             elif name == "omega":
-                return self._omega
+                return self._omega, None
             elif name == "v_full":
-                return self._v_full
+                return self._v_full, None
             else:
-                return None
+                return None, None
         else:
             if name == "p":
-                return self._p_gpu
+                return self._p_gpu, None
             elif name == "q":
-                return self._q_gpu
+                return self._q_gpu, self._q_remapping_gpu
             elif name == "q_full":
-                return self._q_full_gpu
+                return self._q_full_gpu, self._q_full_remapping_gpu
             elif name == "v":
-                return self._v_gpu
+                return self._v_gpu, None
             elif name == "omega":
-                return self._omega_gpu
+                return self._omega_gpu, None
             elif name == "v_full":
-                return self._v_full_gpu
+                return self._v_full_gpu, None
             else:
-                return None
+                return None, None
     
     def set(self,
             data,
@@ -428,38 +433,38 @@ class RootState(SharedTWrapper):
             robot_idxs= None,
             gpu: bool = False):
 
-        internal_data = self._retrieve_data(name=data_type,
+        internal_data, remapping = self._retrieve_data(name=data_type,
                     gpu=gpu)
         
-        if self._q_remapping is None:
+        if remapping is None:
             if robot_idxs is None:
                 internal_data[:, :] = data
             else:
                 internal_data[robot_idxs, :] = data
         else:
             if robot_idxs is None:
-                internal_data[:, self._q_remapping] = data
+                internal_data[:, remapping] = data
             else:
-                internal_data[robot_idxs, self._q_remapping] = data
+                internal_data[robot_idxs, remapping] = data
 
     def get(self,
         data_type: str,
         robot_idxs = None,
         gpu: bool = False):
 
-        internal_data = self._retrieve_data(name=data_type,
+        internal_data, remapping = self._retrieve_data(name=data_type,
                     gpu=gpu)
             
-        if self._q_remapping is None:
+        if remapping is None:
             if robot_idxs is None:
                 return internal_data
             else:
                 return internal_data[robot_idxs, :]
         else:
             if robot_idxs is None:
-                return internal_data[:, self._q_remapping]
+                return internal_data[:, remapping]
             else:
-                return internal_data[robot_idxs, self._q_remapping]
+                return internal_data[robot_idxs, remapping]
             
 class ContactWrenches(SharedTWrapper):
 
@@ -478,9 +483,6 @@ class ContactWrenches(SharedTWrapper):
             fill_value = 0):
         
         basename = "ContactWrenches"
-        if with_torch_view:
-            import torch
-        self._with_torch_view = with_torch_view
 
         self.n_robots = n_robots
         self.n_contacts = n_contacts
@@ -494,7 +496,6 @@ class ContactWrenches(SharedTWrapper):
                                         vlevel = vlevel,
                                         safe = safe,
                                         force_reconnection = force_reconnection)
-
         else:
             self.shared_contact_names = StringTensorClient(
                                         basename = basename + "Names", 
@@ -663,12 +664,12 @@ class ContactWrenches(SharedTWrapper):
                 exception,
                 LogType.EXCEP,
                 throw_when_excep = True)
-        index = self.contact_names.index(contact_name)
+        contact_idx = self.contact_names.index(contact_name)
 
         if robot_idxs is None:
-            return internal_data[:, (index * 3):((index+1) * 3)]
+            return internal_data[:, (contact_idx * 3):((contact_idx+1) * 3)]
         else:
-            return internal_data[robot_idxs, (index * 3):((index+1) * 3)]
+            return internal_data[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)]
 
 class FullRobState(SharedDataBase):
 
