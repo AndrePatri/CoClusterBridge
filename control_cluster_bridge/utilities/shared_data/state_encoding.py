@@ -110,7 +110,6 @@ class JntsState(SharedTWrapper):
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
-                    
             jnt_names_written = self.shared_jnt_names.write_vec(self.jnt_names, 0)
             if not jnt_names_written:
                 exception = "Could not write joint names on shared memory!"

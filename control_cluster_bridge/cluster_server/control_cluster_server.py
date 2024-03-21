@@ -392,7 +392,7 @@ class ControlClusterServer(ABC):
         
         if not just_activated.shape[0] == 0:
             if gpu:
-                just_activated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
+                return just_activated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
             else:
                 return just_activated
         else:
@@ -410,7 +410,7 @@ class ControlClusterServer(ABC):
     
         if not just_deactivated.shape[0] == 0:
             if gpu:
-                just_deactivated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
+                return just_deactivated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
             else:
                 return just_deactivated        
         else:
@@ -423,7 +423,7 @@ class ControlClusterServer(ABC):
         now_active = torch.nonzero(self._now_active.squeeze(dim=1)).squeeze(dim=1)
         if not now_active.shape[0] == 0:
             if gpu:
-                now_active.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
+                return now_active.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
             else:
                 return now_active    
         else:
@@ -436,7 +436,7 @@ class ControlClusterServer(ABC):
         not_active = torch.nonzero((~self._now_active).squeeze(dim=1)).squeeze(dim=1)
         if not not_active.shape[0] == 0:
             if gpu:
-                not_active.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
+                return not_active.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
             else:
                 return not_active
         else:
@@ -449,7 +449,7 @@ class ControlClusterServer(ABC):
         failed = torch.nonzero(self._failed.squeeze(dim=1)).squeeze(dim=1)
         if not failed.shape[0] == 0:
             if gpu:
-                failed.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
+                return failed.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
             else:
                 return failed
         else:
@@ -462,7 +462,7 @@ class ControlClusterServer(ABC):
         registered = torch.nonzero(self._registered.squeeze(dim=1)).squeeze(dim=1)
         if not registered.shape[0] == 0:
             if gpu:
-                registered.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
+                return registered.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
             else:
                 return registered
         else:
