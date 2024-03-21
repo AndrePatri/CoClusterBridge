@@ -821,24 +821,16 @@ class FullRobState(SharedDataBase):
                 from_gpu: bool):
 
         if self._with_gpu_mirror:
-            
             if from_gpu:
-                
                 # synchs root_state and jnt_state (which will normally live on GPU)
                 # with the shared state data using the aggregate view (normally on CPU)
-
-                # this requires a couple of (not so nice) COPIES FROM GPU TO CPU
-                
+                # this requires (not so nice) COPIES FROM GPU TO CPU
                 self.root_state.synch_mirror(from_gpu=True)
                 self.jnts_state.synch_mirror(from_gpu=True)
                 self.contact_wrenches.synch_mirror(from_gpu=True)
-
                 self.synch_to_shared_mem()
-
             else:
-                
                 self.synch_from_shared_mem()
-
                 # copy from CPU to GPU
                 self.root_state.synch_mirror(from_gpu=False)
                 self.jnts_state.synch_mirror(from_gpu=False)
