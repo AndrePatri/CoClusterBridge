@@ -329,75 +329,37 @@ class JntImpMonitor(SharedDataWindow):
 
         if not self._terminated:
             
+            imp_data = self.shared_data_clients[0].imp_data_view
+            imp_data.synch_all(read=True, retry=True)
+
             # pos VS pos ref
-            self.shared_data_clients[0].pos_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].pos_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].pos_view.n_cols) 
-                                                       
-            self.shared_data_clients[0].pos_ref_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].pos_ref_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].pos_ref_view.n_cols)
+            pos = imp_data.get(data_type="pos")
+            pos_ref = imp_data.get(data_type="pos_ref")
+            vel = imp_data.get(data_type="vel")
+            vel_ref = imp_data.get(data_type="vel_ref")
+            eff = imp_data.get(data_type="eff")
+            eff_ff = imp_data.get(data_type="eff_ff")
+            imp_eff  = imp_data.get(data_type="imp_eff")
+            pos_gains = imp_data.get(data_type="pos_gains")
+            vel_gains = imp_data.get(data_type="vel_gains")
+            pos_err = imp_data.get(data_type="pos_err")
+            vel_err = imp_data.get(data_type="vel_err")
 
-            pos_vs_pos_ref = np.concatenate((self.shared_data_clients[0].pos_view.get_numpy_view()[index, :],
-                                            self.shared_data_clients[0].pos_ref_view.get_numpy_view()[index, :]), 
+            pos_vs_pos_ref = np.concatenate((pos[index, :],
+                                            pos_ref[index, :]), 
                                             axis=0) 
-
+            vel_vs_vel_ref = np.concatenate((vel[index, :],
+                                            vel_ref[index, :]), 
+                                            axis=0) 
+            eff_vs_imp_eff = np.concatenate((eff[index, :],
+                                            imp_eff[index, :]), 
+                                            axis=0) 
+            
             self.rt_plotters[0].rt_plot_widget.update(pos_vs_pos_ref.flatten())
-
-            # vel VS vel ref
-            self.shared_data_clients[0].vel_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].vel_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].vel_view.n_cols) # synch data
-            self.shared_data_clients[0].vel_ref_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].vel_ref_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].vel_ref_view.n_cols) # synch data
-
-            vel_vs_vel_ref = np.concatenate((self.shared_data_clients[0].vel_view.get_numpy_view()[index, :],
-                                            self.shared_data_clients[0].vel_ref_view.get_numpy_view()[index, :]), 
-                                            axis=0) 
-
             self.rt_plotters[1].rt_plot_widget.update(vel_vs_vel_ref.flatten())
-
-            # meas. eff VS imp. effort
-            self.shared_data_clients[0].eff_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].eff_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].eff_view.n_cols) # synch data
-            self.shared_data_clients[0].imp_eff_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].imp_eff_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].imp_eff_view.n_cols) # synch data
-
-            eff_vs_imp_eff = np.concatenate((self.shared_data_clients[0].eff_view.get_numpy_view()[index, :],
-                                            self.shared_data_clients[0].imp_eff_view.get_numpy_view()[index, :]), 
-                                            axis=0) 
-
-            self.rt_plotters[2].rt_plot_widget.update(eff_vs_imp_eff.flatten())
-
-            # pos gains
-            self.shared_data_clients[0].pos_gains_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].pos_gains_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].pos_gains_view.n_cols) # synch data
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].pos_gains_view.get_numpy_view()[index, :].flatten())
-
-            # vel gains
-            self.shared_data_clients[0].vel_gains_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].vel_gains_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].vel_gains_view.n_cols) # synch data
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].vel_gains_view.get_numpy_view()[index, :].flatten())
-
-            # pos error
-            self.shared_data_clients[0].pos_err_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].pos_err_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].pos_err_view.n_cols) # synch data
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].pos_err_view.get_numpy_view()[index, :].flatten())
-
-            # vel error
-            self.shared_data_clients[0].vel_err_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].vel_err_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].vel_err_view.n_cols) # synch data
-            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].vel_err_view.get_numpy_view()[index, :].flatten())
-
-            # eff. feedforward  
-            self.shared_data_clients[0].eff_ff_view.synch(read=True, row_index = 0, col_index = 0, 
-                                            n_rows = self.shared_data_clients[0].eff_ff_view.n_rows, 
-                                            n_cols = self.shared_data_clients[0].eff_ff_view.n_cols) # synch data
-            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].eff_ff_view.get_numpy_view()[index, :].flatten())
+            self.rt_plotters[2].rt_plot_widget.update(eff_vs_imp_eff.flatten())    
+            self.rt_plotters[3].rt_plot_widget.update(pos_gains[index, :].flatten())
+            self.rt_plotters[4].rt_plot_widget.update(vel_gains[index, :].flatten())
+            self.rt_plotters[5].rt_plot_widget.update(pos_err[index, :].flatten())
+            self.rt_plotters[6].rt_plot_widget.update(vel_err[index, :].flatten())
+            self.rt_plotters[7].rt_plot_widget.update(eff_ff[index, :].flatten())

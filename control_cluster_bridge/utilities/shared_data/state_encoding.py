@@ -319,15 +319,10 @@ class RootState(SharedTWrapper):
             q_remapping: List[int] = None):
         
         # overriding parent 
-
         super().run()
-        
         if not self.is_server:
-
             self.n_robots = self.n_rows
-
         self._init_views()
-
         self.set_q_remapping(q_remapping)
 
     def get_remapping(self):
@@ -649,28 +644,33 @@ class ContactWrenches(SharedTWrapper):
         
     def get(self,
             data_type: str,
-            contact_name: str,
+            contact_name: str = None,
             robot_idxs = None,
             gpu: bool = False):
 
         internal_data = self._retrieve_data(name=data_type,
                     gpu=gpu)
         
-        if not contact_name in self.contact_names:
-            contact_list = "\t".join(self.contact_names)
-            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
-            Journal.log(self.__class__.__name__,
-                "get_f_contact",
-                exception,
-                LogType.EXCEP,
-                throw_when_excep = True)
-        contact_idx = self.contact_names.index(contact_name)
-
-        if robot_idxs is None:
-            return internal_data[:, (contact_idx * 3):((contact_idx+1) * 3)]
+        if contact_name is not None:
+            if not contact_name in self.contact_names:
+                contact_list = "\t".join(self.contact_names)
+                exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+                Journal.log(self.__class__.__name__,
+                    "get_f_contact",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            contact_idx = self.contact_names.index(contact_name)
+            if robot_idxs is None:
+                return internal_data[:, (contact_idx * 3):((contact_idx+1) * 3)]
+            else:
+                return internal_data[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)]
         else:
-            return internal_data[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)]
-
+            if robot_idxs is None:
+                return internal_data[:, :]
+            else:
+                return internal_data[robot_idxs, :]
+            
 class FullRobState(SharedDataBase):
 
     def __init__(self,

@@ -12,8 +12,6 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 
-import torch
-
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
 
 import numpy as np
@@ -46,7 +44,7 @@ class FullRobStateWindow(SharedDataWindow):
 
     def _initialize(self):
 
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get_p().shape[1],
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get(data_type="p").shape[1],
                     n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
@@ -58,7 +56,7 @@ class FullRobStateWindow(SharedDataWindow):
                     ylabel="[m]"))
         
         self.rt_plotters.append(RtPlotWindow(
-                    data_dim=self.shared_data_clients[0].root_state.get_q().shape[1],
+                    data_dim=self.shared_data_clients[0].root_state.get(data_type="q").shape[1],
                     n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
@@ -68,7 +66,7 @@ class FullRobStateWindow(SharedDataWindow):
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=["q_w", "q_i", "q_j", "q_k"]))
         
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get_v().shape[1],
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get(data_type="v").shape[1],
                     n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
@@ -79,7 +77,7 @@ class FullRobStateWindow(SharedDataWindow):
                     legend_list=["v_x", "v_y", "v_z"], 
                     ylabel="[m/s]"))
         
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get_omega().shape[1],
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].root_state.get(data_type="omega").shape[1],
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
@@ -191,23 +189,22 @@ class FullRobStateWindow(SharedDataWindow):
             
             # update from shared mem
             self.shared_data_clients[0].synch_from_shared_mem()
-
-            torch_idx = torch.tensor(index)
+            np_idx = np.array(index)
 
             # root state
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_p(robot_idxs=torch_idx).numpy().flatten())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_q(robot_idxs=torch_idx).numpy().flatten())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_v(robot_idxs=torch_idx).numpy().flatten())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].root_state.get_omega(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].root_state.get(data_type="p", robot_idxs=np_idx).flatten())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].root_state.get(data_type="q", robot_idxs=np_idx).flatten())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].root_state.get(data_type="v", robot_idxs=np_idx).flatten())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].root_state.get(data_type="omega", robot_idxs=np_idx).flatten())
 
             # joint state
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_q(robot_idxs=torch_idx).numpy().flatten())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_v(robot_idxs=torch_idx).numpy().flatten())
-            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_a(robot_idxs=torch_idx).numpy().flatten())
-            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get_eff(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get(data_type="q",robot_idxs=np_idx).flatten())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get(data_type="v",robot_idxs=np_idx).flatten())
+            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get(data_type="a",robot_idxs=np_idx).flatten())
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].jnts_state.get(data_type="eff",robot_idxs=np_idx).flatten())
 
             # contact state
-            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get_w(robot_idxs=torch_idx).numpy().flatten())
+            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get(data_type="w", robot_idxs=np_idx).flatten())
 
 class RobotStates(FullRobStateWindow):
 
@@ -299,7 +296,7 @@ class RHCRefs(SharedDataWindow):
 
         jnt_leg_full = jnt_ref_names + self.shared_data_clients[0].rob_refs.jnt_names()
 
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get_p().shape[1],
+        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get(data_type="p").shape[1],
                     n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
@@ -312,7 +309,7 @@ class RHCRefs(SharedDataWindow):
                     ylabel="[m]"))
         
         self.rt_plotters.append(RtPlotWindow(
-                    data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get_q().shape[1],
+                    data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get(data_type="q").shape[1],
                     n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
@@ -323,7 +320,7 @@ class RHCRefs(SharedDataWindow):
                     legend_list=["q_w_ref", "q_i_ref", "q_j_ref", "q_k_ref",
                             "q_w", "q_i", "q_j", "q_k"]))
         
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get_v().shape[1],
+        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get(data_type="v").shape[1],
                     n_data = 1,
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
@@ -335,7 +332,7 @@ class RHCRefs(SharedDataWindow):
                             "v_x", "v_y", "v_z"], 
                     ylabel="[m/s]"))
         
-        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get_omega().shape[1],
+        self.rt_plotters.append(RtPlotWindow(data_dim=2 * self.shared_data_clients[0].rob_refs.root_state.get(data_type="omega").shape[1],
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt, 
@@ -412,22 +409,22 @@ class RHCRefs(SharedDataWindow):
 
             self.shared_data_clients[1].synch_from_shared_mem()
 
-            torch_idx = torch.tensor(index)
+            np_idx = np.array(index)
 
-            p_ref = self.shared_data_clients[0].rob_refs.root_state.get_p(robot_idxs=torch_idx).numpy().flatten()
-            p_meas = self.shared_data_clients[1].root_state.get_p(robot_idxs=torch_idx).numpy().flatten()
+            p_ref = self.shared_data_clients[0].rob_refs.root_state.get(data_type="p",robot_idxs=np_idx).flatten()
+            p_meas = self.shared_data_clients[1].root_state.get(data_type="p",robot_idxs=np_idx).flatten()
             p_full = np.concatenate((p_ref, p_meas)) 
                         
-            q_ref = self.shared_data_clients[0].rob_refs.root_state.get_q(robot_idxs=torch_idx).numpy().flatten()
-            q_meas = self.shared_data_clients[1].root_state.get_q(robot_idxs=torch_idx).numpy().flatten()
+            q_ref = self.shared_data_clients[0].rob_refs.root_state.get(data_type="q",robot_idxs=np_idx).flatten()
+            q_meas = self.shared_data_clients[1].root_state.get(data_type="q",robot_idxs=np_idx).flatten()
             q_full = np.concatenate((q_ref, q_meas)) 
 
-            v_ref = self.shared_data_clients[0].rob_refs.root_state.get_v(robot_idxs=torch_idx).numpy().flatten()
-            v_meas = self.shared_data_clients[1].root_state.get_v(robot_idxs=torch_idx).numpy().flatten()
+            v_ref = self.shared_data_clients[0].rob_refs.root_state.get(data_type="v",robot_idxs=np_idx).flatten()
+            v_meas = self.shared_data_clients[1].root_state.get(data_type="v",robot_idxs=np_idx).flatten()
             v_full = np.concatenate((v_ref, v_meas)) 
 
-            omega_ref = self.shared_data_clients[0].rob_refs.root_state.get_omega(robot_idxs=torch_idx).numpy().flatten()
-            omega_meas = self.shared_data_clients[1].root_state.get_omega(robot_idxs=torch_idx).numpy().flatten()
+            omega_ref = self.shared_data_clients[0].rob_refs.root_state.get(data_type="omega",robot_idxs=np_idx).flatten()
+            omega_meas = self.shared_data_clients[1].root_state.get(data_type="omega",robot_idxs=np_idx).flatten()
             omega_full = np.concatenate((omega_ref, omega_meas)) 
 
             # # root state
@@ -436,8 +433,10 @@ class RHCRefs(SharedDataWindow):
             self.rt_plotters[2].rt_plot_widget.update(v_full)
             self.rt_plotters[3].rt_plot_widget.update(omega_full)
 
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].contact_flags.get_numpy_view()[index, :])
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].phase_id.get_numpy_view()[index, :])
+            contact_flags = self.shared_data_clients[0].contact_flags.get_numpy_view()
+            phase_id = self.shared_data_clients[0].phase_id.get_numpy_view()
+            self.rt_plotters[4].rt_plot_widget.update(contact_flags[index, :])
+            self.rt_plotters[5].rt_plot_widget.update(phase_id[index, :])
 
 class RHCInternal(SharedDataWindow):
 
@@ -922,7 +921,7 @@ class RHCProfiling(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        self.grid_n_rows = 4
+        self.grid_n_rows = 3
 
         self.grid_n_cols = 2
 

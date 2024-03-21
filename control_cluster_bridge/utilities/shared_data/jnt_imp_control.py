@@ -11,529 +11,6 @@ from typing import List
 import torch
 
 # Joint impedance control debug data
-class JntImpCntrlDataOld(SharedDataBase):
-
-    class PosErrView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "PosErr" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                safe=safe,
-                with_torch_view = True,
-                with_gpu_mirror = with_gpu_mirror)
-    
-    class VelErrView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "VelErr" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                safe=safe,
-                with_torch_view = True,
-                with_gpu_mirror = with_gpu_mirror)
-    
-    class PosGainsView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "PosGain" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-    
-    class VelGainsView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "VelGain" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class PosView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "Pos" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class VelView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "Vel" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class EffView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "Eff" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class PosRefView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "PosRef" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class VelRefView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "VelRef" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class EffFFView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "EffFF" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    class ImpEffView(SharedTWrapper):
-
-        def __init__(self,
-                namespace = "",
-                is_server = False, 
-                n_envs: int = -1, 
-                n_jnts: int = -1, 
-                verbose: bool = False, 
-                vlevel: VLevel = VLevel.V0,
-                force_reconnection: bool = False,
-                safe: bool = True,
-                with_gpu_mirror: bool = False):
-            
-            basename = "ImpEff" # hardcoded
-
-            super().__init__(namespace = namespace,
-                basename = basename,
-                is_server = is_server, 
-                n_rows = n_envs, 
-                n_cols = n_jnts, 
-                verbose = verbose, 
-                vlevel = vlevel,
-                force_reconnection=force_reconnection,
-                with_torch_view = True,
-                safe=safe,
-                with_gpu_mirror = with_gpu_mirror)
-
-    def __init__(self, 
-            is_server = False, 
-            n_envs: int = -1, 
-            n_jnts: int = -1,
-            jnt_names: List[str] = [""],
-            namespace = "", 
-            verbose = False, 
-            vlevel: VLevel = VLevel.V0,
-            force_reconnection: bool = False,
-            safe: bool = True,
-            use_gpu: bool = False):
-
-        self.is_server = is_server
-
-        self.n_envs = n_envs
-        self.n_jnts = n_jnts
-
-        self.jnt_names = jnt_names
-
-        self.verbose = verbose
-        self.vlevel = vlevel
-        
-        self._use_gpu = use_gpu
-        if self.is_server:
-
-            self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
-                                        basename = "JntImpCntrlSharedJntNames", 
-                                        name_space = namespace,
-                                        verbose = self.verbose, 
-                                        vlevel = self.vlevel,
-                                        force_reconnection = force_reconnection,
-                                        safe = safe)
-
-        else:
-
-            self.shared_jnt_names = StringTensorClient(
-                                        basename = "JntImpCntrlSharedJntNames", 
-                                        name_space = namespace,
-                                        verbose = self.verbose, 
-                                        vlevel = self.vlevel,
-                                        safe = safe)
-
-        self.pos_err_view = self.PosErrView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-        
-        self.vel_err_view = self.VelErrView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-        
-        self.pos_gains_view = self.PosGainsView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.vel_gains_view = self.VelGainsView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.eff_ff_view = self.EffFFView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.pos_view = self.PosView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-        
-        self.pos_ref_view = self.PosRefView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.vel_view = self.VelView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.vel_ref_view = self.VelRefView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.eff_view = self.EffView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-
-        self.imp_eff_view = self.ImpEffView(is_server = self.is_server, 
-                                    n_envs = self.n_envs, 
-                                    n_jnts = self.n_jnts,
-                                    namespace = namespace, 
-                                    verbose = self.verbose, 
-                                    vlevel = self.vlevel,
-                                    force_reconnection=force_reconnection,
-                                    safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-        
-        self._is_runnning = False
-
-    def __del__(self):
-
-        self.terminate()
-
-    def is_running(self):
-        
-        return self._is_runnning
-
-    def run(self):
-        
-        self.pos_err_view.run()
-        self.vel_err_view.run()
-        self.pos_gains_view.run()
-        self.vel_gains_view.run()
-        self.eff_ff_view.run()
-        self.pos_view.run()
-        self.pos_ref_view.run()
-        self.vel_view.run()
-        self.vel_ref_view.run()
-        self.eff_view.run()
-        self.imp_eff_view.run()
-
-        # in case we are clients
-        self.n_envs = self.pos_err_view.n_rows
-        self.n_jnts = self.pos_err_view.n_cols
-
-        # retrieving joint names
-        self.shared_jnt_names.run()
-
-        if self.is_server:
-
-            jnt_names_written = self.shared_jnt_names.write_vec(self.jnt_names, 0)
-
-            if not jnt_names_written:
-                
-                exception = f"Could not write joint names on shared memory!"
-
-                Journal.log(self.__class__.__name__,
-                    "run",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
-                        
-        else:
-            
-            self.jnt_names = [""] * self.n_jnts
-
-            while not self.shared_jnt_names.read_vec(self.jnt_names, 0):
-
-                Journal.log(self.__class__.__name__,
-                        "run",
-                        "Could not read joint names on shared memory. Retrying...",
-                        LogType.WARN,
-                        throw_when_excep = True)
-                
-    def close(self):
-        
-        self.pos_err_view.close()
-        self.vel_err_view.close()
-        self.pos_gains_view.close()
-        self.vel_gains_view.close()
-        self.eff_ff_view.close()
-        self.pos_view.close()
-        self.pos_ref_view.close()
-        self.vel_view.close()
-        self.vel_ref_view.close()
-        self.eff_view.close()
-        self.imp_eff_view.close()
-
-        self.shared_jnt_names.close()
 
 class JntImpCntrlData(SharedDataBase):
 
@@ -548,42 +25,167 @@ class JntImpCntrlData(SharedDataBase):
                 vlevel: VLevel = VLevel.V0,
                 force_reconnection: bool = False,
                 safe: bool = True,
-                with_gpu_mirror: bool = False):
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
             
             basename = "ImpedanceData" # hardcoded
             
             # the way data is ordered is in a tensor of shape
             # [n_envs x (n_jns x n_fields)]
             # Along columns 
-            self._fields = ["pos_err", "vel_err", "pos_gains", "vel_gains", "eff_ff", 
-                "pos", "pos_ref", "vel", "vel_ref", 
-                "eff", "imp_eff"]
-            n_fields = len(self._fields)
-            
-            self._n_jnts = n_jnts
 
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
                 n_rows = n_envs, 
-                n_cols = n_jnts * n_fields, 
+                n_cols = n_jnts * 11, 
                 verbose = verbose, 
                 vlevel = vlevel,
                 force_reconnection=force_reconnection,
                 safe=safe,
-                with_torch_view = True,
+                with_torch_view = with_torch_view,
                 with_gpu_mirror = with_gpu_mirror)
 
+            self._pos_err = None
+            self._vel_err = None
+            self._pos_gains = None
+            self._vel_gains = None
+            self._eff_ff = None
+            self._pos = None
+            self._pos_ref = None
+            self._vel = None
+            self._vel_ref = None
+            self._eff = None
+            self._imp_eff = None
+            
+            self.n_jnts = None
+
+        def _init_views(self):
+
+            if self._with_torch_view:
+                self._pos_err = self.get_torch_view()[:, 0:self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_err = self.get_torch_view()[:, 1*self.n_jnts:2*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._pos_gains = self.get_torch_view()[:, 2*self.n_jnts:3*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_gains = self.get_torch_view()[:, 3*self.n_jnts:4*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._eff_ff = self.get_torch_view()[:, 4*self.n_jnts:5*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._pos = self.get_torch_view()[:, 5*self.n_jnts:6*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._pos_ref = self.get_torch_view()[:, 6*self.n_jnts:7*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel = self.get_torch_view()[:, 7*self.n_jnts:8*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_ref = self.get_torch_view()[:, 8*self.n_jnts:9*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._eff = self.get_torch_view()[:, 9*self.n_jnts:10*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._imp_eff = self.get_torch_view()[:, 10*self.n_jnts:11*self.n_jnts].view(self.n_rows, self.n_jnts)
+            else:
+                self._pos_err = self.get_numpy_view()[:, 0:self.n_jnts].view()
+                self._vel_err = self.get_numpy_view()[:, 1*self.n_jnts:2*self.n_jnts].view()
+                self._pos_gains = self.get_numpy_view()[:, 2*self.n_jnts:3*self.n_jnts].view()
+                self._vel_gains = self.get_numpy_view()[:, 3*self.n_jnts:4*self.n_jnts].view()
+                self._eff_ff = self.get_numpy_view()[:, 4*self.n_jnts:5*self.n_jnts].view()
+                self._pos = self.get_numpy_view()[:, 5*self.n_jnts:6*self.n_jnts].view()
+                self._pos_ref = self.get_numpy_view()[:, 6*self.n_jnts:7*self.n_jnts].view()
+                self._vel = self.get_numpy_view()[:, 7*self.n_jnts:8*self.n_jnts].view()
+                self._vel_ref = self.get_numpy_view()[:, 8*self.n_jnts:9*self.n_jnts].view()
+                self._eff = self.get_numpy_view()[:, 9*self.n_jnts:10*self.n_jnts].view()
+                self._imp_eff = self.get_numpy_view()[:, 10*self.n_jnts:11*self.n_jnts].view()
+                self._p = self.get_numpy_view()[:, 0:3].view()
+            if self.gpu_mirror_exists():
+                # gpu views
+                self._pos_err_gpu = self._gpu_mirror[:, 0:self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_err_gpu = self._gpu_mirror[:, 1*self.n_jnts:2*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._pos_gains_gpu = self._gpu_mirror[:, 2*self.n_jnts:3*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_gains_gpu = self._gpu_mirror[:, 3*self.n_jnts:4*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._eff_ff_gpu = self._gpu_mirror[:, 4*self.n_jnts:5*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._pos_gpu = self._gpu_mirror[:, 5*self.n_jnts:6*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._pos_ref_gpu = self._gpu_mirror[:, 6*self.n_jnts:7*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_gpu = self._gpu_mirror[:, 7*self.n_jnts:8*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._vel_ref_gpu = self._gpu_mirror[:, 8*self.n_jnts:9*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._eff_gpu = self._gpu_mirror[:, 9*self.n_jnts:10*self.n_jnts].view(self.n_rows, self.n_jnts)
+                self._imp_eff_gpu = self._gpu_mirror[:, 10*self.n_jnts:11*self.n_jnts].view(self.n_rows, self.n_jnts)
+
+        def _retrieve_data(self,
+                name: str,
+                gpu: bool = False):
+        
+            if not gpu:
+                if name == "pos_err":
+                    return self._pos_err
+                if name == "vel_err":
+                    return self._vel_err
+                if name == "pos_gains":
+                    return self._pos_gains
+                if name == "vel_gains":
+                    return self._vel_gains
+                if name == "eff_ff":
+                    return self._eff_ff
+                if name == "pos":
+                    return self._pos
+                if name == "pos_ref":
+                    return self._pos_ref
+                if name == "vel":
+                    return self._vel
+                if name == "vel_ref":
+                    return self._vel_ref
+                if name == "eff":
+                    return self._eff
+                if name == "imp_eff":
+                    return self._imp_eff
+                else:
+                    return None
+            else:
+                if name == "pos_err":
+                    return self._pos_err_gpu
+                if name == "vel_err":
+                    return self._vel_err_gpu
+                if name == "pos_gains":
+                    return self._pos_gains_gpu
+                if name == "vel_gains":
+                    return self._vel_gains_gpu
+                if name == "eff_ff":
+                    return self._eff_ff_gpu
+                if name == "pos":
+                    return self._pos_gpu
+                if name == "pos_ref":
+                    return self._pos_ref_gpu
+                if name == "vel":
+                    return self._vel_gpu
+                if name == "vel_ref":
+                    return self._vel_ref_gpu
+                if name == "eff":
+                    return self._eff_gpu
+                if name == "imp_eff":
+                    return self._imp_eff_gpu
+                else:
+                    return None
+            
+        def run(self):
+            super().run()
+            self.n_jnts = int(self.n_cols / 11)
+            self._init_views()
+
         def set(self,
-            name: str,
-            data: torch.Tensor):
+            data,
+            data_type: str,
+            robot_idxs= None,
+            gpu: bool = False):
 
-            idxs = self._fields.index(name)
+            internal_data = self._retrieve_data(name=data_type,
+                    gpu=gpu)
+            if robot_idxs is None:
+                internal_data[:, :] = data
+            else:
+                internal_data[robot_idxs, :] = data
 
-            imp_data = self.get_torch_view()
+        def get(self,
+            data_type: str,
+            robot_idxs = None,
+            gpu: bool = False):
 
-            start_idx = idxs * self._n_jnts
-            imp_data[:, start_idx:(start_idx + self._n_jnts)] = data
+            internal_data = self._retrieve_data(name=data_type,
+                        gpu=gpu)
+                
+            if robot_idxs is None:
+                return internal_data
+            else:
+                return internal_data[robot_idxs, :]
 
     def __init__(self, 
             is_server = False, 
@@ -608,8 +210,8 @@ class JntImpCntrlData(SharedDataBase):
         self.vlevel = vlevel
         
         self._use_gpu = use_gpu
+        with_torch_view = True if self._use_gpu else False
         if self.is_server:
-
             self.shared_jnt_names = StringTensorServer(length = self.n_jnts, 
                                         basename = "JntImpCntrlSharedJntNames", 
                                         name_space = namespace,
@@ -617,16 +219,13 @@ class JntImpCntrlData(SharedDataBase):
                                         vlevel = self.vlevel,
                                         force_reconnection = force_reconnection,
                                         safe = safe)
-
         else:
-
             self.shared_jnt_names = StringTensorClient(
                                         basename = "JntImpCntrlSharedJntNames", 
                                         name_space = namespace,
                                         verbose = self.verbose, 
                                         vlevel = self.vlevel,
                                         safe = safe)
-
         self.imp_data_view = self.ImpDataView(is_server = self.is_server, 
                                     n_envs = self.n_envs, 
                                     n_jnts = self.n_jnts,
@@ -635,8 +234,9 @@ class JntImpCntrlData(SharedDataBase):
                                     vlevel = self.vlevel,
                                     force_reconnection=force_reconnection,
                                     safe=safe,
-                                    with_gpu_mirror=self._use_gpu)
-        
+                                    with_gpu_mirror=self._use_gpu,
+                                    with_torch_view=with_torch_view)
+
         self._is_runnning = False
 
     def __del__(self):
@@ -653,13 +253,12 @@ class JntImpCntrlData(SharedDataBase):
 
         # in case we are clients
         self.n_envs = self.imp_data_view.n_rows
-        self.n_jnts = self.imp_data_view.n_cols
+        self.n_jnts = self.imp_data_view.n_jnts
 
         # retrieving joint names
         self.shared_jnt_names.run()
 
         if self.is_server:
-
             jnt_names_written = self.shared_jnt_names.write_vec(self.jnt_names, 0)
             if not jnt_names_written:
                 exception = f"Could not write joint names on shared memory!"
@@ -668,11 +267,11 @@ class JntImpCntrlData(SharedDataBase):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-                        
         else:
-            
             self.jnt_names = [""] * self.n_jnts
             while not self.shared_jnt_names.read_vec(self.jnt_names, 0):
+                
+                print(self.jnt_names)
                 Journal.log(self.__class__.__name__,
                     "run",
                     "Could not read joint names on shared memory. Retrying...",

@@ -15,8 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
-import torch
-
 from pynput import keyboard
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
@@ -29,6 +27,8 @@ from SharsorIPCpp.PySharsorIPC import dtype
 from control_cluster_bridge.utilities.math_utils import incremental_rotate
 
 import math
+
+import numpy as np
 
 class RhcRefsFromKeyboard:
 
@@ -54,7 +54,7 @@ class RhcRefsFromKeyboard:
         self.rhc_refs = None
 
         self.cluster_idx = -1
-        self.cluster_idx_torch = torch.tensor(self.cluster_idx)
+        self.cluster_idx_np = np.array(self.cluster_idx)
 
         self._init_shared_data()
 
@@ -86,8 +86,6 @@ class RhcRefsFromKeyboard:
 
         self.rhc_refs = RhcRefs(namespace=self.namespace,
                                 is_server=False, 
-                                with_gpu_mirror=False, 
-                                with_torch_view=False,
                                 safe=False, 
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2)
@@ -114,9 +112,9 @@ class RhcRefsFromKeyboard:
         if read:
 
             self.env_index.synch_all(read=True, retry=True)
-
-            self.cluster_idx = self.env_index.get_numpy_view()[0, 0].item()
-            self.cluster_idx_torch = self.cluster_idx
+            env_index = self.env_index.get_numpy_view()
+            self.cluster_idx = env_index[0, 0].item()
+            self.cluster_idx_np = self.cluster_idx
         
             self.rhc_refs.rob_refs.synch_from_shared_mem()
             self.rhc_refs.contact_flags.synch_all(read=True, retry=True)
@@ -139,94 +137,88 @@ class RhcRefsFromKeyboard:
     def _update_base_height(self, 
                 decrement = False):
         
-        current_p_ref = self.rhc_refs.rob_refs.root_state.get_p(robot_idxs=self.cluster_idx_torch)
+        current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
 
         if decrement:
 
-            new_height_ref = current_p_ref[0, 2] - self.height_dh
+            new_height_ref = current_p_ref[2] - self.height_dh
 
         else:
 
-            new_height_ref = current_p_ref[0, 2] + self.height_dh
+            new_height_ref = current_p_ref[2] + self.height_dh
 
-        current_p_ref[0, 2] = new_height_ref
+        current_p_ref[2] = new_height_ref
 
-        self.rhc_refs.rob_refs.root_state.set_p(p = current_p_ref,
-                                    robot_idxs=self.cluster_idx_torch)
+        self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+                                    robot_idxs=self.cluster_idx_np)
     
     def _update_navigation(self, 
                     lateral = None, 
                     orientation = None,
                     increment = True):
 
-        current_p_ref = self.rhc_refs.rob_refs.root_state.get_p(robot_idxs=self.cluster_idx_torch)
+        current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
 
-        current_q_ref = self.rhc_refs.rob_refs.root_state.get_q(robot_idxs=self.cluster_idx_torch)
+        current_q_ref = self.rhc_refs.rob_refs.root_state.get(data_type="q", robot_idxs=self.cluster_idx_np)
 
         if lateral is not None and lateral and increment:
             # lateral motion
             
-            current_p_ref[0, 1] = current_p_ref[0, 1] - self.dxy
+            current_p_ref[1] = current_p_ref[1] - self.dxy
 
         if lateral is not None and lateral and not increment:
             # lateral motion
             
-            current_p_ref[0, 1] = current_p_ref[0, 1] + self.dxy
+            current_p_ref[1] = current_p_ref[1] + self.dxy
 
         if lateral is not None and not lateral and not increment:
             # frontal motion
             
-            current_p_ref[0, 0] = current_p_ref[0, 0] - self.dxy
+            current_p_ref[0] = current_p_ref[0] - self.dxy
 
         if lateral is not None and not lateral and increment:
             # frontal motion
             
-            current_p_ref[0, 0] = current_p_ref[0, 0] + self.dxy
+            current_p_ref[0] = current_p_ref[0] + self.dxy
 
         if orientation is not None and orientation and increment:
             
             # rotate counter-clockwise
-            current_q_ref[0, :] = incremental_rotate(current_q_ref.flatten(), 
+            current_q_ref[:] = incremental_rotate(current_q_ref.flatten(), 
                             self.dtheta_z, 
                             [0, 0, 1])
 
         if orientation is not None and orientation and not increment:
             
             # rotate counter-clockwise
-            current_q_ref[0, :] = incremental_rotate(current_q_ref.flatten(), 
+            current_q_ref[:] = incremental_rotate(current_q_ref.flatten(), 
                             -self.dtheta_z, 
                             [0, 0, 1])
 
-        self.rhc_refs.rob_refs.root_state.set_p(p = current_p_ref,
-                                    robot_idxs=self.cluster_idx_torch)
+        self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+                                    robot_idxs=self.cluster_idx_np)
         
-        self.rhc_refs.rob_refs.root_state.set_q(q = current_q_ref,
-                                    robot_idxs=self.cluster_idx_torch)
+        self.rhc_refs.rob_refs.root_state.set(data_type="q",data=current_q_ref,
+                                    robot_idxs=self.cluster_idx_np)
 
     def _update_phase_id(self,
                 phase_id: int = -1):
 
-        self.rhc_refs.phase_id.get_numpy_view()[self.cluster_idx, 0] = phase_id
+        phase_id = self.rhc_refs.phase_id.get_numpy_view()
+        phase_id[self.cluster_idx, 0] = phase_id
 
     def _set_contacts(self,
                 key,
                 is_contact: bool = True):
-        
+        contact_flags = self.rhc_refs.contact_flags.get_numpy_view()
         if key.char == "7":
-                    
-            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 0] = is_contact
-
+            contact_flags[self.cluster_idx, 0] = is_contact
         if key.char == "9":
-            
-            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 1] = is_contact
-
+            contact_flags[self.cluster_idx, 1] = is_contact
         if key.char == "1":
-            
-            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 2] = is_contact
-
+            contact_flags[self.cluster_idx, 2] = is_contact
         if key.char == "3":
-            
-            self.rhc_refs.contact_flags.get_numpy_view()[self.cluster_idx, 3] = is_contact
+            contact_flags[self.cluster_idx, 3] = is_contact
     
     def _set_phase_id(self,
                     key):
@@ -291,11 +283,11 @@ class RhcRefsFromKeyboard:
                 throw_when_excep = True)
             
         if key.char == "+" and self.enable_heightchange:
-
+            print("AAAAAAAAAAAA")
             self._update_base_height(decrement=False)
         
         if key.char == "-" and self.enable_heightchange:
-
+            print("AAAAAAAAAAAA")
             self._update_base_height(decrement=True)
 
     def _set_navigation(self,
