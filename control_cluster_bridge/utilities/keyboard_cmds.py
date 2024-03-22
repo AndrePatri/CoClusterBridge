@@ -174,9 +174,9 @@ class RhcRefsFromKeyboard:
             current_lin_v_ref[0] = current_lin_v_ref[0] + self.dxy
         if orientation is not None and orientation and increment:
             # rotate counter-clockwise
-            current_omega_ref[3] = current_omega_ref[3] + self.dtheta_z 
+            current_omega_ref[2] = current_omega_ref[2] + self.dtheta_z 
         if orientation is not None and orientation and not increment:
-            current_omega_ref[3] = current_omega_ref[3] - self.dtheta_z 
+            current_omega_ref[2] = current_omega_ref[2] - self.dtheta_z 
 
         self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
@@ -187,7 +187,7 @@ class RhcRefsFromKeyboard:
                 phase_id: int = -1):
 
         phase_id = self.rhc_refs.phase_id.get_numpy_view()
-        phase_id[self.cluster_idx, 0] = phase_id
+        phase_id[self.cluster_idx, 111] = phase_id
 
     def _set_contacts(self,
                 key,
@@ -265,11 +265,9 @@ class RhcRefsFromKeyboard:
                 throw_when_excep = True)
             
         if key.char == "+" and self.enable_heightchange:
-            print("AAAAAAAAAAAA")
             self._update_base_height(decrement=False)
         
         if key.char == "-" and self.enable_heightchange:
-            print("AAAAAAAAAAAA")
             self._update_base_height(decrement=True)
 
     def _set_navigation(self,
