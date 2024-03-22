@@ -257,6 +257,7 @@ class ControlClusterServer(ABC):
                                         retry=True)
         # all active controllers will be triggered
         self._registered[:, :] = self._rhc_status.registration.get_torch_view(gpu=False)
+        self._prev_active_controllers[:, :] = self._now_active
         self._now_active[:, :] = self._rhc_status.activation_state.get_torch_view(gpu=False) & \
                             self._rhc_status.registration.get_torch_view(gpu=False) # controllers have to be registered
                             # to be considered active
@@ -303,7 +304,7 @@ class ControlClusterServer(ABC):
                         val=[self._solution_time,
                             self._cluster_dt/self._solution_time,
                             self.is_running()])
-        self._prev_active_controllers[:, :] = self._now_active # to keep track of previous states
+
         self._was_running = self._is_running
         self._solution_counter += 1
     
@@ -407,7 +408,7 @@ class ControlClusterServer(ABC):
         now_not_active = ~self._now_active.squeeze(dim=1)
         active_before = self._prev_active_controllers.squeeze(dim=1)
         just_deactivated = torch.nonzero(now_not_active & active_before).squeeze(dim=1)
-    
+        
         if not just_deactivated.shape[0] == 0:
             if gpu:
                 return just_deactivated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
