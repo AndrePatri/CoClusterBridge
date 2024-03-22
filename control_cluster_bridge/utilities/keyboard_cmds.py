@@ -157,48 +157,30 @@ class RhcRefsFromKeyboard:
                     orientation = None,
                     increment = True):
 
-        current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
-
-        current_q_ref = self.rhc_refs.rob_refs.root_state.get(data_type="q", robot_idxs=self.cluster_idx_np)
+        current_lin_v_ref = self.rhc_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
+        current_omega_ref = self.rhc_refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
 
         if lateral is not None and lateral and increment:
             # lateral motion
-            
-            current_p_ref[1] = current_p_ref[1] - self.dxy
-
+            current_lin_v_ref[1] = current_lin_v_ref[1] - self.dxy
         if lateral is not None and lateral and not increment:
             # lateral motion
-            
-            current_p_ref[1] = current_p_ref[1] + self.dxy
-
+            current_lin_v_ref[1] = current_lin_v_ref[1] + self.dxy
         if lateral is not None and not lateral and not increment:
             # frontal motion
-            
-            current_p_ref[0] = current_p_ref[0] - self.dxy
-
+            current_lin_v_ref[0] = current_lin_v_ref[0] - self.dxy
         if lateral is not None and not lateral and increment:
             # frontal motion
-            
-            current_p_ref[0] = current_p_ref[0] + self.dxy
-
+            current_lin_v_ref[0] = current_lin_v_ref[0] + self.dxy
         if orientation is not None and orientation and increment:
-            
             # rotate counter-clockwise
-            current_q_ref[:] = incremental_rotate(current_q_ref.flatten(), 
-                            self.dtheta_z, 
-                            [0, 0, 1])
-
+            current_omega_ref[3] = current_omega_ref[3] + self.dtheta_z 
         if orientation is not None and orientation and not increment:
-            
-            # rotate counter-clockwise
-            current_q_ref[:] = incremental_rotate(current_q_ref.flatten(), 
-                            -self.dtheta_z, 
-                            [0, 0, 1])
+            current_omega_ref[3] = current_omega_ref[3] - self.dtheta_z 
 
-        self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+        self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
-        
-        self.rhc_refs.rob_refs.root_state.set(data_type="q",data=current_q_ref,
+        self.rhc_refs.rob_refs.root_state.set(data_type="omega",data=current_omega_ref,
                                     robot_idxs=self.cluster_idx_np)
 
     def _update_phase_id(self,
