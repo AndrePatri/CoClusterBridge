@@ -39,7 +39,8 @@ class ControlClusterClient(ABC):
             use_mp_fork: bool = False,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
-            verbose: bool = False):
+            verbose: bool = False,
+            debug: bool = False):
 
         # ciao :D
         #        CR 
@@ -56,28 +57,22 @@ class ControlClusterClient(ABC):
         self.isolated_cores = get_isolated_cores()[1] # available isolated
         # cores 
 
-        self.namespace = namespace
+        self._namespace = namespace
         
-        self.verbose = verbose
-
+        self._verbose = verbose
+        self._debug = debug
         self.processes_basename = processes_basename
 
         self.cluster_size = cluster_size
 
         self._device = "cpu"
 
-        self._controllers = [] # list of controllers (must inherit from
-        # RHController)
+        self._controllers = [] # list of controllers
 
-        # self.handshake_srvr = HanshakeDataCntrlSrvr(verbose=self.verbose, 
-        #                                 namespace=self.namespace)
-        # self.handshake_srvr.handshake()
         self._processes = [] 
 
         self._is_cluster_ready = False
                  
-        self.jnt_names_rhc = None # publishes joint names from controller to shared mem
-
         # shared memory 
 
         self.cluster_stats = None
@@ -95,7 +90,6 @@ class ControlClusterClient(ABC):
                 controller_idx: int):
         
         if not isinstance(core_idxs, List):
-            
             exception = f"core_idx should be a List"
             Journal.log(f"{self.__class__.__name__}{controller_idx}",
                     "solve",
@@ -104,7 +98,6 @@ class ControlClusterClient(ABC):
                     throw_when_excep = True)
 
         if not isinstance(core_idxs[0], int):
-            
             exception = f"core_idx should be a List of integeters"
             Journal.log(f"{self.__class__.__name__}{controller_idx}",
                     "solve",
@@ -115,7 +108,6 @@ class ControlClusterClient(ABC):
         import os
         pid = os.getpid()  
         os.sched_setaffinity(pid, core_idxs)
-
         info = f"Affinity ID {os.sched_getaffinity(pid)} was set for controller n.{controller_idx}."
         Journal.log(f"{self.__class__.__name__}{controller_idx}",
                     "_set_affinity",
@@ -128,19 +120,16 @@ class ControlClusterClient(ABC):
                     available_cores: List[int]):
         
         # this runs in a child process for each controller
-
         if self.set_affinity:
             # put rhc controller on a single specific core 
             self._set_affinity(core_idxs=[self._compute_process_affinity(idx, core_ids=available_cores)],
                         controller_idx=idx)
-            
         if self.use_mp_fork: # that's an hack
             # use all available cores
             self._set_affinity(core_idxs=available_cores,
                         controller_idx=idx)
             
         controller = self._generate_controller(idx=idx)
-
         controller.solve() # runs the solution loop
 
     def run(self):
@@ -151,8 +140,8 @@ class ControlClusterClient(ABC):
         from perf_sleep.pyperfsleep import PerfSleep
 
         self.cluster_stats = RhcProfiling(is_server=False, 
-                                    name=self.namespace,
-                                    verbose=self.verbose,
+                                    name=self._namespace,
+                                    verbose=self._verbose,
                                     vlevel=VLevel.V2,
                                     safe=True)
         
@@ -161,18 +150,12 @@ class ControlClusterClient(ABC):
                                     val=self._is_cluster_ready)
 
         while True:
-
             try:
-
                 nsecs =  1000000000 # 1 sec
                 PerfSleep.thread_sleep(nsecs) # we just keep it alive
-
                 continue
-
             except KeyboardInterrupt:
-
                 self.terminate() # closes all processes
-                
                 break
 
     def terminate(self):
@@ -182,104 +165,71 @@ class ControlClusterClient(ABC):
                         "terminating cluster...",
                         LogType.STAT,
                         throw_when_excep = True)
-        
-        if self.jnt_names_rhc is not None:
-
-            self.jnt_names_rhc.terminate()
-
-        self._close_processes() # we also terminate all the child processes
-
-        self._close_shared_mem()
-
+        self._close_processes() # we terminate all the child processes
+        self._close_shared_mem() # and close the used shared memory
         self._terminated = True
     
     def _close_processes(self):
-    
         # Wait for each process to exit gracefully or terminate forcefully
-                
         for process in self._processes:
-
-            process.join(timeout=0.2)  # Wait for 5 seconds for each process to exit gracefully
-
+            process.join(timeout=0)  # Wait for 5 seconds for each process to exit gracefully
             if process.is_alive():
-                
                 process.terminate()  # Forcefully terminate the process
-            
             Journal.log(self.__class__.__name__,
                     "_close_processes",
                     "Terminating child process " + str(process.name),
                     LogType.STAT)
     
     def _close_shared_mem(self):
-
         if self.cluster_stats is not None:
-
             self.cluster_stats.close()
 
     def _get_cores(self):
 
         cores = None
-
         if not self.isolated_cores_only:
-
             # distribute processes over all system cores and
             # over both physical and virtual cores
-
             import psutil
             cores = list(range(psutil.cpu_count()))
-
         else:
-
             # distribute processes over isolated cores only,
             # both physical and virtual
             cores = self.isolated_cores
-
         return cores
  
     def _debug_prints(self):
             
         if self.core_ids_override_list is not None:
-            
             # we distribute the controllers over the available ones
             warning = "Custom core id list provided. Will distribute controllers over those idxs."
-            
             Journal.log(self.__class__.__name__,
                         "_debug_prints",
                         warning,
                         LogType.WARN,
                         throw_when_excep = True)
-            
         else:
-
             if self.isolated_cores_only:
-
                 if not len(self.isolated_cores) > 0: 
-                    
                     exception ="No isolated cores found on this machine. Either isolate some cores or " + \
                         "deactivate the use_isolated_cores flag."
-                    
                     Journal.log(self.__class__.__name__,
                         "_debug_prints",
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
-                                    
                 # we distribute the controllers over the available ones
                 warning = "Will distribute controllers over isolated cores only"
-                
                 Journal.log(self.__class__.__name__,
                             "_debug_prints",
                             warning,
                             LogType.WARN,
                             throw_when_excep = True)
-            
         if len(self.isolated_cores) < self.cluster_size and self.isolated_cores_only:
-            
             # we distribute the controllers over the available ones
             warning = "Not enough isolated cores available to distribute the controllers " + \
                 f"on them. N. available isolated cores: {len(self.isolated_cores)}, n. controllers {self.cluster_size}. "+ \
                 "Processes will be distributed among the available ones."
-            
             Journal.log(self.__class__.__name__,
                         "_debug_prints",
                         warning,
@@ -293,7 +243,6 @@ class ControlClusterClient(ABC):
         # assign process_index to a single core 
         # in the core ids list
         num_cores = len(core_ids)
-
         return core_ids[process_index % num_cores]
 
     def _spawn_processes(self):
@@ -321,21 +270,16 @@ class ControlClusterClient(ABC):
             core_ids = self.core_ids_override_list
 
         for i in range(0, self.cluster_size):
-            
             info = f"Spawning process for controller n.{i}."
-
             Journal.log(self.__class__.__name__,
                     "_spawn_processes",
                     info,
                     LogType.STAT,
                     throw_when_excep = True)
-
             process = ctx.Process(target=self._spawn_controller, 
                             name=self.processes_basename + str(i),
                             args=(i, core_ids))
-                        
             self._processes.append(process)
-
             self._processes[i].start()
             
         self._is_cluster_ready = True
@@ -349,6 +293,5 @@ class ControlClusterClient(ABC):
     @abstractmethod
     def _generate_controller(self,
                         idx: int):
-
         # to be overridden
         return None

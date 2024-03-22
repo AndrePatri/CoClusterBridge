@@ -41,26 +41,31 @@ from perf_sleep.pyperfsleep import PerfSleep
 class RHController(ABC):
 
     def __init__(self, 
-            cluster_size: int,
             srdf_path: str,
             n_nodes: int,
             dt: float,
+            namespace: str, # shared mem namespace
+            dtype = np.float32, 
             verbose = False, 
-            debug = False,
-            array_dtype = np.float32, 
-            namespace = "",
-            debug_sol = False):
+            debug = False):
         
         self.namespace = namespace
-        
-        self.controller_index = None 
-        self.controller_index_np = None 
-
-        self.srdf_path = srdf_path
-
+        self._dtype = dtype
         self._verbose = verbose
         self._debug = debug
-        self._debug_sol = debug_sol
+
+        self._n_nodes = n_nodes
+        self._dt = dt
+        self._n_intervals = self._n_nodes - 1 
+        self._t_horizon = self._n_intervals * dt
+        
+        self.controller_index = None # will be assigned upon registration to a cluster
+        self.controller_index_np = None 
+
+        self.srdf_path = srdf_path # using for parsing robot homing
+
+        self._registered = False
+        self._closed = False 
 
         self._profiling_data_dict = {}
         self._profiling_data_dict["full_solve_dt"] = np.nan
@@ -69,29 +74,22 @@ class RHController(ABC):
         self._profiling_data_dict["phases_shift_dt"] = np.nan
         self._profiling_data_dict["task_ref_update"] = np.nan
         
-        self.cluster_size = cluster_size
-        self._registered = False
-        self._closed = False 
-
         self.n_dofs = None
         self.n_contacts = None
         
         # shared mem
         self.robot_state = None 
-
         self.rhc_status = None
         self.rhc_internal = None
         self.cluster_stats = None
         self.robot_cmds = None
         self.rhc_refs = None
-
         self._remote_triggerer = None
         self._remote_triggerer_timeout = 60000 # [ns]
         
         # jnt names
         self._env_side_jnt_names = []
         self._controller_side_jnt_names = []
-
         self._got_jnt_names_from_controllers = False
 
         # data maps
@@ -100,33 +98,45 @@ class RHController(ABC):
 
         self._got_contact_names = False
 
-        self._received_trigger = False # used for proper termination 
+        self._received_trigger = False # used for proper termination
 
-        self.array_dtype = array_dtype
-
-        self.n_resets = 0
-        self.n_fails = 0
+        self._n_resets = 0
+        self._n_fails = 0
         self._failed = False
 
-        self._n_nodes = n_nodes
-        self._dt = dt
-        self._n_intervals = self._n_nodes - 1 
-        self._t_horizon = self._n_intervals * dt
+        self._start_time = time.perf_counter() # used for profiling when in debug mode
 
-        self._start_time = time.perf_counter()
-
-        self._homer = None
+        self._homer = None # robot homing manager
 
         self._init()
+
+    def __del__(self):
+        if not self._closed:
+            self._close()
+
+    def _close(self):
+        self._unregister_from_cluster()
+        if self.robot_cmds is not None:
+            self.robot_cmds.close()
+        if self.robot_state is not None:
+            self.robot_state.close()
+        if self.rhc_status is not None:
+            self.rhc_status.close()
+        if self.rhc_internal is not None:
+            self.rhc_internal.close()
+        if self.cluster_stats is not None:
+            self.cluster_stats.close()
+        if self._remote_triggerer is not None:
+            self._remote_triggerer.close()
+        self._closed = True
 
     def init_rhc_task_cmds(self):
         
         self.rhc_refs = self._init_rhc_task_cmds()
         
-    def init_states(self):
+    def _init_states(self):
         
         quat_remap = self._get_quat_remap()
-
         self.robot_state = RobotState(namespace=self.namespace,
                                 is_server=False,
                                 q_remapping=quat_remap, # remapping from environment to controller
@@ -136,7 +146,6 @@ class RHController(ABC):
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
         self.robot_state.run()
-        
         self.robot_cmds = RhcCmds(namespace=self.namespace,
                                 is_server=False,
                                 q_remapping=quat_remap, # remapping from environment to controller
@@ -148,9 +157,14 @@ class RHController(ABC):
         self.robot_cmds.run()
     
     def _rhc(self):
-
         if self._debug:
-
+            self._rhc_db()
+        else:
+            self._rhc_min()
+    
+    def _rhc_db(self):
+        # rhc with debug data
+        if self._debug:
             self._start_time = time.perf_counter()
 
         self.robot_state.synch_from_shared_mem() # updates robot state with
@@ -173,7 +187,7 @@ class RHController(ABC):
         self._write_cmds_from_sol() # we update update the views of the cmds
         # from the latest solution
     
-        if self._debug_sol:
+        if self._debug:
             # if in debug, rhc internal state is streamed over 
             # shared mem.
             self._update_rhc_internal()
@@ -186,22 +200,42 @@ class RHController(ABC):
             self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
             self._update_profiling_data() # updates all profiling data
         
-        if self._verbose and self._debug:
+        if self._debug:
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                 "solve",
                 f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
                 LogType.INFO,
                 throw_when_excep = True)  
 
+    def _rhc_min(self):
+
+        self.robot_state.synch_from_shared_mem() # updates robot state with
+        # latest data on shared mem
+        if not self.failed():
+            # we can solve only if not in failure state
+            self._failed = not self._solve() # solve actual TO
+            if (self._failed):  
+                # perform failure procedure
+                self._on_failure()                       
+        else:
+            Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                "solve",
+                "Received solution req, but controller is in failure state. " + \
+                    " You should have reset the controller!",
+                LogType.EXCEP,
+                throw_when_excep = True)
+        self._write_cmds_from_sol() # we update update the views of the cmds
+        # from the latest solution
+        self.rhc_status.trigger.write_retry(False, 
+                                row_index=self.controller_index,
+                                col_index=0) # allow next solution trigger
+            
     def solve(self):
         
         # run the solution loop and wait for trigger signals
         # using cond. variables (efficient)
-        
         while True:
-            
             try: 
-
                 # we are always listening for a trigger signal 
                 if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
                     Journal.log(self.__class__.__name__,
@@ -209,74 +243,54 @@ class RHController(ABC):
                         "Didn't receive any remote trigger req within timeout!",
                         LogType.EXCEP,
                         throw_when_excep = True)
-                    
                 self._received_trigger = True
-                # signal received -> we incoming request
-                
+                # signal received -> we process incoming requests
                 # perform reset, if required
                 if self.rhc_status.resets.read_retry(row_index=self.controller_index,
                                                 col_index=0)[0]:
                     self.reset() # rhc is reset
-
                 # check if a trigger request was received
                 if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
                             col_index=0)[0]:
                     self._rhc() # run solution
-                                       
                 self._remote_triggerer.ack() # send ack signal to server
-
                 self._received_trigger = False
-
             except (KeyboardInterrupt):
-
                 self._close()
-
                 break
                 
     def reset(self):
         
         if not self._closed:
-                        
             self._reset()
-
             self._failed = False # allow triggering
-            
             self.set_cmds_to_homing()
-
-            # self.n_fails = 0 # reset fail n
-
-            self.n_resets += 1
-
+            self._n_resets += 1
             self.rhc_status.fails.write_retry(False, 
                                         row_index=self.controller_index,
                                         col_index=0)
-            
             self.rhc_status.resets.write_retry(False, 
                                             row_index=self.controller_index,
                                             col_index=0)
 
-    def create_jnt_maps(self):
+    def _create_jnt_maps(self):
         
         # retrieve env-side joint names from shared mem
         self._env_side_jnt_names = self.robot_state.jnt_names()
-
         self._check_jnt_names_compatibility() # will raise exception
-
         if not self._got_jnt_names_from_controllers:
-            
             exception = f"Cannot run the solve(). assign_env_side_jnt_names() was not called!"
-
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                    "create_jnt_maps",
+                    "_create_jnt_maps",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
-        
         self._to_controller = [self._env_side_jnt_names.index(element) for element in self._controller_side_jnt_names]
-        
         # set joint remappings for shared data
         self.robot_state.set_jnts_remapping(jnts_remapping=self._to_controller)
         self.robot_cmds.set_jnts_remapping(jnts_remapping=self._to_controller)
+
+        return True
 
     def set_cmds_to_homing(self):
 
@@ -284,7 +298,7 @@ class RHController(ABC):
                             self.robot_cmds.n_jnts())
         
         null_action = np.zeros((1, self.robot_cmds.n_jnts()), 
-                        dtype=self.array_dtype)
+                        dtype=self._dtype)
         
         self.robot_cmds.jnts_state.set(data=homing, data_type="q", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=null_action, data_type="v", robot_idxs=self.controller_index_np)
@@ -294,77 +308,36 @@ class RHController(ABC):
                                 read=False) # only write data corresponding to this controller
     
     def failed(self):
-
         return self._failed
-    
-    def __del__(self):
-        
-        if not self._closed:
-
-            self._close()
-
-    def _close(self):
-
-        self._unregister_from_cluster()
-
-        if self.robot_cmds is not None:
-            
-            self.robot_cmds.close()
-        
-        if self.robot_state is not None:
-            
-            self.robot_state.close()
-        
-        if self.rhc_status is not None:
-        
-            self.rhc_status.close()
-        
-        if self.rhc_internal is not None:
-
-            self.rhc_internal.close()
-
-        if self.cluster_stats is not None:
-
-            self.cluster_stats.close()
-        
-        if self._remote_triggerer is not None:
-
-            self._remote_triggerer.close()
-
-        self._closed = True
 
     def _assign_cntrl_index(self, reg_state: np.ndarray):
-        
         state = reg_state.flatten() # ensure 1D tensor
-
         free_spots = np.nonzero(~state.flatten())[0]
-
         return free_spots[0].item()  # just return the first free spot
     
     def _register_to_cluster(self):
         
-        # acquire semaphores since we have to perform compound operations
+        # acquire semaphores since we have to perform non-atomic operations
         # on the whole memory views
         self.rhc_status.registration.data_sem_acquire()
         self.rhc_status.controllers_counter.data_sem_acquire()
-
         self.rhc_status.controllers_counter.synch_all(retry = True,
                                                 read = True)
         
         available_spots = self.rhc_status.cluster_size
 
         # incrementing cluster controllers counter
-        
         controllers_counter = self.rhc_status.controllers_counter.get_numpy_view()
-
-        if controllers_counter[0, 0] + 1 > available_spots:
+        if controllers_counter[0, 0] + 1 > available_spots: # no space left -> return 
+            self.rhc_status.controllers_counter.data_sem_release()
+            self.rhc_status.registration.data_sem_release()
             exception = "Cannot register to cluster. No space left " + \
                 f"({controllers_counter[0, 0]} controllers already registered)"
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_register_to_cluster",
                     exception,
                     LogType.EXCEP,
-                    throw_when_excep = True)
+                    throw_when_excep = True) 
                     
         # increment controllers counter
         controllers_counter += 1 
@@ -400,20 +373,15 @@ class RHController(ABC):
             # received interrupt during solution --> 
             # send ack signal to server anyway
             self._remote_triggerer.ack() 
-
         if self._registered:
-
             # acquire semaphores since we have to perform operations
             # on the whole memory views
             self.rhc_status.registration.data_sem_acquire()
             self.rhc_status.controllers_counter.data_sem_acquire()
-
             self.rhc_status.registration.write_retry(False, 
                                     row_index=self.controller_index,
                                     col_index=0)
-            
             self._deactivate()
-            
             # decrementing controllers counter
             self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = True)
@@ -421,35 +389,29 @@ class RHController(ABC):
             controllers_counter -= 1 
             self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = False)
-
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_unregister_from_cluster",
                     "Done",
                     LogType.STAT,
                     throw_when_excep = True)
-            
             # we can now release everything
             self.rhc_status.registration.data_sem_release()
             self.rhc_status.controllers_counter.data_sem_release()
     
     def _deactivate(self):
-
         # signal controller deactivation over shared mem
-            self.rhc_status.activation_state.write_retry(False, 
-                                    row_index=self.controller_index,
-                                    col_index=0)
+        self.rhc_status.activation_state.write_retry(False, 
+                                row_index=self.controller_index,
+                                col_index=0)
     
     def _get_quat_remap(self):
-
-        # to be overridden
-
+        # to be overridden by child class if necessary
         return [0, 1, 2, 3]
     
     def _consinstency_checks(self):
         
         # check controller dt
         server_side_cluster_dt = self.cluster_stats.get_info(info_name="cluster_dt")
-  
         if not (abs(server_side_cluster_dt - self._dt) < 1e-8):
             exception = f"Trying to initialize a controller with control dt {self._dt}, which" + \
                 f"does not match the cluster control dt {server_side_cluster_dt}"
@@ -458,7 +420,6 @@ class RHController(ABC):
                         exception,
                         LogType.EXCEP,
                         throw_when_excep = True)
-                    
         # check contact names
         
         server_side_contact_names = set(self.robot_state.contact_names())
@@ -472,7 +433,6 @@ class RHController(ABC):
                         warn,
                         LogType.WARN,
                         throw_when_excep = True)
-        
         if not len(self.robot_state.contact_names()) == len(self._get_contacts()):
             exception = f"Controller-side n contacts {self._get_contacts()} do not match " + \
                 f"server-side n contacts {len(self.robot_state.contact_names())}!"
@@ -492,54 +452,38 @@ class RHController(ABC):
                     LogType.STAT,
                     throw_when_excep = True)
         
-        self._init_problem() # we call the child's initialization method
-
         self.rhc_status = RhcStatus(is_server=False,
                                     namespace=self.namespace, 
                                     verbose=self._verbose, 
                                     vlevel=VLevel.V2,
                                     with_torch_view=False, 
                                     with_gpu_mirror=False)
-
-        self.rhc_status.run()
-
-        # statistical data
-        self.cluster_stats = RhcProfiling(cluster_size=self.cluster_size,
-                                    is_server=False, 
+        self.rhc_status.run() # rhc status (reg. flags, failure, tot cost, tot cnstrl viol, etc...)
+        self._register_to_cluster() # registers the controller to the cluster
+        self._init_states() # initializes shared mem. states
+        self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
+                                        verbose=self._verbose,
+                                        vlevel=VLevel.V2) # remote triggering
+        self._remote_triggerer.run()
+        self.cluster_stats = RhcProfiling(is_server=False, 
                                     name=self.namespace,
                                     verbose=self._verbose,
                                     vlevel=VLevel.V2,
-                                    safe=True)
-
+                                    safe=True) # profiling data
         self.cluster_stats.run()
         self.cluster_stats.synch_info()
+        self._init_problem() # we call the child's initialization method for the actual problem
+        self._create_jnt_maps()
+        self.init_rhc_task_cmds() # initializes rhc interface to external commands (defined by child class)
+        self._consinstency_checks() # sanity checks
 
-        self._register_to_cluster() # registers the controller to the cluster
-
-        self.init_states() # initializes states
-
-        self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
-                                        verbose=self._verbose,
-                                        vlevel=VLevel.V2)
-        self._remote_triggerer.run()
-
-        self.create_jnt_maps()
-
-        self.init_rhc_task_cmds() # initializes rhc commands
-        
-        self._consinstency_checks()
-
-        if self._debug_sol:
-            
+        if self._debug:
             # internal solution is published on shared mem
-
             # we assume the user has made available the cost
             # and constraint data at this point (e.g. through
             # the solution of a bootstrap)
-            
             cost_data = self._get_cost_data()
             constr_data = self._get_constr_data()
-
             config = RhcInternal.Config(is_server=True, 
                         enable_q= True, 
                         enable_v=True, 
@@ -553,7 +497,6 @@ class RHController(ABC):
                         constr_names=constr_data[0],
                         constr_dims=constr_data[1],
                         )
-            
             self.rhc_internal = RhcInternal(config=config, 
                                     namespace=self.namespace,
                                     rhc_index = self.controller_index,
@@ -567,16 +510,8 @@ class RHController(ABC):
                                     safe=True)
             self.rhc_internal.run()
 
-        self._homer = RobotHomer(self.srdf_path, 
-                            self._controller_side_jnt_names)
         if self._homer is None:
-            exception = f"Robot homer not initialized. Did you call the _init_robot_homer() method in the child class?"
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                    "create_jnt_maps",
-                    exception,
-                    LogType.EXCEP,
-                    throw_when_excep = True)
-            
+            self._init_robot_homer() # call this in case it wasn't called by child
         self.set_cmds_to_homing()
 
         Journal.log(f"{self.__class__.__name__}",
@@ -591,15 +526,14 @@ class RHController(ABC):
                                         row_index=self.controller_index,
                                         col_index=0)
         self._deactivate()
-        self.n_fails += 1
-        self.rhc_status.controllers_fail_counter.write_retry(self.n_fails,
+        self._n_fails += 1
+        self.rhc_status.controllers_fail_counter.write_retry(self._n_fails,
                                                     row_index=self.controller_index,
                                                     col_index=0)
 
     def _init_robot_homer(self):
-
         self._homer = RobotHomer(srdf_path=self.srdf_path, 
-                            jnt_names_prb=self._get_robot_jnt_names())
+                            jnt_names_prb=self._controller_side_jnt_names)
         
     def _update_profiling_data(self):
 
@@ -648,18 +582,14 @@ class RHController(ABC):
                         jnt_names: List[str]):
 
         self._controller_side_jnt_names = jnt_names
-
         self._got_jnt_names_from_controllers = True
 
     def _check_jnt_names_compatibility(self):
 
         set_srvr = set(self._controller_side_jnt_names)
         set_client  = set(self._env_side_jnt_names)
-
         if not set_srvr == set_client:
-
             exception = "Server-side and client-side joint names do not match!"
-
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_check_jnt_names_compatibility",
                     exception,
@@ -667,203 +597,146 @@ class RHController(ABC):
                     throw_when_excep = True)
     
     def _get_cost_data(self):
-        
         # to be overridden by child class
         return None, None
     
     def _get_constr_data(self):
-        
         # to be overridden by child class
         return None, None
     
     def _update_rhc_internal(self):
-
         # data which is not enabled in the config is not actually 
-        # written so overhead is minimal in for non-enabled data
-
+        # written so overhead is minimal for non-enabled data
         self.rhc_internal.write_q(data= self._get_q_from_sol(),
                             retry=True)
-
         self.rhc_internal.write_v(data= self._get_v_from_sol(),
                             retry=True)
-        
         self.rhc_internal.write_a(data= self._get_a_from_sol(),
                             retry=True)
-        
         self.rhc_internal.write_a_dot(data= self._get_a_dot_from_sol(),
                             retry=True)
-        
         self.rhc_internal.write_f(data= self._get_f_from_sol(),
                             retry=True)
-        
         self.rhc_internal.write_f_dot(data= self._get_f_dot_from_sol(),
                             retry=True)
-        
         self.rhc_internal.write_eff(data= self._get_eff_from_sol(),
                             retry=True)
-
         # for cost_idx in range(self.rhc_internal.config.n_costs):
-            
         #     # iterate over all costs and update all values
         #     cost_name = self.rhc_internal.config.cost_names[cost_idx]
         #     self.rhc_internal.write_cost(data= self._get_cost_from_sol(cost_name = cost_name),
         #                         cost_name = cost_name,
         #                         retry=True)
-        
         # for constr_idx in range(self.rhc_internal.config.n_constr):
-
         #     # iterate over all constraints and update all values
         #     constr_name = self.rhc_internal.config.constr_names[constr_idx]
         #     self.rhc_internal.write_constr(data= self._get_constr_from_sol(constr_name=constr_name),
         #                         constr_name = constr_name,
         #                         retry=True)
     
-    def _get_contacts(self):
-        
+    def _get_contacts(self): 
         contact_names = self._get_contact_names()
-
         self._got_contact_names = True
-
         return contact_names
     
     def _get_q_from_sol(self):
-
         # to be overridden by child class
-
         return None
 
     def _get_v_from_sol(self):
-
         # to be overridden by child class
-        
         return None
     
     def _get_a_from_sol(self):
-
         # to be overridden by child class
-        
         return None
     
     def _get_a_dot_from_sol(self):
-
         # to be overridden by child class
-        
         return None
     
     def _get_f_from_sol(self):
-
         # to be overridden by child class
-        
         return None
     
     def _get_f_dot_from_sol(self):
-
         # to be overridden by child class
-        
         return None
     
     def _get_eff_from_sol(self):
-
         # to be overridden by child class
-        
         return None
     
     def _get_cost_from_sol(self,
                     cost_name: str):
-
         # to be overridden by child class
-        
         return None
     
     def _get_constr_from_sol(self,
                     constr_name: str):
-
         # to be overridden by child class
-        
         return None
     
     @abstractmethod
-    def _reset(self):
-        
+    def _reset(self):   
         pass
 
     @abstractmethod
     def _init_rhc_task_cmds(self):
-
         pass
 
     @abstractmethod
     def _get_robot_jnt_names(self):
-
         pass
     
     @abstractmethod
     def _get_contact_names(self):
-
         pass
 
     @abstractmethod
     def _get_cmd_jnt_q_from_sol(self) -> np.ndarray:
-
         pass
 
     @abstractmethod
     def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
-
         pass
     
     @abstractmethod
     def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
-
         pass
 
     def _get_rhc_cost(self) -> np.ndarray:
-
         # to be overridden
-
         return np.nan
     
     def _get_rhc_residual(self) -> np.ndarray:
-        
         # to be overridden
-
         return np.nan
 
     def _get_rhc_niter_to_sol(self) -> np.ndarray:
-        
         # to be overridden
-        
         return np.nan
     
     @abstractmethod
     def _update_open_loop(self):
-
-        # updates measured robot state 
-        # using the internal robot state of the RHC controller
-
+        # updates rhc controller 
+        # using the internal state 
         pass
     
     @abstractmethod
     def _update_closed_loop(self):
-
-        # updates measured robot state 
-        # using the provided measurements
-
+        # uses meas. from robot
         pass
 
     @abstractmethod
     def _solve(self) -> bool:
-
         pass
             
     @abstractmethod
     def _get_ndofs(self):
-
         pass
 
     @abstractmethod
     def _init_problem(self):
-
         # initialized horizon's TO problem
-
         pass
