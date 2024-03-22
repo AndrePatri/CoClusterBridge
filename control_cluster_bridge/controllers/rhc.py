@@ -200,7 +200,7 @@ class RHController(ABC):
             self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
             self._update_profiling_data() # updates all profiling data
         
-        if self._debug:
+        if self._debug and self._verbose:
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                 "solve",
                 f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
