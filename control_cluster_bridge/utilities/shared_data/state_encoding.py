@@ -305,14 +305,14 @@ class RootState(SharedTWrapper):
         self._v = None
         self._omega = None
         self._q_full = None # full root configuration (pos + quaternion)
-        self._v_full = None # full root velocity (lin. + angular)
+        self._twist = None # full root velocity (lin. + angular)
 
         self._p_gpu = None
         self._q_gpu = None
         self._v_gpu = None
         self._omega_gpu = None
         self._q_full_gpu = None
-        self._v_full_gpu = None 
+        self._twist_gpu = None 
         
     def run(self,
             q_remapping: List[int] = None):
@@ -365,7 +365,7 @@ class RootState(SharedTWrapper):
 
             self._v = self.get_torch_view()[:, 7:10].view(self.n_robots, 3)
             self._omega = self.get_torch_view()[:, 10:13].view(self.n_robots, 3)
-            self._v_full = self.get_torch_view()[:, 7:13].view(self.n_robots, 6)
+            self._twist = self.get_torch_view()[:, 7:13].view(self.n_robots, 6)
         else:
             self._p = self.get_numpy_view()[:, 0:3].view()
             self._q = self.get_numpy_view()[:, 3:7].view()
@@ -373,7 +373,7 @@ class RootState(SharedTWrapper):
 
             self._v = self.get_numpy_view()[:, 7:10].view()
             self._omega = self.get_numpy_view()[:, 10:13].view()
-            self._v_full = self.get_numpy_view()[:, 7:13].view()
+            self._twist = self.get_numpy_view()[:, 7:13].view()
 
         if self.gpu_mirror_exists():
 
@@ -384,7 +384,7 @@ class RootState(SharedTWrapper):
 
             self._v_gpu = self._gpu_mirror[:, 7:10].view(self.n_robots, 3)
             self._omega_gpu = self._gpu_mirror[:, 10:13].view(self.n_robots, 3)
-            self._v_full_gpu = self._gpu_mirror[:, 7:13].view(self.n_robots, 6)
+            self._twist_gpu = self._gpu_mirror[:, 7:13].view(self.n_robots, 6)
     
     def _retrieve_data(self,
                 name: str,
@@ -401,8 +401,8 @@ class RootState(SharedTWrapper):
                 return self._v, None
             elif name == "omega":
                 return self._omega, None
-            elif name == "v_full":
-                return self._v_full, None
+            elif name == "twist":
+                return self._twist, None
             else:
                 return None, None
         else:
@@ -416,8 +416,8 @@ class RootState(SharedTWrapper):
                 return self._v_gpu, None
             elif name == "omega":
                 return self._omega_gpu, None
-            elif name == "v_full":
-                return self._v_full_gpu, None
+            elif name == "twist":
+                return self._twist_gpu, None
             else:
                 return None, None
     

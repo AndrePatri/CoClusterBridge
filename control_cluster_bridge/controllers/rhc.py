@@ -589,7 +589,11 @@ class RHController(ABC):
         set_srvr = set(self._controller_side_jnt_names)
         set_client  = set(self._env_side_jnt_names)
         if not set_srvr == set_client:
-            exception = "Server-side and client-side joint names do not match!"
+            exception = "Server-side and client-side joint names do not match!\n" + \
+                "server side -> \n" + \
+                " ".join(self._env_side_jnt_names) + \
+                "\nclient side -> \n" + \
+                " ".join(self._controller_side_jnt_names) 
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
                     "_check_jnt_names_compatibility",
                     exception,
