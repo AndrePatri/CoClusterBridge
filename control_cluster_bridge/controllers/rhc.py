@@ -626,18 +626,18 @@ class RHController(ABC):
                             retry=True)
         self.rhc_internal.write_eff(data= self._get_eff_from_sol(),
                             retry=True)
-        # for cost_idx in range(self.rhc_internal.config.n_costs):
-        #     # iterate over all costs and update all values
-        #     cost_name = self.rhc_internal.config.cost_names[cost_idx]
-        #     self.rhc_internal.write_cost(data= self._get_cost_from_sol(cost_name = cost_name),
-        #                         cost_name = cost_name,
-        #                         retry=True)
-        # for constr_idx in range(self.rhc_internal.config.n_constr):
-        #     # iterate over all constraints and update all values
-        #     constr_name = self.rhc_internal.config.constr_names[constr_idx]
-        #     self.rhc_internal.write_constr(data= self._get_constr_from_sol(constr_name=constr_name),
-        #                         constr_name = constr_name,
-        #                         retry=True)
+        for cost_idx in range(self.rhc_internal.config.n_costs):
+            # iterate over all costs and update all values
+            cost_name = self.rhc_internal.config.cost_names[cost_idx]
+            self.rhc_internal.write_cost(data= self._get_cost_from_sol(cost_name = cost_name),
+                                cost_name = cost_name,
+                                retry=True)
+        for constr_idx in range(self.rhc_internal.config.n_constr):
+            # iterate over all constraints and update all values
+            constr_name = self.rhc_internal.config.constr_names[constr_idx]
+            self.rhc_internal.write_constr(data= self._get_constr_from_sol(constr_name=constr_name),
+                                constr_name = constr_name,
+                                retry=True)
     
     def _get_contacts(self): 
         contact_names = self._get_contact_names()

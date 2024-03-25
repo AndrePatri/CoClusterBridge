@@ -762,15 +762,11 @@ class RHCInternal(SharedDataWindow):
                     # iterate over data names (i.e. plots)
 
                         if self.is_cost:
-                            
                             data = np.atleast_2d(self.shared_data_clients[index].read_cost(self.names[i])[:, :])
-                            
                             self.rt_plotters[i].rt_plot_widget.update(data)
 
                         if self.is_constraint:
-
                             data = np.atleast_2d(self.shared_data_clients[index].read_constr(self.names[i])[:, :])
-                            
                             self.rt_plotters[i].rt_plot_widget.update(data)
 
             else:

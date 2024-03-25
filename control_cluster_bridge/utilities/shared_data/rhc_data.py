@@ -1119,7 +1119,6 @@ class RhcInternal(SharedDataBase):
             config: Config = None,
             namespace = "",
             rhc_index = 0,
-            is_server = False, 
             n_nodes: int = -1, 
             n_contacts: int = -1,
             n_jnts: int = -1,
