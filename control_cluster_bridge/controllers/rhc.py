@@ -434,6 +434,7 @@ class RHController(ABC):
                         LogType.WARN,
                         throw_when_excep = True)
         if not len(self.robot_state.contact_names()) == len(self._get_contacts()):
+            # at least, we need the n of contacts to match!
             exception = f"Controller-side n contacts {self._get_contacts()} do not match " + \
                 f"server-side n contacts {len(self.robot_state.contact_names())}!"
             Journal.log(f"{self.__class__.__name__}{self.controller_index}",
