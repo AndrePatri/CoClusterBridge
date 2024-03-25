@@ -196,7 +196,6 @@ class RhcRefs(SharedDataBase):
     def __init__(self,
                 namespace: str,
                 is_server: bool,
-                basename: str = "",
                 n_robots: int = None,
                 n_jnts: int = None,
                 n_contacts: int = 1,
