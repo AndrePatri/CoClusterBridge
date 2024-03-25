@@ -24,8 +24,6 @@ from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import dtype
 
-from control_cluster_bridge.utilities.math_utils import incremental_rotate
-
 import math
 
 import numpy as np
