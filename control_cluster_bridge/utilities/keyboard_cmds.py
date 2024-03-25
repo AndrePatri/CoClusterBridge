@@ -44,8 +44,13 @@ class RhcRefsFromKeyboard:
         self.height_dh = 0.02 # [m]
 
         self.enable_navigation = False
+        self.enable_twist = False
+        self.enable_twist_roll = False
+        self.enable_twist_pitch = False
+        self.enable_twist_yaw = False
+
         self.dxy = 0.05 # [m]
-        self.dtheta_z = 1.0 * math.pi / 180.0 # [rad]
+        self._dtwist = 1.0 * math.pi / 180.0 # [rad]
 
         self.enable_phase_id_change = False
 
@@ -151,30 +156,39 @@ class RhcRefsFromKeyboard:
                                     robot_idxs=self.cluster_idx_np)
     
     def _update_navigation(self, 
-                    lateral = None, 
-                    orientation = None,
+                    type: str,
                     increment = True):
 
         current_lin_v_ref = self.rhc_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
         current_omega_ref = self.rhc_refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
 
-        if lateral is not None and lateral and increment:
+        if type=="lateral_lin" and increment:
             # lateral motion
             current_lin_v_ref[1] = current_lin_v_ref[1] - self.dxy
-        if lateral is not None and lateral and not increment:
+        if type=="lateral_lin" and not increment:
             # lateral motion
             current_lin_v_ref[1] = current_lin_v_ref[1] + self.dxy
-        if lateral is not None and not lateral and not increment:
+        if type=="frontal_lin" and not increment:
             # frontal motion
             current_lin_v_ref[0] = current_lin_v_ref[0] - self.dxy
-        if lateral is not None and not lateral and increment:
+        if type=="frontal_lin" and increment:
             # frontal motion
             current_lin_v_ref[0] = current_lin_v_ref[0] + self.dxy
-        if orientation is not None and orientation and increment:
+        if type=="twist_roll" and increment:
             # rotate counter-clockwise
-            current_omega_ref[2] = current_omega_ref[2] + self.dtheta_z 
-        if orientation is not None and orientation and not increment:
-            current_omega_ref[2] = current_omega_ref[2] - self.dtheta_z 
+            current_omega_ref[0] = current_omega_ref[0] + self._dtwist 
+        if type=="twist_roll" and not increment:
+            current_omega_ref[0] = current_omega_ref[0] - self._dtwist 
+        if type=="twist_pitch" and increment:
+            # rotate counter-clockwise
+            current_omega_ref[1] = current_omega_ref[1] + self._dtwist 
+        if type=="twist_pitch" and not increment:
+            current_omega_ref[1] = current_omega_ref[1] - self._dtwist 
+        if type=="twist_yaw" and increment:
+            # rotate counter-clockwise
+            current_omega_ref[2] = current_omega_ref[2] + self._dtwist 
+        if type=="twist_yaw" and not increment:
+            current_omega_ref[2] = current_omega_ref[2] - self._dtwist 
 
         self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
@@ -268,50 +282,87 @@ class RhcRefsFromKeyboard:
         if key.char == "-" and self.enable_heightchange:
             self._update_base_height(decrement=True)
 
-    def _set_navigation(self,
+    def _set_twist(self, 
                 key):
-
-        if key.char == "n":
-                    
-            self.enable_navigation = not self.enable_navigation
-
-            info = f"Navigation enabled: {self.enable_navigation}"
-
+        
+        if key.char == "T":
+            self.enable_twist = not self.enable_twist
+            info = f"Twist change enabled: {self.enable_twist}"
             Journal.log(self.__class__.__name__,
                 "_set_navigation",
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
-        
+        if self.enable_twist and key.char == "x":
+            self.enable_twist_roll = not self.enable_twist_roll
+            info = f"Twist roll change enabled: {self.enable_twist_roll}"
+            Journal.log(self.__class__.__name__,
+                "_set_navigation",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+        if self.enable_twist and key.char == "y":
+            self.enable_twist_pitch = not self.enable_twist_pitch
+            info = f"Twist pitch change enabled: {self.enable_twist_pitch}"
+            Journal.log(self.__class__.__name__,
+                "_set_navigation",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+        if self.enable_twist and key.char == "z":
+            self.enable_twist_yaw = not self.enable_twist_yaw
+            info = f"Twist yaw change enabled: {self.enable_twist_yaw}"
+            Journal.log(self.__class__.__name__,
+                "_set_navigation",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+
+        if key.char == "+":
+            if self.enable_twist_roll:
+                self._update_navigation(type="twist_roll",
+                                    increment = True)
+            if self.enable_twist_pitch:
+                self._update_navigation(type="twist_pitch",
+                                    increment = True)
+            if self.enable_twist_yaw:
+                self._update_navigation(type="twist_yaw",
+                                    increment = True)
+        if key.char == "-":
+            if self.enable_twist_roll:
+                self._update_navigation(type="twist_roll",
+                                    increment = False)
+            if self.enable_twist_pitch:
+                self._update_navigation(type="twist_pitch",
+                                    increment = False)
+            if self.enable_twist_yaw:
+                self._update_navigation(type="twist_yaw",
+                                    increment = False)
+            
+    def _set_navigation(self,
+                key):
+
+        if key.char == "n":
+            self.enable_navigation = not self.enable_navigation
+            info = f"Navigation enabled: {self.enable_navigation}"
+            Journal.log(self.__class__.__name__,
+                "_set_navigation",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+            
         if key.char == "6" and self.enable_navigation:
-            
-            self._update_navigation(lateral = True, 
+            self._update_navigation(type="lateral_lin", 
                             increment = True)
-
         if key.char == "4" and self.enable_navigation:
-            
-            self._update_navigation(lateral = True, 
+            self._update_navigation(type="lateral_lin",
                             increment = False)
-        
         if key.char == "8" and self.enable_navigation:
-            
-            self._update_navigation(lateral = False, 
+            self._update_navigation(type="frontal_lin",
                             increment = True)
-        
         if key.char == "2" and self.enable_navigation:
-            
-            self._update_navigation(lateral = False, 
+            self._update_navigation(type="frontal_lin",
                             increment = False)
-        
-        if key == keyboard.Key.left and self.enable_navigation:
-                
-            self._update_navigation(orientation=True,
-                                increment = True)
-
-        if key == keyboard.Key.right and self.enable_navigation:
-            
-            self._update_navigation(orientation=True,
-                                increment = False)
                 
     def _on_press(self, key):
 
@@ -322,21 +373,18 @@ class RhcRefsFromKeyboard:
             # current cluster index
 
             if hasattr(key, 'char'):
-                
-                # print('Key {0} pressed.'.format(key.char))
-                
+                                
                 # phase ids
                 self._set_phase_id(key)
-
                 # stepping phases (if phase id allows it)
                 self._set_contacts(key=key, 
                             is_contact=False)
-                
                 # height change
                 self._set_base_height(key)
-
-                # navigation
+                # (linear) navigation cmds
                 self._set_navigation(key)
+                # orientation (twist)
+                self._set_twist(key)
 
             self._synch(read=False)
 
