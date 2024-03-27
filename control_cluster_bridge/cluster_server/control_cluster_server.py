@@ -349,6 +349,9 @@ class ControlClusterServer(ABC):
         self._get_rhc_sol() # not super efficient, but safe: in theory we should only update the 
         # sol of the controllers which where reset 
 
+        self._rhc_status.resets.synch_all(read=True, retry=True) # update reset flags (controllers
+        # reset flags upon successful reset)
+
     def activate_controllers(self,
                     idxs: torch.Tensor = None):
         if idxs is not None:

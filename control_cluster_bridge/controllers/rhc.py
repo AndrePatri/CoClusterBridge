@@ -262,6 +262,7 @@ class RHController(ABC):
     def reset(self):
         
         if not self._closed:
+            aaa = f"AAAAAAAAAAAAAA {self._n_resets}- n {self.controller_index}\n"
             self._reset()
             self._failed = False # allow triggering
             self.set_cmds_to_homing()
