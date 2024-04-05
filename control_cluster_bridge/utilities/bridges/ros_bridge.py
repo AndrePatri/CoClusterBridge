@@ -15,6 +15,8 @@ import time
 
 from perf_sleep.pyperfsleep import PerfSleep
 
+from typing import List
+
 class Sharsor2RosBridge():
 
     def __init__(self,
@@ -26,6 +28,7 @@ class Sharsor2RosBridge():
 
         self._bridges = []
         self._clients = []
+        self._shared_mems = [] # List of lists
 
         self._init_clients()
 
@@ -39,6 +42,16 @@ class Sharsor2RosBridge():
                                 safe=False, 
                                 verbose=True, 
                                 vlevel=VLevel.V1))
+        
+        for client in self._clients:
+            shared_mems = []
+            shared_mem = client.get_shared_mem() # this method is must be available for all clients 
+            # (it must return either a single Client, a List of Clients or None)
+            if not isinstance(shared_mem, List): #
+                shared_mems.append(shared_mem)
+            else: # we assume that in all other cases it will be a List of clients
+                shared_mems = shared_mem
+            self._shared_mems.append(shared_mems)
                 
     def _run_clients(self):
         for client in self._clients:
@@ -48,34 +61,41 @@ class Sharsor2RosBridge():
         for client in self._clients:
             client.close()
 
+    def _close_bridges(self):
+        for bridge in self._bridges:
+            bridge.close()
+
     def _init_toROS_bridges(self):
 
         if self._backend == "ros1":
             import rospy
             node = rospy.init_node("Sharsor2RosBridge_" + self._namespace)
-            for client in self._clients:
-                self._bridges.append(ToRos(client=client.get_shared_mem(),
+            for i in range(len(self._shared_mems)):
+                shared_mems_client = self._shared_mems[i]
+                for j in range(len(shared_mems_client)):
+                    self._bridges.append(ToRos(client=shared_mems_client[j],
                     queue_size = 1,
                     ros_backend = self._backend))
-            
         elif self._backend == "ros2":
             import rclpy
             rclpy.init()
             node = rclpy.create_node(self._namespace)
-            for client in self._clients:
-
-                shared_mems = client.get_shared_mem() # potentially a single Server/Client, a List or None
-
-                self._bridges.append(ToRos(client=shared_mems,
+            for i in range(len(self._shared_mems)):
+                shared_mems_client = self._shared_mems[i]
+                for j in range(len(shared_mems_client)):
+                    self._bridges.append(ToRos(client=shared_mems_client[j],
                     queue_size = 1,
-                    ros_backend = self._backend),
-                    node=node)
+                    ros_backend = self._backend,
+                    node=node))
         else:
             Journal.log(self.__class__.__name__,
                 "_init_toROS_bridges",
                 f"backend {self._backend} not supported!",
                 LogType.EXCEP,
                 throw_when_excep = True)
+        
+        for bridge in self._bridges:
+            bridge.run()
 
     def run(self, dt: float = 0.05):
 
@@ -124,11 +144,13 @@ class Sharsor2RosBridge():
 
     def _update(self):
 
-        aaa = 1
+        for bridge in self._bridges:
+            bridge.update()
 
     def close(self):
 
         self._close_clients()
+        self._close_bridges()
 
         self._is_running = False
 
