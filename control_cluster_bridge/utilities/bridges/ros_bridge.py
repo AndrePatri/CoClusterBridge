@@ -1,150 +1,157 @@
 from SharsorIPCpp.PySharsor.extensions.ros_bridge.to_ros import *
 from SharsorIPCpp.PySharsor.wrappers.shared_data_view import *
-
 from SharsorIPCpp.PySharsorIPC import *
 
-from control_cluster_bridge.utilities.data import RhcInternal
-# from control_cluster_bridge.utilities.rhc_defs import RHCState
+from SharsorIPCpp.PySharsorIPC import VLevel
+from SharsorIPCpp.PySharsorIPC import LogType
+from SharsorIPCpp.PySharsorIPC import Journal
 
-import os   
+from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 
-# Function to set CPU affinity
-def set_affinity(cores):
-    try:
-        os.sched_setaffinity(0, cores)
-        print(f"Set CPU affinity to cores: {cores}")
-    except Exception as e:
-        print(f"Error setting CPU affinity: {e}")
+import argparse
+import time 
 
-order = 'C'
+from perf_sleep.pyperfsleep import PerfSleep
 
-namespace = "kyon0"
+class Sharsor2RosBridge():
 
-config = RhcInternal.Config(is_server=False, 
-                        enable_q= True, 
-                        enable_v=False, 
-                        enable_a=False, 
-                        enable_a_dot=False, 
-                        enable_f=False,
-                        enable_f_dot=False, 
-                        enable_eff=False
-                        )
+    def __init__(self,
+            namespace: str,
+            backend: str = "ros2"):
 
-rhc_internal = RhcInternal(config=config, 
-                        namespace=namespace,
-                        rhc_index = 0,
-                        is_server=False,
-                        vlevel=VLevel.V2,
-                        verbose=True)
+        self._namespace = namespace
+        self._backend = backend
 
-rhc_internal.run()
+        self._bridges = []
+        self._clients = []
 
-class RosBridge():
+        self._init_clients()
 
-    def __init__(self):
+        self._dt = 0.05
 
-        self.
-# update_dt = 0.005
-# start_time = time.perf_counter() 
-# start_time = 0.0
-# elapsed_time = 0.0
-# actual_loop_dt = 0.0
+        self._is_running = False
 
-# time_to_sleep_ns = 0
-# debug = False
+    def _init_clients(self):
+        self._clients.append(RobotState(namespace=self._namespace, 
+                                is_server=False, 
+                                safe=False, 
+                                verbose=True, 
+                                vlevel=VLevel.V1))
+                
+    def _run_clients(self):
+        for client in self._clients:
+            client.run()
 
-# perf_timer = PerfSleep()
+    def _close_clients(self):
+        for client in self._clients:
+            client.close()
 
-# namespace = 'Shared2RosBridge'
+    def _init_toROS_bridges(self):
 
-# ros_backend = "ros1" # ros1, ros2
-# node = None
-# bridge = None
+        if self._backend == "ros1":
+            import rospy
+            node = rospy.init_node("Sharsor2RosBridge_" + self._namespace)
+            for client in self._clients:
+                self._bridges.append(ToRos(client=client.get_shared_mem(),
+                    queue_size = 1,
+                    ros_backend = self._backend))
+            
+        elif self._backend == "ros2":
+            import rclpy
+            rclpy.init()
+            node = rclpy.create_node(self._namespace)
+            for client in self._clients:
 
-# if ros_backend == "ros1":
+                shared_mems = client.get_shared_mem() # potentially a single Server/Client, a List or None
 
-#     import rospy
+                self._bridges.append(ToRos(client=shared_mems,
+                    queue_size = 1,
+                    ros_backend = self._backend),
+                    node=node)
+        else:
+            Journal.log(self.__class__.__name__,
+                "_init_toROS_bridges",
+                f"backend {self._backend} not supported!",
+                LogType.EXCEP,
+                throw_when_excep = True)
 
-#     node = rospy.init_node(namespace)
+    def run(self, dt: float = 0.05):
 
-#     bridge = ToRos(client=client.shared_mem,
-#         queue_size = 1,
-#         ros_backend = ros_backend)
+        self._dt = dt
 
-# if ros_backend == "ros2":
+        self._run_clients()
 
-#     import rclpy
+        self._init_toROS_bridges()
 
-#     rclpy.init()
+        self._is_running = True
 
-#     node = rclpy.create_node(namespace)
+        self._run()
 
-#     bridge = ToRos(client=client.shared_mem,
-#         queue_size=1,
-#         ros_backend=ros_backend,
-#         node=node)
+    def _run(self):
 
-# bridge.run()
+        info = f": starting sharsor-to-ROS bridge with update dt {self._dt} s" + \
+            f" with namespace {self._namespace}"
+        Journal.log(self.__class__.__name__,
+            "run",
+            info,
+            LogType.INFO,
+            throw_when_excep = True)
+        start_time = 0.0
+        elapsed_time = 0.0
+        time_to_sleep_ns = 0
 
-# msg = f"Will try to run the bridge at {1/update_dt} Hz."
-# Journal.log("test_to_ros.py",
-#             "",
-#             msg,
-#             LogType.INFO,
-#             throw_when_excep = True)
+        while self._is_running:
+            try:
+                start_time = time.perf_counter() 
+                self._update()
+                elapsed_time = time.perf_counter() - start_time
+                time_to_sleep_ns = int((self._dt - elapsed_time) * 1000000000) # [ns]
+                if time_to_sleep_ns < 0:
+                    warning = f": Could not match desired update dt of {self._dt} s. " + \
+                        f"Elapsed time to update {elapsed_time}."
+                    Journal.log(self.__class__.__name__,
+                        "run",
+                        warning,
+                        LogType.WARN,
+                        throw_when_excep = True)
+                else:
+                    PerfSleep.thread_sleep(time_to_sleep_ns) 
+                continue
+            except KeyboardInterrupt:
+                self.close()
 
-# try:
+    def _update(self):
 
-#     set_affinity([9])
+        aaa = 1
+
+    def close(self):
+
+        self._close_clients()
+
+        self._is_running = False
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description="Multi Robot Visualizer")
+    parser.add_argument('--ns', type=str, help='Namespace to be used for cluster shared memory')
+    parser.add_argument('--ros2', action='store_true', help='Enable ROS 2 mode')
+    parser.add_argument('--dt', type=float, default=0.01, help='Update interval in seconds, default is 0.01')
+
+    args = parser.parse_args()
     
-#     while True:
-        
-#         if ros_backend == "ros1":
-            
-#             if rospy.is_shutdown():
+    backend = "ros2" if args.ros2 else "ros1"
 
-#                 break
+    if args.ns is None:
+        Journal.log("ros_bridge.py",
+                "ros_bridge",
+                "no --ns argument provided!",
+                LogType.EXCEP,
+                throw_when_excep = True)
+    bridge = Sharsor2RosBridge(namespace=args.ns,
+                    backend=backend)
 
-#         if ros_backend == "ros2":
-            
-#             if not rclpy.ok():
+    bridge.run()
 
-#                 break
-
-#         start_time = time.perf_counter() 
-
-#         # server.get_numpy_view()[:, :] = np.random.rand(server.n_rows, server.n_cols)
-
-#         bridge.update()
-        
-#         # if ros_backend == "ros2":
-
-#         #     rclpy.spin_once(node) # processes callbacks
-
-#         elapsed_time = time.perf_counter() - start_time
-
-#         time_to_sleep_ns = int((update_dt - elapsed_time) * 1e+9) # [ns]
-
-#         if time_to_sleep_ns < 0:
-
-#             warning = f"Could not match desired update dt of {update_dt} s. " + \
-#                 f"Elapsed time to update {elapsed_time}."
-
-#             Journal.log("test_to_ros.py",
-#                         "",
-#                         warning,
-#                         LogType.WARN,
-#                         throw_when_excep = True)
-
-#         perf_timer.thread_sleep(time_to_sleep_ns) 
-
-#         # loop_rate.sleep()
-
-#         actual_loop_dt = time.perf_counter() - start_time
-
-#         if debug:
-
-#             print(f"Actual loop dt {actual_loop_dt} s.")
-
-# except KeyboardInterrupt:
-#     print("\nCtrl+C pressed. Exiting the loop.")
+    bridge.close()

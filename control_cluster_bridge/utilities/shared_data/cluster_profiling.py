@@ -301,6 +301,15 @@ class RhcProfiling(SharedDataBase):
 
         return self._is_runnning
     
+    def get_shared_mem(self):
+        return [self.shared_data.get_shared_mem(),
+            self.rti_sol_time.get_shared_mem(),
+            self.solve_loop_dt.get_shared_mem(),
+            self.prb_update_dt.get_shared_mem(),
+            self.phase_shift_dt.get_shared_mem(),
+            self.task_ref_update_dt.get_shared_mem(),
+            self.shared_datanames.get_shared_mem()]
+    
     def run(self):
         
         self.shared_datanames.run()

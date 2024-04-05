@@ -246,7 +246,11 @@ class JntImpCntrlData(SharedDataBase):
     def is_running(self):
         
         return self._is_runnning
-
+    
+    def get_shared_mem(self):
+        return [self.shared_jnt_names.get_shared_mem(),
+            self.imp_data_view.get_shared_mem()]
+    
     def run(self):
         
         self.imp_data_view.run()

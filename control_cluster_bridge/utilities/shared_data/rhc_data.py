@@ -269,6 +269,11 @@ class RhcRefs(SharedDataBase):
     
         return self._is_runnning
     
+    def get_shared_mem(self):
+        return self.rob_refs.get_shared_mem() + [
+            self.phase_id.get_shared_mem(),
+            self.contact_flags.get_shared_mem()]
+    
     def run(self):
 
         self.rob_refs.run()
@@ -706,6 +711,18 @@ class RhcStatus(SharedDataBase):
     def is_running(self):
     
         return self._is_runnning
+    
+    def get_shared_mem(self):
+        return [self.fails.get_shared_mem(),
+            self.resets.get_shared_mem(),
+            self.trigger.get_shared_mem(),
+            self.activation_state.get_shared_mem(),
+            self.registration.get_shared_mem(),
+            self.controllers_counter.get_shared_mem(),
+            self.controllers_fail_counter.get_shared_mem(),
+            self.rhc_cost.get_shared_mem(),
+            self.rhc_constr_viol.get_shared_mem(),
+            self.rhc_n_iter.get_shared_mem()]
     
     def run(self):
 
@@ -1273,6 +1290,19 @@ class RhcInternal(SharedDataBase):
 
         return self._is_running
     
+    def get_shared_mem(self):
+        return [self.fails.get_shared_mem(),
+            self.q.get_shared_mem(),
+            self.v.get_shared_mem(),
+            self.a.get_shared_mem(),
+            self.a_dot.get_shared_mem(),
+            self.f.get_shared_mem(),
+            self.f_dot.get_shared_mem(),
+            self.eff.get_shared_mem(),
+            self.costs.get_shared_mem(),
+            self.cnstr.get_shared_mem(),
+            self._shared_jnt_names.get_shared_mem()]
+                
     def jnt_names(self):
 
         return self._jnt_names

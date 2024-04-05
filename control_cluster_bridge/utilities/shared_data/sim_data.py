@@ -131,6 +131,10 @@ class SharedSimInfo(SharedDataBase):
             
         self._is_running = False
     
+    def get_shared_mem(self):
+        return [self.shared_sim_data.get_shared_mem(),
+            self.shared_sim_datanames.get_shared_mem()]
+    
     def _parse_sim_dict(self):
 
         if self.sim_params_dict is not None:

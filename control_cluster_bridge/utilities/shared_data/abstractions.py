@@ -17,6 +17,11 @@ class SharedDataBase(ABC):
 
         pass
 
+    @abstractmethod
+    def get_shared_mem(self):
+
+        pass
+    
 def is_shared_data_child(cls):
 
     return issubclass(cls,

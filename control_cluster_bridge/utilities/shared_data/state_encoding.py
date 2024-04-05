@@ -756,7 +756,12 @@ class FullRobState(SharedDataBase):
     def __del__(self):
 
         self.close()
-
+    
+    def get_shared_mem(self):
+        return [self.root_state.get_shared_mem(),
+            self.jnts_state.get_shared_mem(),
+            self.contact_wrenches.get_shared_mem()]
+    
     def n_robots(self):
 
         return self._n_robots
