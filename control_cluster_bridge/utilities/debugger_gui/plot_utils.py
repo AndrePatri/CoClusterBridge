@@ -121,7 +121,7 @@ class RtPlotWidget(pg.PlotWidget):
         if not self.paused:
 
             self.data[:, :, :] = np.roll(self.data, -1, axis=0) # roll data "pages" backwards
-            # for each page (first dimension) data is arranges in a matrix
+            # for each page (first dimension) data is arranged in a matrix
             # [data dim x data sample]
 
             updated_data_shape = new_data.shape

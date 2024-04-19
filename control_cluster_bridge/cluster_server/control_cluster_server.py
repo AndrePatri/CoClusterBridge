@@ -181,6 +181,7 @@ class ControlClusterServer(ABC):
                             fill_value=np.nan)
         self._rhc_status = RhcStatus(is_server=True,
                             cluster_size=self.cluster_size,
+                            n_nodes=50, # just an ub which should fit for most cases
                             namespace=self._namespace, 
                             verbose=self._verbose, 
                             vlevel=self._vlevel,

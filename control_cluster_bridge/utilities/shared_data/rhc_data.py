@@ -561,6 +561,64 @@ class RhcStatus(SharedDataBase):
                 with_torch_view=with_torch_view,
                 fill_value = np.nan)
     
+    class RhcNodesCostView(SharedTWrapper):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                n_nodes: int = -1,
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
+            
+            basename = "RhcNodesCost" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
+                fill_value = 0)
+    
+    class RhcNodesCnstrViolationView(SharedTWrapper):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                n_nodes: int = -1,
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
+            
+            basename = "RhcNodesCnstrViolation" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = n_nodes, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
+                fill_value = 0)
+    
     class RhcNIterationsView(SharedTWrapper):
 
         def __init__(self,
@@ -592,6 +650,7 @@ class RhcStatus(SharedDataBase):
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
+            n_nodes: int = -1,
             namespace = "", 
             verbose = False, 
             vlevel: VLevel = VLevel.V0,
@@ -602,6 +661,7 @@ class RhcStatus(SharedDataBase):
         self.is_server = is_server
 
         self.cluster_size = cluster_size
+        self.n_nodes = n_nodes
 
         self.namespace = namespace
 
@@ -691,6 +751,26 @@ class RhcStatus(SharedDataBase):
                                 with_gpu_mirror=with_gpu_mirror,
                                 with_torch_view=with_torch_view)
         
+        self.rhc_nodes_cost = self.RhcNodesCostView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                n_nodes=self.n_nodes,
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
+
+        self.rhc_nodes_constr_viol = self.RhcNodesCnstrViolationView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                n_nodes=self.n_nodes,
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
+
         self.rhc_n_iter = self.RhcNIterationsView(namespace=self.namespace, 
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
@@ -722,7 +802,9 @@ class RhcStatus(SharedDataBase):
             self.controllers_fail_counter.get_shared_mem(),
             self.rhc_cost.get_shared_mem(),
             self.rhc_constr_viol.get_shared_mem(),
-            self.rhc_n_iter.get_shared_mem()]
+            self.rhc_n_iter.get_shared_mem(),
+            self.rhc_nodes_cost.get_shared_mem(),
+            self.rhc_nodes_constr_viol.get_shared_mem()]
     
     def run(self):
 
@@ -735,12 +817,15 @@ class RhcStatus(SharedDataBase):
         self.controllers_fail_counter.run()
         self.rhc_cost.run()
         self.rhc_constr_viol.run()
+        self.rhc_nodes_cost.run()
+        self.rhc_nodes_constr_viol.run()
         self.rhc_n_iter.run()
 
         if not self.is_server:
     
             self.cluster_size = self.trigger.n_rows
-        
+            self.n_nodes = self.rhc_nodes_cost.n_cols
+
         self._is_runnning = True
 
     def close(self):
@@ -757,6 +842,8 @@ class RhcStatus(SharedDataBase):
             self.rhc_n_iter.close()
             self.rhc_cost.close()
             self.rhc_constr_viol.close()
+            self.rhc_nodes_cost.close()
+            self.rhc_nodes_constr_viol.close()
 
             self._is_runnning = False
 

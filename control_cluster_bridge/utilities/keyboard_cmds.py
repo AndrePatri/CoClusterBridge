@@ -375,7 +375,7 @@ class RhcRefsFromKeyboard:
             if hasattr(key, 'char'):
                                 
                 # phase ids
-                self._set_phase_id(key)
+                # self._set_phase_id(key)
                 # stepping phases (if phase id allows it)
                 self._set_contacts(key=key, 
                             is_contact=False)

@@ -239,7 +239,8 @@ class RtClusterDebugger(QMainWindow):
                             window_buffer_factor=self.window_buffer_factor, 
                             namespace=self.namespace,
                             parent=None, 
-                            verbose = self.verbose)
+                            verbose = self.verbose,
+                            add_settings_tab=True)
 
         self.base_spawnable_tabs = [sim_info, 
                             cluster_info,

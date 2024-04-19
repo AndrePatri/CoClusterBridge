@@ -572,13 +572,19 @@ class RHController(ABC):
         self.rhc_status.rhc_cost.write_retry(self._get_rhc_cost(), 
                                     row_index=self.controller_index,
                                     col_index=0)
-        self.rhc_status.rhc_constr_viol.write_retry(self._get_rhc_residual(), 
+        self.rhc_status.rhc_constr_viol.write_retry(self._get_rhc_constr_viol(), 
                                     row_index=self.controller_index,
                                     col_index=0)
         self.rhc_status.rhc_n_iter.write_retry(self._get_rhc_niter_to_sol(), 
                                     row_index=self.controller_index,
                                     col_index=0)
-    
+        self.rhc_status.rhc_nodes_cost.write_retry(data=self._get_rhc_nodes_cost(), 
+                                            row_index=self.controller_index, 
+                                            col_index=0)
+        self.rhc_status.rhc_nodes_constr_viol.write_retry(data=self._get_rhc_nodes_constr_viol(), 
+                                            row_index=self.controller_index, 
+                                            col_index=0)
+
     def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):
 
@@ -710,14 +716,22 @@ class RHController(ABC):
     def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
         pass
 
-    def _get_rhc_cost(self) -> np.ndarray:
+    def _get_rhc_cost(self):
         # to be overridden
         return np.nan
     
-    def _get_rhc_residual(self) -> np.ndarray:
+    def _get_rhc_constr_viol(self):
         # to be overridden
         return np.nan
 
+    def _get_rhc_nodes_cost(self):
+        # to be overridden
+        return np.zeros((1,self.rhc_status.n_nodes), dtype=self._dtype)
+    
+    def _get_rhc_nodes_constr_viol(self):
+        # to be overridden
+        return np.zeros((1,self.rhc_status.n_nodes), dtype=self._dtype)
+    
     def _get_rhc_niter_to_sol(self) -> np.ndarray:
         # to be overridden
         return np.nan

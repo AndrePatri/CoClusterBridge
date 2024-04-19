@@ -495,10 +495,9 @@ class RHCInternal(SharedDataWindow):
                             vlevel=VLevel.V1)
 
         self.rhc_status_info.run()
-        
-        self.cluster_size = self.rhc_status_info.trigger.n_rows
+        self.rhc_status_info.close()
 
-        self.rhc_status_info.close() # we don't need the client anymore
+        self.cluster_size = self.rhc_status_info.trigger.n_rows
 
         enable_costs = False
         enable_constr = False
@@ -1071,7 +1070,7 @@ class RHCStatus(SharedDataWindow):
         namespace = "",
         parent: QWidget = None, 
         verbose = False,
-        add_settings_tab = False,
+        add_settings_tab = True,
         ):
         
         name = "RhcStatus"
@@ -1102,7 +1101,7 @@ class RHCStatus(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        self.grid_n_rows = 5
+        self.grid_n_rows = 6
 
         self.grid_n_cols = 2
 
@@ -1226,6 +1225,28 @@ class RHCStatus(SharedDataWindow):
                                     legend_list=cluster_idx_legend, 
                                     ylabel="[int]"))
         
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = self.shared_data_clients[0].n_nodes,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc Cost on nodes", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[float]"))
+        
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = self.shared_data_clients[0].n_nodes,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Rhc Constraint Violation on nodes", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[float]"))
+        
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
@@ -1235,25 +1256,40 @@ class RHCStatus(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[6].base_frame, 3, 0)
         self.grid.addFrame(self.rt_plotters[7].base_frame, 3, 1)
         self.grid.addFrame(self.rt_plotters[8].base_frame, 4, 0)
-        self.grid.addFrame(self.rt_plotters[8].base_frame, 4, 1)
+        self.grid.addFrame(self.rt_plotters[9].base_frame, 4, 1)
+        self.grid.addFrame(self.rt_plotters[10].base_frame, 5, 0)
+        self.grid.addFrame(self.rt_plotters[11].base_frame, 5, 1)
 
     def _finalize_grid(self):
         
-        if self.add_settings_tab:
+        widget_utils = WidgetUtils()
 
-            widget_utils = WidgetUtils()
+        settings_frames = []
 
-            settings_frames = []
+        node_index_slider = widget_utils.generate_complex_slider(
+                        parent=None, 
+                        parent_layout=None,
+                        min_shown=f"{0}", min= 0, 
+                        max_shown=f"{self.shared_data_clients[0].n_nodes - 1}", 
+                        max=self.shared_data_clients[0].n_nodes - 1, 
+                        init_val_shown=f"{0}", init=0, 
+                        title="node index slider", 
+                        callback=self._update_node_idx)
+        
+        settings_frames.append(node_index_slider)
+        
+        self.grid.addToSettings(settings_frames)
 
-            # sim_info_widget = widget_utils.create_scrollable_label_list(parent=None, 
-            #                                     parent_layout=None, 
-            #                                     list_names=self.shared_data_clients[0].param_keys,
-            #                                     title="RT SIMULATOR INFO", 
-            #                                     init=[np.nan] * len(self.shared_data_clients[0].param_keys))
-            
-            # settings_frames.append(sim_info_widget)
-            
-            self.grid.addToSettings(settings_frames)
+    def _update_node_idx(self,
+                    idx: int):
+
+        self.current_node_index = idx
+
+        self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
+        
+        # only cost and constr on nodes
+        self.rt_plotters[10].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+        self.rt_plotters[11].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
 
     def update(self,
             index: int):
@@ -1283,7 +1319,11 @@ class RHCStatus(SharedDataWindow):
                                                     retry=False)
             self.shared_data_clients[0].rhc_n_iter.synch_all(read = True, 
                                                     retry=False)
-
+            self.shared_data_clients[0].rhc_nodes_cost.synch_all(read = True, 
+                                                    retry=False)
+            self.shared_data_clients[0].rhc_nodes_constr_viol.synch_all(read = True, 
+                                                    retry=False)
+            
             self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.get_numpy_view())
             self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.get_numpy_view())
             self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].controllers_fail_counter.get_numpy_view())
@@ -1294,5 +1334,6 @@ class RHCStatus(SharedDataWindow):
             self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].rhc_cost.get_numpy_view())
             self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].rhc_constr_viol.get_numpy_view())
             self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.get_numpy_view())
-
+            self.rt_plotters[10].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_cost.get_numpy_view())
+            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_view())
             
