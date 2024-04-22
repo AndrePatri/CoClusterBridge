@@ -662,8 +662,9 @@ class RHCInternal(SharedDataWindow):
             legend_wrench = force_legend + torque_legend
             for i in range(len(self._contact_names)):
                 contact_name = self._contact_names[i]
-                for j in range(6):
-                    legend_wrench[6 * i + j] = legend_wrench[6 * i + j] + "_" + contact_name
+                for j in range(3):
+                    legend_wrench[3 * i + j] = legend_wrench[3 * i + j] + "_" + contact_name
+                    legend_wrench[3 * len(self._contact_names) + 3 * i + j] = legend_wrench[3 * len(self._contact_names) +3 * i + j] + "_" + contact_name                    
 
             self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_q,
                                     n_data = n_nodes_q,
