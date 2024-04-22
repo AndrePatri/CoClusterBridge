@@ -246,6 +246,12 @@ class ControlClusterServer(ABC):
     def triggered(self):
         return (self._trigger_counter - self._solution_counter) == 1
     
+    def solution_counter(self):
+        return self._solution_counter
+    
+    def trigger_counter(self):
+        return self._trigger_counter
+    
     def pre_trigger(self):
         # first retrieve current controllers status (this is a 
         # separate method wrt trigger_solution to allow higher level code
