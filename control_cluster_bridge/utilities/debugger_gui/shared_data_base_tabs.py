@@ -1102,7 +1102,7 @@ class RHCStatus(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        self.grid_n_rows = 6
+        self.grid_n_rows = 6 + int(self.shared_data_clients[0].n_contacts/2)
 
         self.grid_n_cols = 2
 
@@ -1248,6 +1248,18 @@ class RHCStatus(SharedDataWindow):
                                     legend_list=cluster_idx_legend, 
                                     ylabel="[float]"))
         
+        for i in range(self.shared_data_clients[0].n_contacts):
+            self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                        n_data = self.shared_data_clients[0].n_nodes,
+                                        update_data_dt=self.update_data_dt, 
+                                        update_plot_dt=self.update_plot_dt,
+                                        window_duration=self.window_duration, 
+                                        parent=None, 
+                                        base_name=f"Rhc Step Flag - contact n {i}", 
+                                        window_buffer_factor=self.window_buffer_factor, 
+                                        legend_list=cluster_idx_legend, 
+                                        ylabel="[float]"))
+        
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
@@ -1260,6 +1272,10 @@ class RHCStatus(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[9].base_frame, 4, 1)
         self.grid.addFrame(self.rt_plotters[10].base_frame, 5, 0)
         self.grid.addFrame(self.rt_plotters[11].base_frame, 5, 1)
+        n_rows = int(self.shared_data_clients[0].n_contacts/2)
+        for i in range(n_rows):
+            for j in range(2):
+                self.grid.addFrame(self.rt_plotters[12 + 2 * i + j].base_frame, 6 + i, j)
 
     def _finalize_grid(self):
         
@@ -1291,6 +1307,9 @@ class RHCStatus(SharedDataWindow):
         # only cost and constr on nodes
         self.rt_plotters[10].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
         self.rt_plotters[11].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+        n_contacts = self.shared_data_clients[0].n_contacts
+        for i in range(n_contacts):
+            self.rt_plotters[12+i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
 
     def update(self,
             index: int):
@@ -1324,7 +1343,9 @@ class RHCStatus(SharedDataWindow):
                                                     retry=False)
             self.shared_data_clients[0].rhc_nodes_constr_viol.synch_all(read = True, 
                                                     retry=False)
-            
+            self.shared_data_clients[0].rhc_step_var.synch_all(read = True, 
+                                                    retry=False)
+
             self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.get_numpy_view())
             self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.get_numpy_view())
             self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].controllers_fail_counter.get_numpy_view())
@@ -1337,4 +1358,13 @@ class RHCStatus(SharedDataWindow):
             self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.get_numpy_view())
             self.rt_plotters[10].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_cost.get_numpy_view())
             self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_view())
+
+            n_contacts = self.shared_data_clients[0].n_contacts
+            tot_data = self.shared_data_clients[0].rhc_step_var.get_numpy_view()
+            print("UAAAAAAAAAAAAAAAAAAAAAA")
+            print(tot_data[0, :])
+            for i in range(n_contacts):
+                start_idx = self.shared_data_clients[0].n_nodes * i
+                single_contact_data = tot_data[:, start_idx:(start_idx+self.shared_data_clients[0].n_nodes)]
+                self.rt_plotters[12 + i].rt_plot_widget.update(single_contact_data)
             

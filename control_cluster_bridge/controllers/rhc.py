@@ -584,6 +584,14 @@ class RHController(ABC):
         self.rhc_status.rhc_nodes_constr_viol.write_retry(data=self._get_rhc_nodes_constr_viol(), 
                                             row_index=self.controller_index, 
                                             col_index=0)
+        f_contact = self._get_f_from_sol()
+        if f_contact is not None:
+            for i in range(self.rhc_status.n_contacts):
+                contact_idx = i*3
+                z_idx = contact_idx+2
+                self.rhc_status.rhc_step_var.write_retry(data=f_contact[z_idx:(z_idx+1), :], 
+                                                    row_index=self.controller_index, 
+                                                    col_index=i*self.rhc_status.n_nodes)
 
     def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):
