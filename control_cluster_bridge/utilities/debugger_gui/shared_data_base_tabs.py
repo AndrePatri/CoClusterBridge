@@ -655,15 +655,15 @@ class RHCInternal(SharedDataWindow):
 
             n_dims_f = self.shared_data_clients[0].f.n_rows 
             n_nodes_f = self.shared_data_clients[0].f.n_cols
-            f_legend_base = ["f_x", "f_y", "f_z", "t_x", "t_y", "t_z"]
-            f_legend = f_legend_base * len(self._contact_names)
-
+            f_legend_base_f = ["f_x", "f_y", "f_z"]
+            f_legend_base_t = ["t_x", "t_y", "t_z"]
+            force_legend = f_legend_base_f * len(self._contact_names)
+            torque_legend = f_legend_base_t * len(self._contact_names)
+            legend_wrench = force_legend + torque_legend
             for i in range(len(self._contact_names)):
                 contact_name = self._contact_names[i]
-
                 for j in range(6):
-
-                    f_legend[6 * i + j] = f_legend[6 * i + j] + "_" + contact_name
+                    legend_wrench[6 * i + j] = legend_wrench[6 * i + j] + "_" + contact_name
 
             self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_q,
                                     n_data = n_nodes_q,
@@ -706,7 +706,7 @@ class RHCInternal(SharedDataWindow):
                                     parent=None, 
                                     base_name=f"Rhc internal data: f", 
                                     window_buffer_factor=self.window_buffer_factor, 
-                                    legend_list=f_legend, 
+                                    legend_list=legend_wrench, 
                                     ylabel=""))
 
             self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
