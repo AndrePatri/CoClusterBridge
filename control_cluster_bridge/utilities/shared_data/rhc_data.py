@@ -279,7 +279,7 @@ class RhcRefs(SharedDataBase):
         self.rob_refs.run()
         self.phase_id.run()
 
-        self.n_contacts = self.rob_refs.n_contacts()
+        self._n_contacts = self.rob_refs.n_contacts()
         
         self.n_robots = self.rob_refs.n_robots()    
         
@@ -287,7 +287,7 @@ class RhcRefs(SharedDataBase):
                             basename=self.basename,
                             is_server=self.is_server,
                             n_robots=self.n_robots,
-                            n_contacts=self.n_contacts,
+                            n_contacts=self._n_contacts,
                             verbose=self.verbose,
                             vlevel=self.vlevel,
                             force_reconnection=self.force_reconnection,
@@ -297,7 +297,10 @@ class RhcRefs(SharedDataBase):
         self.contact_flags.run()
 
         self._is_runnning = True
-
+    
+    def n_contacts(self):
+        return self._n_contacts
+    
     def close(self):
         
         if self.is_running():
