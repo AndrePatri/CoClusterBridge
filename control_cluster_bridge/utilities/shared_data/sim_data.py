@@ -286,7 +286,7 @@ class SharedSimInfo(SharedDataBase):
 
         self.synch()
 
-        return self.shared_sim_data.get_numpy_view().copy()
+        return self.shared_sim_data.get_numpy_mirror().copy()
     
     def close(self):
 

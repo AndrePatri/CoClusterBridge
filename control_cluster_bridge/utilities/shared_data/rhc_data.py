@@ -679,7 +679,10 @@ class RhcStatus(SharedDataBase):
                 with_gpu_mirror=with_gpu_mirror,
                 with_torch_view=with_torch_view,
                 fill_value = 0)
-            
+        
+        def tot_dim(self):
+            return self.n_cols
+        
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
@@ -875,7 +878,7 @@ class RhcStatus(SharedDataBase):
             self.n_contacts = int(self.rhc_step_var.n_cols / self.n_nodes)
 
         self._is_runnning = True
-
+    
     def close(self):
         
         if self.is_running():

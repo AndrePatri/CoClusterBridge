@@ -446,7 +446,7 @@ class RhcProfiling(SharedDataBase):
     def synch_info(self):
 
         self.shared_data.synch_all(read=True, retry = True)
-        self.param_values[:, :] = self.shared_data.get_numpy_view()
+        self.param_values[:, :] = self.shared_data.get_numpy_mirror()
 
     def synch_all(self):
 

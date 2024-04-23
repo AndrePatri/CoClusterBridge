@@ -115,7 +115,7 @@ class RhcRefsFromKeyboard:
         if read:
 
             self.env_index.synch_all(read=True, retry=True)
-            env_index = self.env_index.get_numpy_view()
+            env_index = self.env_index.get_numpy_mirror()
             self.cluster_idx = env_index[0, 0].item()
             self.cluster_idx_np = self.cluster_idx
         
@@ -198,13 +198,13 @@ class RhcRefsFromKeyboard:
     def _update_phase_id(self,
                 phase_id: int = -1):
 
-        phase_id = self.rhc_refs.phase_id.get_numpy_view()
+        phase_id = self.rhc_refs.phase_id.get_numpy_mirror()
         phase_id[self.cluster_idx, 111] = phase_id
 
     def _set_contacts(self,
                 key,
                 is_contact: bool = True):
-        contact_flags = self.rhc_refs.contact_flags.get_numpy_view()
+        contact_flags = self.rhc_refs.contact_flags.get_numpy_mirror()
         if key.char == "7":
             contact_flags[self.cluster_idx, 0] = is_contact
         if key.char == "9":

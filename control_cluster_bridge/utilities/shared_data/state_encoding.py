@@ -166,15 +166,15 @@ class JntsState(SharedTWrapper):
 
         # jnts
         if self._with_torch_view:
-            self._q = self.get_torch_view()[:, 0:self.n_jnts].view(self.n_robots, self.n_jnts)
-            self._v = self.get_torch_view()[:, self.n_jnts:2 * self.n_jnts].view(self.n_robots, self.n_jnts)
-            self._a = self.get_torch_view()[:, 2*self.n_jnts:3 * self.n_jnts].view(self.n_robots, self.n_jnts)
-            self._eff = self.get_torch_view()[:, 3*self.n_jnts:4 * self.n_jnts].view(self.n_robots, self.n_jnts)
+            self._q = self.get_torch_mirror()[:, 0:self.n_jnts].view(self.n_robots, self.n_jnts)
+            self._v = self.get_torch_mirror()[:, self.n_jnts:2 * self.n_jnts].view(self.n_robots, self.n_jnts)
+            self._a = self.get_torch_mirror()[:, 2*self.n_jnts:3 * self.n_jnts].view(self.n_robots, self.n_jnts)
+            self._eff = self.get_torch_mirror()[:, 3*self.n_jnts:4 * self.n_jnts].view(self.n_robots, self.n_jnts)
         else:
-            self._q = self.get_numpy_view()[:, 0:self.n_jnts].view()
-            self._v = self.get_numpy_view()[:, self.n_jnts:2 * self.n_jnts].view()
-            self._a = self.get_numpy_view()[:, 2*self.n_jnts:3 * self.n_jnts].view()
-            self._eff = self.get_numpy_view()[:, 3*self.n_jnts:4 * self.n_jnts].view()
+            self._q = self.get_numpy_mirror()[:, 0:self.n_jnts].view()
+            self._v = self.get_numpy_mirror()[:, self.n_jnts:2 * self.n_jnts].view()
+            self._a = self.get_numpy_mirror()[:, 2*self.n_jnts:3 * self.n_jnts].view()
+            self._eff = self.get_numpy_mirror()[:, 3*self.n_jnts:4 * self.n_jnts].view()
         
         if self.gpu_mirror_exists():
             # gpu views 
@@ -359,21 +359,21 @@ class RootState(SharedTWrapper):
 
         # root
         if self._with_torch_view:
-            self._p = self.get_torch_view()[:, 0:3].view(self.n_robots, 3)
-            self._q = self.get_torch_view()[:, 3:7].view(self.n_robots, 4)
-            self._q_full = self.get_torch_view()[:, 0:7].view(self.n_robots, 7)
+            self._p = self.get_torch_mirror()[:, 0:3].view(self.n_robots, 3)
+            self._q = self.get_torch_mirror()[:, 3:7].view(self.n_robots, 4)
+            self._q_full = self.get_torch_mirror()[:, 0:7].view(self.n_robots, 7)
 
-            self._v = self.get_torch_view()[:, 7:10].view(self.n_robots, 3)
-            self._omega = self.get_torch_view()[:, 10:13].view(self.n_robots, 3)
-            self._twist = self.get_torch_view()[:, 7:13].view(self.n_robots, 6)
+            self._v = self.get_torch_mirror()[:, 7:10].view(self.n_robots, 3)
+            self._omega = self.get_torch_mirror()[:, 10:13].view(self.n_robots, 3)
+            self._twist = self.get_torch_mirror()[:, 7:13].view(self.n_robots, 6)
         else:
-            self._p = self.get_numpy_view()[:, 0:3].view()
-            self._q = self.get_numpy_view()[:, 3:7].view()
-            self._q_full = self.get_numpy_view()[:, 0:7].view()
+            self._p = self.get_numpy_mirror()[:, 0:3].view()
+            self._q = self.get_numpy_mirror()[:, 3:7].view()
+            self._q_full = self.get_numpy_mirror()[:, 0:7].view()
 
-            self._v = self.get_numpy_view()[:, 7:10].view()
-            self._omega = self.get_numpy_view()[:, 10:13].view()
-            self._twist = self.get_numpy_view()[:, 7:13].view()
+            self._v = self.get_numpy_mirror()[:, 7:10].view()
+            self._omega = self.get_numpy_mirror()[:, 10:13].view()
+            self._twist = self.get_numpy_mirror()[:, 7:13].view()
 
         if self.gpu_mirror_exists():
 
@@ -570,15 +570,15 @@ class ContactWrenches(SharedTWrapper):
     def _init_views(self):
 
         if self._with_torch_view:
-            self._f = self.get_torch_view()[:, 0:self.n_contacts * 3].view(self.n_robots, 
+            self._f = self.get_torch_mirror()[:, 0:self.n_contacts * 3].view(self.n_robots, 
                                                                     self.n_contacts * 3)
-            self._t = self.get_torch_view()[:, (self.n_contacts * 3):(self.n_contacts * 6)].view(self.n_robots, 
+            self._t = self.get_torch_mirror()[:, (self.n_contacts * 3):(self.n_contacts * 6)].view(self.n_robots, 
                                                                     self.n_contacts * 3)
-            self._w = self.get_torch_view()[:, :].view(self.n_robots, self.n_contacts * 6)
+            self._w = self.get_torch_mirror()[:, :].view(self.n_robots, self.n_contacts * 6)
         else:
-            self._f = self.get_numpy_view()[:, 0:self.n_contacts * 3].view()
-            self._t = self.get_numpy_view()[:, (self.n_contacts * 3):(self.n_contacts * 6)].view()
-            self._w = self.get_numpy_view()[:, :].view()
+            self._f = self.get_numpy_mirror()[:, 0:self.n_contacts * 3].view()
+            self._t = self.get_numpy_mirror()[:, (self.n_contacts * 3):(self.n_contacts * 6)].view()
+            self._w = self.get_numpy_mirror()[:, :].view()
 
         if self.gpu_mirror_exists():
             self._f_gpu = self._gpu_mirror[:, 0:self.n_contacts * 3].view(self.n_robots, 

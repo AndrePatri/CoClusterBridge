@@ -327,7 +327,7 @@ class RHController(ABC):
         available_spots = self.rhc_status.cluster_size
 
         # incrementing cluster controllers counter
-        controllers_counter = self.rhc_status.controllers_counter.get_numpy_view()
+        controllers_counter = self.rhc_status.controllers_counter.get_numpy_mirror()
         if controllers_counter[0, 0] + 1 > available_spots: # no space left -> return 
             self.rhc_status.controllers_counter.data_sem_release()
             self.rhc_status.registration.data_sem_release()
@@ -347,7 +347,7 @@ class RHController(ABC):
         # read current registration state
         self.rhc_status.registration.synch_all(retry = True,
                                                 read = True)
-        registrations = self.rhc_status.registration.get_numpy_view()
+        registrations = self.rhc_status.registration.get_numpy_mirror()
         self.controller_index = self._assign_cntrl_index(registrations)
         self.controller_index_np = np.array(self.controller_index)
 
@@ -385,7 +385,7 @@ class RHController(ABC):
             # decrementing controllers counter
             self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = True)
-            controllers_counter = self.rhc_status.controllers_counter.get_numpy_view()
+            controllers_counter = self.rhc_status.controllers_counter.get_numpy_mirror()
             controllers_counter -= 1 
             self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = False)

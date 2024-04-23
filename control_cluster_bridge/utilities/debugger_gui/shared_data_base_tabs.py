@@ -433,8 +433,8 @@ class RHCRefs(SharedDataWindow):
             self.rt_plotters[2].rt_plot_widget.update(v_full)
             self.rt_plotters[3].rt_plot_widget.update(omega_full)
 
-            contact_flags = self.shared_data_clients[0].contact_flags.get_numpy_view()
-            phase_id = self.shared_data_clients[0].phase_id.get_numpy_view()
+            contact_flags = self.shared_data_clients[0].contact_flags.get_numpy_mirror()
+            phase_id = self.shared_data_clients[0].phase_id.get_numpy_mirror()
             self.rt_plotters[4].rt_plot_widget.update(contact_flags[index, :])
             self.rt_plotters[5].rt_plot_widget.update(phase_id[index, :])
 
@@ -771,10 +771,10 @@ class RHCInternal(SharedDataWindow):
 
             else:
                 
-                self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].q.get_numpy_view()[:, :])
-                self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].v.get_numpy_view()[:, :])
-                self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].a.get_numpy_view()[:, :])
-                self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].f.get_numpy_view()[:, :])
+                self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].q.get_numpy_mirror()[:, :])
+                self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].v.get_numpy_mirror()[:, :])
+                self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].a.get_numpy_mirror()[:, :])
+                self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].f.get_numpy_mirror()[:, :])
 
 class SimInfo(SharedDataWindow):
 
@@ -1036,27 +1036,27 @@ class RHCProfiling(SharedDataWindow):
             # prb update
             self.shared_data_clients[0].prb_update_dt.synch_all(read = True, 
                                                         retry=False)
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].prb_update_dt.get_numpy_view())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].prb_update_dt.get_numpy_mirror())
             
             # phase shift
             self.shared_data_clients[0].phase_shift_dt.synch_all(read = True, 
                                                         retry=False)
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].phase_shift_dt.get_numpy_view())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].phase_shift_dt.get_numpy_mirror())
 
             # task ref update
             self.shared_data_clients[0].task_ref_update_dt.synch_all(read = True, 
                                                         retry=False)
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].task_ref_update_dt.get_numpy_view())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].task_ref_update_dt.get_numpy_mirror())
             
             # rti sol time
             self.shared_data_clients[0].rti_sol_time.synch_all(read = True, 
                                                         retry=False)
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].rti_sol_time.get_numpy_view())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].rti_sol_time.get_numpy_mirror())
 
             # whole solve loop
             self.shared_data_clients[0].solve_loop_dt.synch_all(read = True, 
                                                         retry=False)
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].solve_loop_dt.get_numpy_view())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].solve_loop_dt.get_numpy_mirror())
             
             # updates side data
             # self.grid.settings_widget_list[0].update(data)
@@ -1346,23 +1346,21 @@ class RHCStatus(SharedDataWindow):
             self.shared_data_clients[0].rhc_step_var.synch_all(read = True, 
                                                     retry=False)
 
-            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.get_numpy_view())
-            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.get_numpy_view())
-            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].controllers_fail_counter.get_numpy_view())
-            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].fails.get_numpy_view())
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].resets.get_numpy_view())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].trigger.get_numpy_view())
-            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].activation_state.get_numpy_view())
-            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].rhc_cost.get_numpy_view())
-            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].rhc_constr_viol.get_numpy_view())
-            self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.get_numpy_view())
-            self.rt_plotters[10].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_cost.get_numpy_view())
-            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_view())
+            self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.get_numpy_mirror())
+            self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.get_numpy_mirror())
+            self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].controllers_fail_counter.get_numpy_mirror())
+            self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].fails.get_numpy_mirror())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].resets.get_numpy_mirror())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].trigger.get_numpy_mirror())
+            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].activation_state.get_numpy_mirror())
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].rhc_cost.get_numpy_mirror())
+            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].rhc_constr_viol.get_numpy_mirror())
+            self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.get_numpy_mirror())
+            self.rt_plotters[10].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_cost.get_numpy_mirror())
+            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_mirror())
 
             n_contacts = self.shared_data_clients[0].n_contacts
-            tot_data = self.shared_data_clients[0].rhc_step_var.get_numpy_view()
-            print("UAAAAAAAAAAAAAAAAAAAAAA")
-            print(tot_data[0, :])
+            tot_data = self.shared_data_clients[0].rhc_step_var.get_numpy_mirror()
             for i in range(n_contacts):
                 start_idx = self.shared_data_clients[0].n_nodes * i
                 single_contact_data = tot_data[:, start_idx:(start_idx+self.shared_data_clients[0].n_nodes)]
