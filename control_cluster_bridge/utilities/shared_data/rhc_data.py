@@ -682,7 +682,35 @@ class RhcStatus(SharedDataBase):
         
         def tot_dim(self):
             return self.n_cols
-        
+    
+    class RhcFailIndex(SharedTWrapper): 
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
+            
+            basename = "RhcFailIndex" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = 1, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
+                fill_value = 0)
+            
     def __init__(self, 
             is_server = False, 
             cluster_size: int = -1, 
@@ -828,6 +856,16 @@ class RhcStatus(SharedDataBase):
                                 force_reconnection=force_reconnection,
                                 with_gpu_mirror=with_gpu_mirror,
                                 with_torch_view=with_torch_view) 
+        
+        self.rhc_fail_idx = self.RhcFailIndex(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
+
         self._is_runnning = False
 
         self._acquired_reg_sem = False
@@ -853,7 +891,8 @@ class RhcStatus(SharedDataBase):
             self.rhc_n_iter.get_shared_mem(),
             self.rhc_nodes_cost.get_shared_mem(),
             self.rhc_nodes_constr_viol.get_shared_mem(),
-            self.rhc_step_var.get_shared_mem()]
+            self.rhc_step_var.get_shared_mem(),
+            self.rhc_fail_idx.get_shared_mem()]
     
     def run(self):
 
@@ -870,6 +909,7 @@ class RhcStatus(SharedDataBase):
         self.rhc_nodes_constr_viol.run()
         self.rhc_n_iter.run()
         self.rhc_step_var.run()
+        self.rhc_fail_idx.run()
 
         if not self.is_server:
     
@@ -896,6 +936,7 @@ class RhcStatus(SharedDataBase):
             self.rhc_nodes_cost.close()
             self.rhc_nodes_constr_viol.close()
             self.rhc_step_var.close()
+            self.rhc_fail_idx.close()
 
             self._is_runnning = False
 

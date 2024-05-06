@@ -104,6 +104,8 @@ class RHController(ABC):
 
         self._n_resets = 0
         self._n_fails = 0
+        self._fail_idx_thresh = 1e3
+
         self._failed = False
 
         self._start_time = time.perf_counter() # used for profiling when in debug mode
@@ -174,7 +176,7 @@ class RHController(ABC):
         if not self.failed():
             # we can solve only if not in failure state
             self._failed = not self._solve() # solve actual TO
-            if (self._failed):  
+            if (self._failed): 
                 # perform failure procedure
                 self._on_failure()                       
         else:
@@ -639,6 +641,20 @@ class RHController(ABC):
     def _get_constr_data(self):
         # to be overridden by child class
         return None, None
+    
+    def _get_fail_idx(self):
+        # to be overriden by parent
+        return 0.0
+    
+    def _check_rhc_failure(self):
+        # we use rhc constr. viol to detect failures
+        
+        idx = self._get_fail_idx()
+        self.rhc_status.rhc_fail_idx.write_retry(idx, 
+                                        row_index=self.controller_index,
+                                        col_index=0) # write idx  on shared mem
+            
+        return idx >= self._fail_idx_thresh
     
     def _update_rhc_internal(self):
         # data which is not enabled in the config is not actually 

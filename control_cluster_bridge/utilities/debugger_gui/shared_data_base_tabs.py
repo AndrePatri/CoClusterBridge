@@ -1102,18 +1102,15 @@ class RHCStatus(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        self.grid_n_rows = 6 + int(self.shared_data_clients[0].n_contacts/2)
+        self.grid_n_rows = 7 + int(self.shared_data_clients[0].n_contacts/2)
 
         self.grid_n_cols = 2
 
     def _initialize(self):
         
         cluster_size = self.shared_data_clients[0].cluster_size
-
         cluster_idx_legend = [""] * cluster_size
-
         for i in range(cluster_size):
-            
             cluster_idx_legend[i] = str(i)
         
         self.rt_plotters.append(RtPlotWindow(data_dim=1,
@@ -1160,6 +1157,17 @@ class RHCStatus(SharedDataWindow):
                                     legend_list=cluster_idx_legend, 
                                     ylabel="[bool]"))
         
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                                    n_data = 1,
+                                    update_data_dt=self.update_data_dt, 
+                                    update_plot_dt=self.update_plot_dt,
+                                    window_duration=self.window_duration, 
+                                    parent=None, 
+                                    base_name=f"Fail. index", 
+                                    window_buffer_factor=self.window_buffer_factor, 
+                                    legend_list=cluster_idx_legend, 
+                                    ylabel="[float]"))
+
         self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
                                     n_data = 1,
                                     update_data_dt=self.update_data_dt, 
@@ -1272,6 +1280,8 @@ class RHCStatus(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[9].base_frame, 4, 1)
         self.grid.addFrame(self.rt_plotters[10].base_frame, 5, 0)
         self.grid.addFrame(self.rt_plotters[11].base_frame, 5, 1)
+        self.grid.addFrame(self.rt_plotters[12].base_frame, 6, 0)
+
         n_rows = int(self.shared_data_clients[0].n_contacts/2)
         for i in range(n_rows):
             for j in range(2):
@@ -1305,11 +1315,11 @@ class RHCStatus(SharedDataWindow):
         self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
         
         # only cost and constr on nodes
-        self.rt_plotters[10].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
         self.rt_plotters[11].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+        self.rt_plotters[12].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
         n_contacts = self.shared_data_clients[0].n_contacts
         for i in range(n_contacts):
-            self.rt_plotters[12+i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+            self.rt_plotters[13+i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
 
     def update(self,
             index: int):
@@ -1345,19 +1355,22 @@ class RHCStatus(SharedDataWindow):
                                                     retry=False)
             self.shared_data_clients[0].rhc_step_var.synch_all(read = True, 
                                                     retry=False)
-
+            self.shared_data_clients[0].rhc_fail_idx.synch_all(read = True, 
+                                                    retry=False)
+            
             self.rt_plotters[0].rt_plot_widget.update(self.shared_data_clients[0].controllers_counter.get_numpy_mirror())
             self.rt_plotters[1].rt_plot_widget.update(self.shared_data_clients[0].registration.get_numpy_mirror())
             self.rt_plotters[2].rt_plot_widget.update(self.shared_data_clients[0].controllers_fail_counter.get_numpy_mirror())
             self.rt_plotters[3].rt_plot_widget.update(self.shared_data_clients[0].fails.get_numpy_mirror())
-            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].resets.get_numpy_mirror())
-            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].trigger.get_numpy_mirror())
-            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].activation_state.get_numpy_mirror())
-            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].rhc_cost.get_numpy_mirror())
-            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].rhc_constr_viol.get_numpy_mirror())
-            self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.get_numpy_mirror())
-            self.rt_plotters[10].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_cost.get_numpy_mirror())
-            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_mirror())
+            self.rt_plotters[4].rt_plot_widget.update(self.shared_data_clients[0].rhc_fail_idx.get_numpy_mirror())
+            self.rt_plotters[5].rt_plot_widget.update(self.shared_data_clients[0].resets.get_numpy_mirror())
+            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].trigger.get_numpy_mirror())
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].activation_state.get_numpy_mirror())
+            self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].rhc_cost.get_numpy_mirror())
+            self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].rhc_constr_viol.get_numpy_mirror())
+            self.rt_plotters[10].rt_plot_widget.update(self.shared_data_clients[0].rhc_n_iter.get_numpy_mirror())
+            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_cost.get_numpy_mirror())
+            self.rt_plotters[12].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_mirror())
 
             n_contacts = self.shared_data_clients[0].n_contacts
             tot_data = self.shared_data_clients[0].rhc_step_var.get_numpy_mirror()
