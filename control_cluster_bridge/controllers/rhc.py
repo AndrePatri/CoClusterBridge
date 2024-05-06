@@ -104,7 +104,7 @@ class RHController(ABC):
 
         self._n_resets = 0
         self._n_fails = 0
-        self._fail_idx_thresh = 1e3
+        self._fail_idx_thresh = 1e6
 
         self._failed = False
 
