@@ -66,7 +66,9 @@ class RHController(ABC):
 
         self._registered = False
         self._closed = False 
-
+        
+        self._allow_triggering_when_failed = True
+        
         self._profiling_data_dict = {}
         self._profiling_data_dict["full_solve_dt"] = np.nan
         self._profiling_data_dict["rti_solve_dt"] = np.nan
@@ -169,7 +171,6 @@ class RHController(ABC):
 
         self.robot_state.synch_from_shared_mem() # updates robot state with
         # latest data on shared mem
-        
         if not self.failed():
             # we can solve only if not in failure state
             self._failed = not self._solve() # solve actual TO
@@ -177,12 +178,20 @@ class RHController(ABC):
                 # perform failure procedure
                 self._on_failure()                       
         else:
-            Journal.log(self.__class__.__name__ + f"{self.controller_index}",
-                "solve",
-                "Received solution req, but controller is in failure state. " + \
-                    " You should have reset the controller!",
-                LogType.EXCEP,
-                throw_when_excep = True)
+            if not self._allow_triggering_when_failed:
+                Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                    "solve",
+                    "Received solution req, but controller is in failure state. " + \
+                        " You should have reset() the controller!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            else: 
+                if self._verbose:
+                    Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                        "solve",
+                        "Received solution req, but controller is in failure state. No solution will be performed. " + \
+                            " Use the reset() method to continue solving!",
+                        LogType.WARN)
             
         self._write_cmds_from_sol() # we update update the views of the cmds
         # from the latest solution
@@ -191,21 +200,18 @@ class RHController(ABC):
             # if in debug, rhc internal state is streamed over 
             # shared mem.
             self._update_rhc_internal()
-
+            self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
+            self._update_profiling_data() # updates all profiling data
+            if self._verbose:
+                Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+                    "solve",
+                    f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
+                    LogType.INFO,
+                    throw_when_excep = True) 
+            
         self.rhc_status.trigger.write_retry(False, 
                                 row_index=self.controller_index,
                                 col_index=0) # allow next solution trigger 
-        
-        if self._debug:
-            self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
-            self._update_profiling_data() # updates all profiling data
-        
-        if self._debug and self._verbose:
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
-                "solve",
-                f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
-                LogType.INFO,
-                throw_when_excep = True)  
 
     def _rhc_min(self):
 
@@ -218,14 +224,23 @@ class RHController(ABC):
                 # perform failure procedure
                 self._on_failure()                       
         else:
-            Journal.log(self.__class__.__name__ + f"{self.controller_index}",
-                "solve",
-                "Received solution req, but controller is in failure state. " + \
-                    " You should have reset the controller!",
-                LogType.EXCEP,
-                throw_when_excep = True)
-        self._write_cmds_from_sol() # we update update the views of the cmds
-        # from the latest solution
+            if not self._allow_triggering_when_failed:
+                Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                    "solve",
+                    "Received solution req, but controller is in failure state. " + \
+                        " You should have reset() the controller!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            else: 
+                if self._verbose:
+                    Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                        "solve",
+                        "Received solution req, but controller is in failure state. No solution will be performed. " + \
+                            " Use the reset() method to continue solving!",
+                        LogType.WARN)
+                    
+        self._write_cmds_from_sol() # we update the views of the cmds
+        # from the latest solution even if failed
         self.rhc_status.trigger.write_retry(False, 
                                 row_index=self.controller_index,
                                 col_index=0) # allow next solution trigger
@@ -398,12 +413,6 @@ class RHController(ABC):
             self.rhc_status.registration.data_sem_release()
             self.rhc_status.controllers_counter.data_sem_release()
     
-    def _deactivate(self):
-        # signal controller deactivation over shared mem
-        self.rhc_status.activation_state.write_retry(False, 
-                                row_index=self.controller_index,
-                                col_index=0)
-    
     def _get_quat_remap(self):
         # to be overridden by child class if necessary
         return [0, 1, 2, 3]
@@ -520,6 +529,14 @@ class RHController(ABC):
                     f"RHC controller initialized with index {self.controller_index}",
                     LogType.STAT,
                     throw_when_excep = True)
+
+    def _deactivate(self):
+        # signal controller deactivation over shared mem
+        self.rhc_status.activation_state.write_retry(False, 
+                                row_index=self.controller_index,
+                                col_index=0)
+        # also set cmds to homing for safety
+        self.set_cmds_to_homing()
 
     def _on_failure(self):
         
