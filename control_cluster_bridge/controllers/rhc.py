@@ -327,6 +327,9 @@ class RHController(ABC):
     def failed(self):
         return self._failed
 
+    def robot_mass(self):
+        return self._robot_mass
+    
     def _assign_cntrl_index(self, reg_state: np.ndarray):
         state = reg_state.flatten() # ensure 1D tensor
         free_spots = np.nonzero(~state.flatten())[0]
@@ -526,6 +529,9 @@ class RHController(ABC):
             self._init_robot_homer() # call this in case it wasn't called by child
         self.set_cmds_to_homing()
 
+        self._robot_mass = self._get_robot_mass() # uses child class implemented method
+        self._contact_var_scale = self._get_robot_mass() * 9.81 / self.rhc_status.n_contacts
+
         Journal.log(f"{self.__class__.__name__}",
                     "_init",
                     f"RHC controller initialized with index {self.controller_index}",
@@ -608,7 +614,7 @@ class RHController(ABC):
             for i in range(self.rhc_status.n_contacts):
                 contact_idx = i*3
                 z_idx = contact_idx+2
-                self.rhc_status.rhc_step_var.write_retry(data=f_contact[z_idx:(z_idx+1), :], 
+                self.rhc_status.rhc_step_var.write_retry(data=f_contact[z_idx:(z_idx+1), :]/(self._contact_var_scale), 
                                                     row_index=self.controller_index, 
                                                     col_index=i*self.rhc_status.n_nodes)
 
@@ -794,6 +800,10 @@ class RHController(ABC):
             
     @abstractmethod
     def _get_ndofs(self):
+        pass
+    
+    abstractmethod
+    def _get_robot_mass(self):
         pass
 
     @abstractmethod
