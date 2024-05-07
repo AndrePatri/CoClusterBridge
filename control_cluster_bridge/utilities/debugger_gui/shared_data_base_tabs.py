@@ -1279,13 +1279,14 @@ class RHCStatus(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[8].base_frame, 4, 0)
         self.grid.addFrame(self.rt_plotters[9].base_frame, 4, 1)
         self.grid.addFrame(self.rt_plotters[10].base_frame, 5, 0)
-        self.grid.addFrame(self.rt_plotters[11].base_frame, 5, 1)
-        self.grid.addFrame(self.rt_plotters[12].base_frame, 6, 0)
+
+        self.grid.addFrame(self.rt_plotters[11].base_frame, 6, 0)
+        self.grid.addFrame(self.rt_plotters[12].base_frame, 6, 1)
 
         n_rows = int(self.shared_data_clients[0].n_contacts/2)
         for i in range(n_rows):
             for j in range(2):
-                self.grid.addFrame(self.rt_plotters[12 + 2 * i + j].base_frame, 6 + i, j)
+                self.grid.addFrame(self.rt_plotters[13 + 2 * i + j].base_frame, 7 + i, j)
 
     def _finalize_grid(self):
         
@@ -1377,5 +1378,5 @@ class RHCStatus(SharedDataWindow):
             for i in range(n_contacts):
                 start_idx = self.shared_data_clients[0].n_nodes * i
                 single_contact_data = tot_data[:, start_idx:(start_idx+self.shared_data_clients[0].n_nodes)]
-                self.rt_plotters[12 + i].rt_plot_widget.update(single_contact_data)
+                self.rt_plotters[13 + i].rt_plot_widget.update(single_contact_data)
             
