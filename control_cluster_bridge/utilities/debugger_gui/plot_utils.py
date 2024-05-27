@@ -101,6 +101,8 @@ class RtPlotWidget(pg.PlotWidget):
         self.update_data_dt = update_data_dt
         self.update_plot_dt = update_plot_dt
 
+        self._last_sample_idx = self.window_buffer_size-1
+
         self.data = np.zeros((self.window_buffer_size, self.n_dims, self.n_data))
 
         if self._slide_through_samples:
@@ -299,7 +301,7 @@ class RtPlotWidget(pg.PlotWidget):
 
             pen = pg.mkPen(color=color, 
                     width=2.3)
-            self.lines.append(self.plot_item.plot(self.data[self._current_index, i, :], 
+            self.lines.append(self.plot_item.plot(self.data[(self.window_buffer_size-1)-self._current_index, i, :], 
                         pen=pen))
             
     def _init_scatter(self):
@@ -366,7 +368,7 @@ class RtPlotWidget(pg.PlotWidget):
 
     def _update_plot_data_lines2(self):
         for i in range(0, self.n_dims):
-            self.lines[i].setData(self.data[self._current_index, i, :]) # along window
+            self.lines[i].setData(self.data[self._last_sample_idx - self._current_index, i, :]) # along window
             
     def _update_plot_data_scatter(self):
         for i in range(0, self.n_dims):
@@ -380,7 +382,7 @@ class RtPlotWidget(pg.PlotWidget):
         
     def _update_plot_data_scatter2(self):
         for i in range(0, self.n_dims):
-            x_data = self.sample_stamps[-self.window_size:]
+            x_data = self.sample_stamps[-self.n_data:]
             y_data = self.data[self._current_index, i, -self.n_data:] # along window
             # Filter out NaN values so that scatter does not go crazy
             mask = ~np.isnan(y_data)
