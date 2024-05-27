@@ -625,8 +625,10 @@ class RHCInternal(SharedDataWindow):
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=legend_list, 
                                     ylabel="",
-                                    slide_through_samples=True,
-                                    scatter_mode=True))
+                                    xlabel="node idx",
+                                    slide_through_samples=False,
+                                    scatter_mode=True,
+                                    scatter_size=6))
 
                         self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
 
@@ -724,22 +726,23 @@ class RHCInternal(SharedDataWindow):
         widget_utils = WidgetUtils()
 
         settings_frames = []
-
+        window_size = self.rt_plotters[0].rt_plot_widget.window_fullsize()
         node_index_slider = widget_utils.generate_complex_slider(
                         parent=None, 
                         parent_layout=None,
-                        min_shown=f"{0}", min= 0, 
-                        max_shown=f"{self.n_nodes - 1}", 
-                        max=self.n_nodes - 1, 
+                        min_shown=f"{-(window_size - 1)}", 
+                        min= -(window_size - 1), 
+                        max_shown=f"{0}", 
+                        max=0, 
                         init_val_shown=f"{0}", init=0, 
-                        title="node index slider", 
-                        callback=self._update_node_idx)
+                        title="window samples slider", 
+                        callback=self._update_window_idx)
         
         settings_frames.append(node_index_slider)
         
         self.grid.addToSettings(settings_frames)
     
-    def _update_node_idx(self,
+    def _update_window_idx(self,
                     idx: int):
 
         self.current_node_index = idx
@@ -748,7 +751,7 @@ class RHCInternal(SharedDataWindow):
 
         for i in range(0, len(self.rt_plotters)):
             
-            self.rt_plotters[i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+            self.rt_plotters[i].rt_plot_widget.switch_to_data(idx = self.current_node_index)
 
     def update(self,
             index: int):
@@ -1318,11 +1321,11 @@ class RHCStatus(SharedDataWindow):
         self.grid.settings_widget_list[0].current_val.setText(f'{idx}')
         
         # only cost and constr on nodes
-        self.rt_plotters[11].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
-        self.rt_plotters[12].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+        self.rt_plotters[11].rt_plot_widget.switch_to_data(idx = self.current_node_index)
+        self.rt_plotters[12].rt_plot_widget.switch_to_data(idx = self.current_node_index)
         n_contacts = self.shared_data_clients[0].n_contacts
         for i in range(n_contacts):
-            self.rt_plotters[13+i].rt_plot_widget.switch_to_data(data_idx = self.current_node_index)
+            self.rt_plotters[13+i].rt_plot_widget.switch_to_data(idx = self.current_node_index)
 
     def update(self,
             index: int):
