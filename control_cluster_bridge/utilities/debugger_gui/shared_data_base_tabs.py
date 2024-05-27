@@ -624,7 +624,9 @@ class RHCInternal(SharedDataWindow):
                                     base_name=f"{base_name}: {self.names[counter]}", 
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=legend_list, 
-                                    ylabel=""))
+                                    ylabel="",
+                                    slide_through_samples=True,
+                                    scatter_mode=True))
 
                         self.grid.addFrame(self.rt_plotters[counter].base_frame, i, j)
 

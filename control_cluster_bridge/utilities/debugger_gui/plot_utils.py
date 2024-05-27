@@ -48,15 +48,20 @@ class RtPlotWidget(pg.PlotWidget):
                 parent: QWidget = None, 
                 xlabel = "sample n.", 
                 ylabel = "", 
-                window_buffer_factor: int = 2):
+                window_buffer_factor: int = 2,
+                slide_through_samples: bool = True,
+                scatter_mode: bool = False):
 
         super().__init__(title=base_name,
                     parent=parent)
         
+        self._slide_through_samples = slide_through_samples # if True, each plot x axis
+        # is time, otherwise plots are performed along the data dimension
+        self._scatter_mode = scatter_mode
+
         self.plot_item = self.getPlotItem()
 
         if legend_list is not None and len(legend_list) != n_dims:
-            
             Journal.log(self.__class__.__name__,
                 "__init__",
                 f"provided legend list length {len(legend_list)} does not match data dimension {n_dims}",
@@ -103,7 +108,10 @@ class RtPlotWidget(pg.PlotWidget):
 
         self._setup_plot()
 
-        self._init_lines()
+        if self._scatter_mode:
+            self._init_scatter()
+        else:
+            self._init_lines()
 
         self.update_window_size(self.window_size)
 
@@ -117,7 +125,6 @@ class RtPlotWidget(pg.PlotWidget):
             ):
 
         # updates window with new data
-
         if not self.paused:
 
             self.data[:, :, :] = np.roll(self.data, -1, axis=0) # roll data "pages" backwards
@@ -128,58 +135,61 @@ class RtPlotWidget(pg.PlotWidget):
             data_size = len(updated_data_shape)
 
             if data_size == 2:
-                
                 # data in assumed to be of shape data_dim x num_data (data_idx is not used)
-
                 if updated_data_shape[0] != self.n_dims:
-                    
                     exep = f"Provided data n. rows should be equal to {self.n_dims}, " + \
                         f"but got {updated_data_shape[0]}"
-                    
-                    raise Exception(exep)
-                
+                    Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exep,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
                 if updated_data_shape[1] != self.n_data:
-                    
                     exep = f"Provided data n. cols should be equal to {self.n_data}, " + \
                         f"but got {updated_data_shape[1]}"
-                    
-                    raise Exception(exep)
-                
+                    Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exep,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
                 # update last sample
                 self.data[-1, :, :] = new_data
-
-            if data_size == 1:
-
+            elif data_size == 1:
                 if updated_data_shape[0] != self.n_dims:
-                    
                     exep = f"Provided data length should be equal to {self.n_dims}, " + \
                         f"but got {updated_data_shape[0]}"
-                    
-                    raise Exception(exep)
-
+                    Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exep,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
                 # update last sample at provided data idx(if not default)
                 self.data[-1, :, data_idx] = new_data
-            
-            if data_size == 0:
-
+            elif data_size == 0:
                 exep = f"Cannot update time-series with 0-D data"
-                
-                raise Exception(exep)
-            
-            if data_size > 2:
-
-                exep = f"Can only plot time-series of vectors (1D) or matrices (2D)"
-                
-                raise Exception(exep)
+                Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exep,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            else:
+                exep = f"Can only plot time-series of vectors (data_size==1) or matrices (data_size==2)"
+                Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exep,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
 
     def switch_to_data(self,
             data_idx: int):
 
         if data_idx > (self.n_data - 1):
-            
             exep = f"Provided data index {data_idx} exceeds max. val. of {self.n_data - 1}"
-
-            raise Exception(exep)
+            Journal.log(self.__class__.__name__,
+                        "__init__",
+                        exep,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
         
         self.current_data_index = data_idx
 
@@ -191,55 +201,41 @@ class RtPlotWidget(pg.PlotWidget):
 
     def hide_line(self, 
                 index: int):
-
         self.lines[index].hide() 
 
     def show_line(self, 
                 index: int):
-
         self.lines[index].show() 
 
     def update_data_sample_dt(self, 
                         dt: float):
-        
         self.update_data_dt = dt
         
     def update_window_size(self, 
                 new_size: int):
-        
         self.window_size = min(new_size, self.window_buffer_size)
-
         x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset * self.window_size, 
             self.window_buffer_size - 1 - self.window_offset * self.window_size) 
-        
         self.setXRange(*x_range)
 
     def update_window_offset(self, 
                     offset: int = 0):
-        
         if offset > self.window_buffer_size - self.window_size:
-
             offset = self.window_buffer_size - self.window_size
-
         self.window_offset = offset
-
         x_range = (self.window_buffer_size - 1 - self.window_size - self.window_offset, 
             self.window_buffer_size - 1 - self.window_offset) 
-        
         self.setXRange(*x_range)
 
     def update_timestamps_res(self, 
                     res: int = 10):
-        
         self.ntimestamps_per_window = res
     
     def nightshift(self):
 
         self.setBackground('k')
-
         title_style = {'color': 'w', 'size': '10pt'}
         self.plotItem.setTitle(title=self.base_name, **title_style)
-
         tick_color = pg.mkColor('w')  # Use 'b' for blue color, you can replace it with your preferred color
         self.x_axis.setPen(tick_color)
         self.x_axis.setTextPen(tick_color)
@@ -247,12 +243,9 @@ class RtPlotWidget(pg.PlotWidget):
         self.y_axis.setTextPen(tick_color)
 
     def dayshift(self):
-
         self.setBackground('w')
-
         title_style = {'color': 'k', 'size': '10pt'}
         self.plotItem.setTitle(title=self.base_name, **title_style)
-
         tick_color = pg.mkColor('k')  # Use 'b' for blue color, you can replace it with your preferred color
         self.x_axis.setPen(tick_color)
         self.x_axis.setTextPen(tick_color)
@@ -260,17 +253,11 @@ class RtPlotWidget(pg.PlotWidget):
         self.y_axis.setTextPen(tick_color)
 
     def _init_lines(self):
-
         for i in range(0, self.n_dims):
-            
             if self.legend_list is None:
-
                 label = f"{self.base_name}_{i}"  # generate label for each line
-
             else:
-                
                 label = self.legend_list[i]
-
             self.labels.append(label)
 
             color = self.colors[i] 
@@ -278,77 +265,89 @@ class RtPlotWidget(pg.PlotWidget):
 
             pen = pg.mkPen(color=color, 
                     width=2.3)
-
             self.lines.append(self.plot_item.plot(self.data[:, i, self.current_data_index], 
                         pen=pen))
-        
+    
+    def _init_scatter(self):
+        for i in range(0, self.n_dims):
+            if self.legend_list is None:
+                label = f"{self.base_name}_{i}"  # generate label for each line
+            else:
+                label = self.legend_list[i]
+            self.labels.append(label)
+
+            color = self.colors[i]
+            color.setAlpha(255)  # Set the alpha value for the color
+
+            pen = pg.mkPen(color=color, width=2.3)
+            brush = pg.mkBrush(color=color)  # Use brush for filling the points
+
+            scatter = pg.ScatterPlotItem(pen=pen, brush=brush, size=1)  # Size defines the point size
+            self.lines.append(scatter)
+            self.plot_item.addItem(scatter)
+
     def _setup_plot(self):
         
         self.enableAutoRange()
-
         self.x_axis = self.plotItem.getAxis('bottom')
         self.y_axis = self.plotItem.getAxis('left')
-
         self.plotItem.setLabel('left', self.y_label)
         self.plotItem.setLabel('bottom', self.x_label)
-
         # self.setDownsampling(auto= True, mode = None, ds = None)
-
         # Set grid color to black
         self.showGrid(x=True, y=True, alpha=1.0)  # Full opacity for grid lines
         self.x_axis.setGrid(255)  
         self.y_axis.setGrid(255) 
-
         # Define a list of colors for each row
         self.colors = [pg.intColor(i, self.n_dims, 255) for i in range(self.n_dims)]
-
         self.dayshift() # sets uppearance for light mode
     
     def _contrasting_colors(self, 
                         num_colors: int):
-
         colors = []
-
         for i in range(num_colors):
-
             hue = (i / num_colors) * 360  # Spread hues across the color wheel
-
             color = pg.mkColor(hue, 255, 200)  # Use full saturation and lightness for contrast
-
             colors.append(color)
-
         return colors
 
     def _init_timers(self):
-        
         self.timer = QTimer()
         self.timer.setInterval(int(self.update_plot_dt * 1e3)) # millisec.
-        self.timer.timeout.connect(self._update_plot_data)
+        if self._scatter_mode:
+            self.timer.timeout.connect(self._update_plot_data_scatter)
+        else:
+            self.timer.timeout.connect(self._update_plot_data_lines)
         self.timer.start()
     
-    def _update_plot_data(self):
-        
+    def _update_plot_data_lines(self):
         for i in range(0, self.n_dims):
-
             self.lines[i].setData(self.data[:, i, self.current_data_index])
+
+    def _update_plot_data_scatter(self):
+        for i in range(0, self.n_dims):
+            x_data = self.sample_stamps[-self.window_size:]
+            y_data = self.data[-self.window_size:, i, self.current_data_index]
+            
+            # Filter out NaN values so that scatter does not go crazy
+            mask = ~np.isnan(y_data)
+            x_data = x_data[mask]
+            y_data = y_data[mask]
+
+        self.lines[i].setData(x=x_data, y=y_data)
 
     def _update_timestams_ticks(self, 
                         elapsed_times: List[float]):
         
         # display only some of the x-axis timestamps to avoid overlap
         step_size = max(1, int(self.window_size // self.ntimestamps_per_window))
-
         selected_labels = elapsed_times[::step_size]
-
         x_tick_vals = [i for i, _ in enumerate(elapsed_times) if i % step_size == 0]
         x_tick_names = [f'{t:.2f}s' for t in selected_labels]
-
         x_ticks = []
         for i in range(0, len(selected_labels)):
-            
             x_ticks.append((x_tick_vals[i], 
                             x_tick_names[i]))
-
         self.getAxis('bottom').setTicks([x_ticks])
     
 class WidgetUtils:
@@ -820,7 +819,7 @@ class SettingsWidget():
             self.pause_button.iconed_button.setIcon(self.pause_button.icone_button)
 
         self.rt_plot_widget.paused = self.paused
-
+    
     def update_window_size(self, 
                     new_size: int):
 
@@ -903,7 +902,9 @@ class RtPlotWindow():
             legend_list: List[str] = None,
             base_name: str = "", 
             window_buffer_factor: int = 2, 
-            ylabel = ""):
+            ylabel = "",
+            slide_through_samples: bool = False,
+            scatter_mode: bool = False):
 
         self.n_data = n_data
         self.data_dim = data_dim
@@ -933,7 +934,9 @@ class RtPlotWindow():
             parent=None, 
             window_buffer_factor=window_buffer_factor, 
             legend_list=legend_list, 
-            ylabel=ylabel
+            ylabel=ylabel,
+            slide_through_samples=slide_through_samples,
+            scatter_mode=scatter_mode
         )
         # we create the settings widget 
         self.settings_widget = SettingsWidget(rt_plotter=self.rt_plot_widget, 
