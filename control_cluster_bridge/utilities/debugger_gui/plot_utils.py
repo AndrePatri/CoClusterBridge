@@ -378,7 +378,7 @@ class RtPlotWidget(pg.PlotWidget):
             mask = ~np.isnan(y_data)
             x_data = x_data[mask]
             y_data = y_data[mask]
-        self.lines[i].setData(x=x_data, y=y_data)
+            self.lines[i].setData(x=x_data, y=y_data)
         
     def _update_plot_data_scatter2(self):
         for i in range(0, self.n_dims):
@@ -388,7 +388,7 @@ class RtPlotWidget(pg.PlotWidget):
             mask = ~np.isnan(y_data)
             x_data = x_data[mask]
             y_data = y_data[mask]
-        self.lines[i].setData(x=x_data, y=y_data)
+            self.lines[i].setData(x=x_data, y=y_data)
     
     def _update_timestams_ticks(self, 
                         elapsed_times: List[float]):

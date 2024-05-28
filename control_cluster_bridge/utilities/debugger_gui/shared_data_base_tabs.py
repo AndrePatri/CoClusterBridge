@@ -584,7 +584,7 @@ class RHCInternal(SharedDataWindow):
         
         else:
 
-            self.grid_n_rows = 4
+            self.grid_n_rows = 2
             self.grid_n_cols = 2
 
     def _initialize(self):
@@ -676,7 +676,11 @@ class RHCInternal(SharedDataWindow):
                                     base_name=f"Rhc internal data: q", 
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=q_legend, 
-                                    ylabel=""))
+                                    ylabel="",
+                                    xlabel="node idx",
+                                    slide_through_samples=False,
+                                    scatter_mode=True,
+                                    scatter_size=4))
             
             self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_v,
                                     n_data = n_nodes_v,
@@ -687,7 +691,11 @@ class RHCInternal(SharedDataWindow):
                                     base_name=f"Rhc internal data: v", 
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=v_legend, 
-                                    ylabel=""))
+                                    ylabel="",
+                                    xlabel="node idx",
+                                    slide_through_samples=False,
+                                    scatter_mode=True,
+                                    scatter_size=4))
             
             self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_a,
                                     n_data = n_nodes_a,
@@ -698,7 +706,11 @@ class RHCInternal(SharedDataWindow):
                                     base_name=f"Rhc internal data: a", 
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=a_legend, 
-                                    ylabel=""))
+                                    ylabel="",
+                                    xlabel="node idx",
+                                    slide_through_samples=False,
+                                    scatter_mode=True,
+                                    scatter_size=4))
 
             self.rt_plotters.append(RtPlotWindow(data_dim=n_dims_f,
                                     n_data = n_nodes_f,
@@ -709,7 +721,11 @@ class RHCInternal(SharedDataWindow):
                                     base_name=f"Rhc internal data: f", 
                                     window_buffer_factor=self.window_buffer_factor, 
                                     legend_list=legend_wrench, 
-                                    ylabel=""))
+                                    ylabel="",
+                                    xlabel="node idx",
+                                    slide_through_samples=False,
+                                    scatter_mode=True,
+                                    scatter_size=4))
 
             self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
             self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
