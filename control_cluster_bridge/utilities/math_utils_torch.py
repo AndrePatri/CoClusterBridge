@@ -185,6 +185,21 @@ def world2base_frame(t_w: torch.Tensor, q_b: torch.Tensor, t_out: torch.Tensor):
     t_out[:, 4] = t_w[:, 3] * R_01 + t_w[:, 4] * R_11 + t_w[:, 5] * R_21
     t_out[:, 5] = t_w[:, 3] * R_02 + t_w[:, 4] * R_12 + t_w[:, 5] * R_22
 
+def xversor(q_b: torch.Tensor,
+        vx_out: torch.Tensor):
+    """
+    Calculate the x versor (first column of the rotation matrix) from a batch of quaternions.
+    
+    Parameters:
+    q_b (torch.Tensor): Tensor of shape (N, 4) containing N quaternions (w, x, y, z).
+    vx (torch.Tensor): Tensor of shape (N, 3) to store the resulting x versors.
+    """
+    q_w, q_i, q_j, q_k = q_b[:, 0], q_b[:, 1], q_b[:, 2], q_b[:, 3]
+
+    vx_out[:, 0] = 1 - 2 * (q_j ** 2 + q_k ** 2)
+    vx_out[:, 1] = 2 * (q_i * q_j + q_k * q_w)
+    vx_out[:, 2] = 2 * (q_i * q_k - q_j * q_w)
+
 if __name__ == "__main__":  
 
     n_envs = 15000
