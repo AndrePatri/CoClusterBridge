@@ -161,7 +161,7 @@ class ControlClusterClient(ABC):
     def terminate(self):
         
         Journal.log(self.__class__.__name__,
-                        "_finalize_init",
+                        "terminate",
                         "terminating cluster...",
                         LogType.STAT,
                         throw_when_excep = True)
