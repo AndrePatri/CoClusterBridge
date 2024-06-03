@@ -580,7 +580,7 @@ class RHController(ABC):
         self.cluster_stats.task_ref_update_dt.write_retry(self._profiling_data_dict["task_ref_update"], 
                                                             row_index=self.controller_index,
                                                             col_index=0)
-       
+    
     def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
@@ -589,9 +589,21 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_v_from_sol(), data_type="v", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_eff_from_sol(), data_type="eff", robot_idxs=self.controller_index_np)
         
+        f_contact = self._get_f_from_sol()
+        contact_names = self.robot_state.contact_names()
+        for i in range(len(contact_names)):
+            contact = contact_names[i]
+            contact_idx = i*3
+            self.robot_cmds.contact_wrenches.set(data=f_contact[contact_idx:(contact_idx+3), 0].T, 
+                                            data_type="f", 
+                                            robot_idxs=self.controller_index_np,
+                                            contact_name=contact)
+            
         # write to shared mem
         self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
-                                read=False)
+                                read=False) # jnt state
+        self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
+                                read=False) # contact state
         
         # we also fill other data (cost, constr. violation, etc..)
         self.rhc_status.rhc_cost.write_retry(self._get_rhc_cost(), 
@@ -609,7 +621,8 @@ class RHController(ABC):
         self.rhc_status.rhc_nodes_constr_viol.write_retry(data=self._get_rhc_nodes_constr_viol(), 
                                             row_index=self.controller_index, 
                                             col_index=0)
-        f_contact = self._get_f_from_sol()
+        
+        
         if f_contact is not None:
             for i in range(self.rhc_status.n_contacts):
                 contact_idx = i*3
