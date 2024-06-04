@@ -54,7 +54,9 @@ class DynamicSimInfoNames:
                 "time_to_get_states_from_sim",
                 "n_sim_steps",
                 "n_cluster_trigger_steps",
-                "n_cluster_sol_steps"]
+                "n_cluster_sol_steps",
+                "sim_time",
+                "cluster_time"]
         
         self.idx_dict = dict.fromkeys(self._keys, None)
 

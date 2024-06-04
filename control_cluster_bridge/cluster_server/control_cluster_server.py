@@ -117,6 +117,9 @@ class ControlClusterServer(ABC):
         self._setup_shared_mem() # initializes shared memory used for 
         # communication between the client and server
 
+    def cluster_dt(self):
+        return self._cluster_dt
+    
     def _compute_n_control_actions(self):
         if self._cluster_dt < self._low_level_control_dt:
             Journal.log(self.__class__.__name__,
