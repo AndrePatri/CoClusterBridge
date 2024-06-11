@@ -112,6 +112,7 @@ class RHController(ABC):
 
         self._homer = None # robot homing manager
 
+        self._class_name_base = f"{self.__class__.__name__}"
         self._init()
 
     def __del__(self):
@@ -181,7 +182,7 @@ class RHController(ABC):
                 self._on_failure()                       
         else:
             if not self._allow_triggering_when_failed:
-                Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                Journal.log(self._class_name_base,
                     "solve",
                     "Received solution req, but controller is in failure state. " + \
                         " You should have reset() the controller!",
@@ -189,7 +190,7 @@ class RHController(ABC):
                     throw_when_excep = True)
             else: 
                 if self._verbose:
-                    Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                    Journal.log(self._class_name_base,
                         "solve",
                         "Received solution req, but controller is in failure state. No solution will be performed. " + \
                             " Use the reset() method to continue solving!",
@@ -205,7 +206,7 @@ class RHController(ABC):
             self._profiling_data_dict["full_solve_dt"] = time.perf_counter() - self._start_time
             self._update_profiling_data() # updates all profiling data
             if self._verbose:
-                Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+                Journal.log(self._class_name_base,
                     "solve",
                     f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
                     LogType.INFO,
@@ -227,7 +228,7 @@ class RHController(ABC):
                 self._on_failure()                       
         else:
             if not self._allow_triggering_when_failed:
-                Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                Journal.log(self._class_name_base,
                     "solve",
                     "Received solution req, but controller is in failure state. " + \
                         " You should have reset() the controller!",
@@ -235,7 +236,7 @@ class RHController(ABC):
                     throw_when_excep = True)
             else: 
                 if self._verbose:
-                    Journal.log(self.__class__.__name__ + f"{self.controller_index}",
+                    Journal.log(self._class_name_base,
                         "solve",
                         "Received solution req, but controller is in failure state. No solution will be performed. " + \
                             " Use the reset() method to continue solving!",
@@ -255,7 +256,7 @@ class RHController(ABC):
             try: 
                 # we are always listening for a trigger signal 
                 if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
-                    Journal.log(self.__class__.__name__,
+                    Journal.log(self._class_name_base,
                         "solve",
                         "Didn't receive any remote trigger req within timeout!",
                         LogType.EXCEP,
@@ -297,7 +298,7 @@ class RHController(ABC):
         self._check_jnt_names_compatibility() # will raise exception
         if not self._got_jnt_names_from_controllers:
             exception = f"Cannot run the solve(). assign_env_side_jnt_names() was not called!"
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                     "_create_jnt_maps",
                     exception,
                     LogType.EXCEP,
@@ -353,7 +354,7 @@ class RHController(ABC):
             self.rhc_status.registration.data_sem_release()
             exception = "Cannot register to cluster. No space left " + \
                 f"({controllers_counter[0, 0]} controllers already registered)"
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                     "_register_to_cluster",
                     exception,
                     LogType.EXCEP,
@@ -369,13 +370,14 @@ class RHController(ABC):
                                                 read = True)
         registrations = self.rhc_status.registration.get_numpy_mirror()
         self.controller_index = self._assign_cntrl_index(registrations)
+        self._class_name_base = self._class_name_base+str(self.controller_index)
         self.controller_index_np = np.array(self.controller_index)
 
         registrations[self.controller_index, 0] = True
         self.rhc_status.registration.synch_all(retry = True,
                                 read = False) # register
 
-        Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+        Journal.log(self._class_name_base,
                     "_register_to_cluster",
                     "Done",
                     LogType.STAT,
@@ -409,7 +411,7 @@ class RHController(ABC):
             controllers_counter -= 1 
             self.rhc_status.controllers_counter.synch_all(retry = True,
                                                     read = False)
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                     "_unregister_from_cluster",
                     "Done",
                     LogType.STAT,
@@ -429,7 +431,7 @@ class RHController(ABC):
         if not (abs(server_side_cluster_dt - self._dt) < 1e-8):
             exception = f"Trying to initialize a controller with control dt {self._dt}, which" + \
                 f"does not match the cluster control dt {server_side_cluster_dt}"
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                         "_consinstency_checks",
                         exception,
                         LogType.EXCEP,
@@ -442,7 +444,7 @@ class RHController(ABC):
         if not server_side_contact_names == control_side_contact_names:
             warn = f"Controller-side contact names do not match server-side joint names!" + \
                 f"\nServer: {self.robot_state.contact_names()}\n Controller: {self._get_contacts()}"
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                         "_consinstency_checks",
                         warn,
                         LogType.WARN,
@@ -451,7 +453,7 @@ class RHController(ABC):
             # at least, we need the n of contacts to match!
             exception = f"Controller-side n contacts {self._get_contacts()} do not match " + \
                 f"server-side n contacts {len(self.robot_state.contact_names())}!"
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                         "_consinstency_checks",
                         exception,
                         LogType.EXCEP,
@@ -461,7 +463,7 @@ class RHController(ABC):
 
         stat = f"Initializing RHC controller " + \
             f"with dt: {self._dt} s, t_horizon: {self._t_horizon} s, n_intervals: {self._n_intervals}"
-        Journal.log(f"{self.__class__.__name__}",
+        Journal.log(self._class_name_base,
                     "_init",
                     stat,
                     LogType.STAT,
@@ -532,7 +534,7 @@ class RHController(ABC):
         self._robot_mass = self._get_robot_mass() # uses child class implemented method
         self._contact_var_scale = self._get_robot_mass() * 9.81 / self.rhc_status.n_contacts
 
-        Journal.log(f"{self.__class__.__name__}",
+        Journal.log(self._class_name_base,
                     "_init",
                     f"RHC controller initialized with index {self.controller_index}",
                     LogType.STAT,
@@ -647,7 +649,7 @@ class RHController(ABC):
                 " ".join(self._env_side_jnt_names) + \
                 "\nclient side -> \n" + \
                 " ".join(self._controller_side_jnt_names) 
-            Journal.log(f"{self.__class__.__name__}{self.controller_index}",
+            Journal.log(self._class_name_base,
                     "_check_jnt_names_compatibility",
                     exception,
                     LogType.EXCEP,

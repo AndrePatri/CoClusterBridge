@@ -70,6 +70,7 @@ class ControlClusterClient(ABC):
         self._controllers = [] # list of controllers
 
         self._processes = [] 
+        self._child_alive = [] 
 
         self._is_cluster_ready = False
                  
@@ -132,6 +133,14 @@ class ControlClusterClient(ABC):
         controller = self._generate_controller(idx=idx)
         controller.solve() # runs the solution loop
 
+    def _childs_all_dead(self):
+        
+        for i in range(0, self.cluster_size):
+            child_p = self._processes[i]
+            if not child_p.is_alive():
+                self._child_alive[i] = False
+        return not any(self._child_alive) 
+        
     def run(self):
             
         self._spawn_processes()
@@ -153,10 +162,14 @@ class ControlClusterClient(ABC):
             try:
                 nsecs =  1000000000 # 1 sec
                 PerfSleep.thread_sleep(nsecs) # we just keep it alive
-                continue
+                if self._childs_all_dead():
+                    break
+                else:
+                    continue
             except KeyboardInterrupt:
-                self.terminate() # closes all processes
                 break
+        
+        self.terminate() # closes all processe
 
     def terminate(self):
         
@@ -175,10 +188,10 @@ class ControlClusterClient(ABC):
             process.join(timeout=0)  # Wait for 5 seconds for each process to exit gracefully
             if process.is_alive():
                 process.terminate()  # Forcefully terminate the process
-            Journal.log(self.__class__.__name__,
-                    "_close_processes",
-                    "Terminating child process " + str(process.name),
-                    LogType.STAT)
+                Journal.log(self.__class__.__name__,
+                        "_close_processes",
+                        "Terminated child process " + str(process.name),
+                        LogType.STAT)
     
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
@@ -280,6 +293,7 @@ class ControlClusterClient(ABC):
                             name=self.processes_basename + str(i),
                             args=(i, core_ids))
             self._processes.append(process)
+            self._child_alive.append(True)
             self._processes[i].start()
             
         self._is_cluster_ready = True
