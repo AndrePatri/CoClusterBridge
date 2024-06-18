@@ -76,7 +76,7 @@ class ControlClusterServer(ABC):
         self._rhc_status = None
         self._cluster_stats = None 
         self._remote_triggerer = None
-        self._remote_triggerer_ack_timeout = 60000 # [ns]
+        self._remote_triggerer_ack_timeout = 300000 # [ns]
         self._n_controllers_connected = 0
 
         # flags
