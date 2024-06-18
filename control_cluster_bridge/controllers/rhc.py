@@ -87,7 +87,7 @@ class RHController(ABC):
         self.robot_cmds = None
         self.rhc_refs = None
         self._remote_triggerer = None
-        self._remote_triggerer_timeout = 120000 # [ns]
+        self._remote_triggerer_timeout = 300000 # [ms]
         
         # jnt names
         self._env_side_jnt_names = []
