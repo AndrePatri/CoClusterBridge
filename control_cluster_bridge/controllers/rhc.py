@@ -47,7 +47,8 @@ class RHController(ABC):
             namespace: str, # shared mem namespace
             dtype = np.float32, 
             verbose = False, 
-            debug = False):
+            debug = False,
+            timeout_ms: int = 60000):
         
         self.namespace = namespace
         self._dtype = dtype
@@ -87,7 +88,7 @@ class RHController(ABC):
         self.robot_cmds = None
         self.rhc_refs = None
         self._remote_triggerer = None
-        self._remote_triggerer_timeout = 300000 # [ms]
+        self._remote_triggerer_timeout = timeout_ms # [ms]
         
         # jnt names
         self._env_side_jnt_names = []

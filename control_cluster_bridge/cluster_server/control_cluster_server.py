@@ -48,7 +48,8 @@ class ControlClusterServer(ABC):
             verbose = False, 
             vlevel: VLevel = VLevel.V1,
             debug = False, 
-            force_reconnection: bool = False):
+            force_reconnection: bool = False,
+            timeout_ms: int = 60000):
         
         self._verbose = verbose
         self._vlevel = vlevel
@@ -76,7 +77,7 @@ class ControlClusterServer(ABC):
         self._rhc_status = None
         self._cluster_stats = None 
         self._remote_triggerer = None
-        self._remote_triggerer_ack_timeout = 300000 # [ns]
+        self._remote_triggerer_ack_timeout = timeout_ms # [ns]
         self._n_controllers_connected = 0
 
         # flags
