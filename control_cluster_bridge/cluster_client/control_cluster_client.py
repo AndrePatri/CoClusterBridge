@@ -24,6 +24,8 @@ import multiprocess as mp
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsorIPC import VLevel
 
+import signal
+
 class ControlClusterClient(ABC):
 
     # This is meant to handle a cluster of controllers for a type of robot, 
@@ -44,6 +46,9 @@ class ControlClusterClient(ABC):
 
         # ciao :D
         #        CR 
+
+        signal.signal(signal.SIGINT, self._handle_sigint)
+        self._sigint_received = False
 
         self.set_affinity = set_affinity
 
@@ -85,7 +90,15 @@ class ControlClusterClient(ABC):
         if not self._terminated:
 
             self.terminate()
-        
+    
+    def _handle_sigint(self, signum, frame):
+        Journal.log(f"{self.__class__.__name__}{controller_idx}",
+                "_handle_sigint",
+                "SIGINT received -> Cleaning up...",
+                LogType.WARN)
+        self._sigint_received = True
+        self.terminate()
+
     def _set_affinity(self, 
                 core_idxs: List[int], 
                 controller_idx: int):
@@ -162,7 +175,7 @@ class ControlClusterClient(ABC):
             try:
                 nsecs =  1000000000 # 1 sec
                 PerfSleep.thread_sleep(nsecs) # we just keep it alive
-                if self._childs_all_dead():
+                if self._childs_all_dead() or self._sigint_received:
                     break
                 else:
                     continue
