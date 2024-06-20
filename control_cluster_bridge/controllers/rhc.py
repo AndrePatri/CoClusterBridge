@@ -268,26 +268,28 @@ class RHController(ABC):
         # run the solution loop and wait for trigger signals
         # using cond. variables (efficient)
         while not self._closed:
-            # we are always listening for a trigger signal 
-            if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
-                Journal.log(self._class_name_base,
-                    "solve",
-                    "Didn't receive any remote trigger req within timeout!",
-                    LogType.EXCEP,
-                    throw_when_excep = True)
-            self._received_trigger = True
-            # signal received -> we process incoming requests
-            # perform reset, if required
-            if self.rhc_status.resets.read_retry(row_index=self.controller_index,
-                                            col_index=0)[0]:
-                self.reset() # rhc is reset
-            # check if a trigger request was received
-            if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
-                        col_index=0)[0]:
-                self._rhc() # run solution
-            self._remote_triggerer.ack() # send ack signal to server
-            self._received_trigger = False
-
+            try:
+                # we are always listening for a trigger signal 
+                if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
+                    Journal.log(self._class_name_base,
+                        "solve",
+                        "Didn't receive any remote trigger req within timeout!",
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+                self._received_trigger = True
+                # signal received -> we process incoming requests
+                # perform reset, if required
+                if self.rhc_status.resets.read_retry(row_index=self.controller_index,
+                                                col_index=0)[0]:
+                    self.reset() # rhc is reset
+                # check if a trigger request was received
+                if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
+                            col_index=0)[0]:
+                    self._rhc() # run solution
+                self._remote_triggerer.ack() # send ack signal to server
+                self._received_trigger = False
+            except:
+                break
         self.close() # is not stricly necessary
 
     def reset(self):

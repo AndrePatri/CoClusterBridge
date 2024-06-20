@@ -191,13 +191,12 @@ class ControlClusterClient(ABC):
     def _close_processes(self):
         # Wait for each process to exit gracefully or terminate forcefully
         for process in self._processes:
-            process.join(timeout=0)  # Wait for 5 seconds for each process to exit gracefully
-            if process.is_alive():
-                process.terminate()  # Forcefully terminate the process
-                Journal.log(self.__class__.__name__,
-                        "_close_processes",
-                        "Terminated child process " + str(process.name),
-                        LogType.STAT)
+            
+            process.join()  # Wait for 5 seconds for each process to exit gracefully
+            Journal.log(self.__class__.__name__,
+                    "_close_processes",
+                    "Terminated child process " + str(process.name),
+                    LogType.STAT)
     
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
