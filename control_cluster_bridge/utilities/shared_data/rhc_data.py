@@ -923,8 +923,8 @@ class RhcStatus(SharedDataBase):
         
         if self.is_running():
             
-            self.trigger.close()
             self.resets.close()
+            self.trigger.close()
             self.fails.close()    
             self.activation_state.close()
             self.registration.close()

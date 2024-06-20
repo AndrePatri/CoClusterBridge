@@ -31,6 +31,8 @@ from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usa
 
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
+from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
+from SharsorIPCpp.PySharsorIPC import dtype
 
 from typing import List, TypeVar, Union
 
@@ -94,6 +96,10 @@ class RHController(ABC):
         self._remote_triggerer = None
         self._remote_triggerer_timeout = timeout_ms # [ms]
         
+        # remote termination
+        self._remote_term = None
+        self._term_req_received = False
+
         # jnt names
         self._env_side_jnt_names = []
         self._controller_side_jnt_names = []
@@ -128,7 +134,7 @@ class RHController(ABC):
                 "_handle_sigint",
                 "SIGINT received",
                 LogType.WARN)
-        self.close()
+        self._term_req_received = True
 
     def _close(self):
         if not self._closed:
@@ -145,6 +151,8 @@ class RHController(ABC):
                 self.cluster_stats.close()
             if self._remote_triggerer is not None:
                 self._remote_triggerer.close()
+            if self._remote_term is not None:
+                self._remote_term.close()
             self._closed = True
 
     def close(self):
@@ -267,29 +275,30 @@ class RHController(ABC):
         
         # run the solution loop and wait for trigger signals
         # using cond. variables (efficient)
-        while not self._closed:
-            try:
-                # we are always listening for a trigger signal 
-                if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
-                    Journal.log(self._class_name_base,
-                        "solve",
-                        "Didn't receive any remote trigger req within timeout!",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
-                self._received_trigger = True
-                # signal received -> we process incoming requests
-                # perform reset, if required
-                if self.rhc_status.resets.read_retry(row_index=self.controller_index,
-                                                col_index=0)[0]:
-                    self.reset() # rhc is reset
-                # check if a trigger request was received
-                if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
-                            col_index=0)[0]:
-                    self._rhc() # run solution
-                self._remote_triggerer.ack() # send ack signal to server
-                self._received_trigger = False
-            except:
+        while not self._term_req_received:
+            # we are always listening for a trigger signal 
+            if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
+                Journal.log(self._class_name_base,
+                    "solve",
+                    "Didn't receive any remote trigger req within timeout!",
+                    LogType.EXCEP,
+                    throw_when_excep = False)
                 break
+            self._received_trigger = True
+            # signal received -> we process incoming requests
+            # perform reset, if required
+            if self.rhc_status.resets.read_retry(row_index=self.controller_index,
+                                            col_index=0)[0]:
+                self.reset() # rhc is reset
+            # check if a trigger request was received
+            if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
+                        col_index=0)[0]:
+                self._rhc() # run solution
+            self._remote_triggerer.ack() # send ack signal to server
+            self._received_trigger = False
+            
+            self._term_req_received = self._term_req_received or self._remote_term.read_retry(row_index=0,
+                                                            col_index=0)[0]
         self.close() # is not stricly necessary
 
     def reset(self):
@@ -484,6 +493,16 @@ class RHController(ABC):
                     stat,
                     LogType.STAT,
                     throw_when_excep = True)
+        
+        self._remote_term = SharedTWrapper(namespace=self.namespace,
+            basename="RemoteTermination",
+            is_server=False,
+            verbose = self._verbose, 
+            vlevel = VLevel.V2,
+            with_gpu_mirror=False,
+            with_torch_view=True,
+            dtype=dtype.Bool)
+        self._remote_term.run()
         
         self.rhc_status = RhcStatus(is_server=False,
                                     namespace=self.namespace, 

@@ -82,6 +82,8 @@ class ControlClusterClient(ABC):
 
         self.cluster_stats = None
         
+        self._remote_term = None
+
         self._terminated = False
     
     def __del__(self):
@@ -156,7 +158,28 @@ class ControlClusterClient(ABC):
         
         from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
         from perf_sleep.pyperfsleep import PerfSleep
+        
+        from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
+        from SharsorIPCpp.PySharsorIPC import dtype
 
+        self._remote_term = SharedTWrapper(namespace=self._namespace,
+            basename="RemoteTermination",
+            is_server=True,
+            n_rows = 1, 
+            n_cols = 1, 
+            verbose = self._verbose, 
+            vlevel = VLevel.V2,
+            safe = False, # boolean operations are atomdic on 64 bit systems
+            dtype=dtype.Bool,
+            force_reconnection=True,
+            with_gpu_mirror=False,
+            with_torch_view=True,
+            fill_value = False)
+        self._remote_term.run()
+        self._remote_term.write_retry(False, 
+                                row_index=0,
+                                col_index=0)
+        
         self.cluster_stats = RhcProfiling(is_server=False, 
                                     name=self._namespace,
                                     verbose=self._verbose,
@@ -191,7 +214,9 @@ class ControlClusterClient(ABC):
     def _close_processes(self):
         # Wait for each process to exit gracefully or terminate forcefully
         for process in self._processes:
-            
+            self._remote_term.write_retry(True, 
+                                        row_index=0,
+                                        col_index=0) # send termination to controllers
             process.join()  # Wait for 5 seconds for each process to exit gracefully
             Journal.log(self.__class__.__name__,
                     "_close_processes",
@@ -201,6 +226,8 @@ class ControlClusterClient(ABC):
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
             self.cluster_stats.close()
+        if self._remote_term is not None:
+            self._remote_term.close()
 
     def _get_cores(self):
 
@@ -264,7 +291,7 @@ class ControlClusterClient(ABC):
         return core_ids[process_index % num_cores]
 
     def _spawn_processes(self):
-        
+
         ctx = None
         if self.use_mp_fork:
             ctx = mp.get_context('fork')
