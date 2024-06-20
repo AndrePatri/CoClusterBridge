@@ -213,10 +213,10 @@ class ControlClusterClient(ABC):
     
     def _close_processes(self):
         # Wait for each process to exit gracefully or terminate forcefully
-        for process in self._processes:
-            self._remote_term.write_retry(True, 
+        self._remote_term.write_retry(True, 
                                         row_index=0,
                                         col_index=0) # send termination to controllers
+        for process in self._processes:
             process.join()  # Wait for 5 seconds for each process to exit gracefully
             Journal.log(self.__class__.__name__,
                     "_close_processes",
