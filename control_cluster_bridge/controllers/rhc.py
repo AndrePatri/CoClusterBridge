@@ -38,6 +38,8 @@ import numpy as np
 
 from perf_sleep.pyperfsleep import PerfSleep
 
+import signal
+
 class RHController(ABC):
 
     def __init__(self, 
@@ -50,6 +52,8 @@ class RHController(ABC):
             debug = False,
             timeout_ms: int = 60000):
         
+        signal.signal(signal.SIGINT, self._handle_sigint)
+
         self.namespace = namespace
         self._dtype = dtype
         self._verbose = verbose
@@ -117,24 +121,34 @@ class RHController(ABC):
         self._init()
 
     def __del__(self):
-        if not self._closed:
-            self._close()
+        self._close()
+
+    def _handle_sigint(self, signum, frame):
+        Journal.log(self._class_name_base,
+                "_handle_sigint",
+                "SIGINT received",
+                LogType.WARN)
+        self.close()
 
     def _close(self):
-        self._unregister_from_cluster()
-        if self.robot_cmds is not None:
-            self.robot_cmds.close()
-        if self.robot_state is not None:
-            self.robot_state.close()
-        if self.rhc_status is not None:
-            self.rhc_status.close()
-        if self.rhc_internal is not None:
-            self.rhc_internal.close()
-        if self.cluster_stats is not None:
-            self.cluster_stats.close()
-        if self._remote_triggerer is not None:
-            self._remote_triggerer.close()
-        self._closed = True
+        if not self._closed:
+            self._unregister_from_cluster()
+            if self.robot_cmds is not None:
+                self.robot_cmds.close()
+            if self.robot_state is not None:
+                self.robot_state.close()
+            if self.rhc_status is not None:
+                self.rhc_status.close()
+            if self.rhc_internal is not None:
+                self.rhc_internal.close()
+            if self.cluster_stats is not None:
+                self.cluster_stats.close()
+            if self._remote_triggerer is not None:
+                self._remote_triggerer.close()
+            self._closed = True
+
+    def close(self):
+        self._close()
 
     def init_rhc_task_cmds(self):
         
@@ -248,36 +262,34 @@ class RHController(ABC):
         self.rhc_status.trigger.write_retry(False, 
                                 row_index=self.controller_index,
                                 col_index=0) # allow next solution trigger
-            
+        
     def solve(self):
         
         # run the solution loop and wait for trigger signals
         # using cond. variables (efficient)
-        while True:
-            try: 
-                # we are always listening for a trigger signal 
-                if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
-                    Journal.log(self._class_name_base,
-                        "solve",
-                        "Didn't receive any remote trigger req within timeout!",
-                        LogType.EXCEP,
-                        throw_when_excep = True)
-                self._received_trigger = True
-                # signal received -> we process incoming requests
-                # perform reset, if required
-                if self.rhc_status.resets.read_retry(row_index=self.controller_index,
-                                                col_index=0)[0]:
-                    self.reset() # rhc is reset
-                # check if a trigger request was received
-                if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
-                            col_index=0)[0]:
-                    self._rhc() # run solution
-                self._remote_triggerer.ack() # send ack signal to server
-                self._received_trigger = False
-            except (KeyboardInterrupt):
-                self._close()
-                break
-                
+        while not self._closed:
+            # we are always listening for a trigger signal 
+            if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
+                Journal.log(self._class_name_base,
+                    "solve",
+                    "Didn't receive any remote trigger req within timeout!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            self._received_trigger = True
+            # signal received -> we process incoming requests
+            # perform reset, if required
+            if self.rhc_status.resets.read_retry(row_index=self.controller_index,
+                                            col_index=0)[0]:
+                self.reset() # rhc is reset
+            # check if a trigger request was received
+            if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
+                        col_index=0)[0]:
+                self._rhc() # run solution
+            self._remote_triggerer.ack() # send ack signal to server
+            self._received_trigger = False
+
+        self.close() # is not stricly necessary
+
     def reset(self):
         
         if not self._closed:
@@ -420,7 +432,8 @@ class RHController(ABC):
             # we can now release everything
             self.rhc_status.registration.data_sem_release()
             self.rhc_status.controllers_counter.data_sem_release()
-    
+            self._registered = False
+
     def _get_quat_remap(self):
         # to be overridden by child class if necessary
         return [0, 1, 2, 3]

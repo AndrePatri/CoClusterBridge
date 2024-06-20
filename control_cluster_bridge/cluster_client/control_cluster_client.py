@@ -48,7 +48,6 @@ class ControlClusterClient(ABC):
         #        CR 
 
         signal.signal(signal.SIGINT, self._handle_sigint)
-        self._sigint_received = False
 
         self.set_affinity = set_affinity
 
@@ -86,9 +85,7 @@ class ControlClusterClient(ABC):
         self._terminated = False
     
     def __del__(self):
-
         if not self._terminated:
-
             self.terminate()
     
     def _handle_sigint(self, signum, frame):
@@ -96,7 +93,6 @@ class ControlClusterClient(ABC):
                 "_handle_sigint",
                 "SIGINT received -> Cleaning up...",
                 LogType.WARN)
-        self._sigint_received = True
         self.terminate()
 
     def _set_affinity(self, 
@@ -171,16 +167,13 @@ class ControlClusterClient(ABC):
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
 
-        while True:
-            try:
-                nsecs =  1000000000 # 1 sec
-                PerfSleep.thread_sleep(nsecs) # we just keep it alive
-                if self._childs_all_dead() or self._sigint_received:
-                    break
-                else:
-                    continue
-            except KeyboardInterrupt:
+        while not self._terminated:
+            nsecs =  1000000000 # 1 sec
+            PerfSleep.thread_sleep(nsecs) # we just keep it alive
+            if self._childs_all_dead():
                 break
+            else:
+                continue
         
         self.terminate() # closes all processe
 
