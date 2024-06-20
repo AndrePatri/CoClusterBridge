@@ -92,7 +92,7 @@ class ControlClusterClient(ABC):
             self.terminate()
     
     def _handle_sigint(self, signum, frame):
-        Journal.log(f"{self.__class__.__name__}{controller_idx}",
+        Journal.log(f"{self.__class__.__name__}",
                 "_handle_sigint",
                 "SIGINT received -> Cleaning up...",
                 LogType.WARN)
