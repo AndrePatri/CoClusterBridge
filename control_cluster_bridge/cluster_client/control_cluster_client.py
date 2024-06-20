@@ -87,8 +87,7 @@ class ControlClusterClient(ABC):
         self._terminated = False
     
     def __del__(self):
-        if not self._terminated:
-            self.terminate()
+        self.terminate()
     
     def _handle_sigint(self, signum, frame):
         Journal.log(f"{self.__class__.__name__}",
@@ -202,15 +201,16 @@ class ControlClusterClient(ABC):
 
     def terminate(self):
         
-        Journal.log(self.__class__.__name__,
-                        "terminate",
-                        "terminating cluster...",
-                        LogType.STAT,
-                        throw_when_excep = True)
-        self._close_processes() # we terminate all the child processes
-        self._close_shared_mem() # and close the used shared memory
-        self._terminated = True
-    
+        if not self._terminated:
+            Journal.log(self.__class__.__name__,
+                            "terminate",
+                            "terminating cluster...",
+                            LogType.STAT,
+                            throw_when_excep = True)
+            self._close_processes() # we terminate all the child processes
+            self._close_shared_mem() # and close the used shared memory
+            self._terminated = True
+        
     def _close_processes(self):
         # Wait for each process to exit gracefully or terminate forcefully
         self._remote_term.write_retry(True, 
