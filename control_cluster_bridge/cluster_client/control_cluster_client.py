@@ -38,7 +38,7 @@ class ControlClusterClient(ABC):
             cluster_size: int,
             processes_basename: str = "Controller", 
             set_affinity: bool = False,
-            use_mp_fork: bool = False,
+            use_mp_fork: bool = True,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False,
@@ -137,10 +137,10 @@ class ControlClusterClient(ABC):
             # put rhc controller on a single specific core 
             self._set_affinity(core_idxs=[self._compute_process_affinity(idx, core_ids=available_cores)],
                         controller_idx=idx)
-        if self.use_mp_fork: # that's an hack
-            # use all available cores
-            self._set_affinity(core_idxs=available_cores,
-                        controller_idx=idx)
+        # if self.use_mp_fork: # that's an hack
+        #     # use all available cores
+        #     self._set_affinity(core_idxs=available_cores,
+        #                 controller_idx=idx)
             
         controller = self._generate_controller(idx=idx)
         controller.solve() # runs the solution loop
@@ -334,15 +334,17 @@ class ControlClusterClient(ABC):
     def _spawn_processes(self):
 
         ctx = None
+        ctx_name = ""
         if self.use_mp_fork:
-            ctx = mp.get_context('fork')
+            ctx = mp.get_context('forkserver')
+            ctx_name="forkserver"
         else:
             ctx = mp.get_context('spawn')
-            # ctx = mp.get_context('forkserver')
+            ctx_name="spawn"
         
         Journal.log(self.__class__.__name__,
                         "_spawn_processes",
-                        "spawning processes...",
+                        f"spawning processes (using context {ctx_name})-->",
                         LogType.STAT,
                         throw_when_excep = True)
             
