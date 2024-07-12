@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
+print("MEGAAAAAAAA CHECKL**************************")
 from abc import ABC, abstractmethod
 
 from typing import List
@@ -132,6 +133,8 @@ class ControlClusterClient(ABC):
                     idx: int,
                     available_cores: List[int]):
         
+        print(f"checking if print works wihtin child {idx}")
+
         # this runs in a child process for each controller
         if self.set_affinity:
             # put rhc controller on a single specific core 
@@ -226,6 +229,9 @@ class ControlClusterClient(ABC):
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
 
+        nsecs =  60000000000 
+        PerfSleep.thread_sleep(nsecs) 
+        
         while not self._terminated:
             nsecs =  1000000000 # 1 sec
             PerfSleep.thread_sleep(nsecs) # we just keep it alive
@@ -365,6 +371,7 @@ class ControlClusterClient(ABC):
                     info,
                     LogType.STAT,
                     throw_when_excep = True)
+            print(f"checking if print work here {i}")
             process = ctx.Process(target=self._spawn_controller, 
                             name=self.processes_basename + str(i),
                             args=(i, core_ids))
