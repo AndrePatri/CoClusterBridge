@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
-print("MEGAAAAAAAA CHECKL**************************")
 from abc import ABC, abstractmethod
 
 from typing import List
@@ -133,8 +132,6 @@ class ControlClusterClient(ABC):
                     idx: int,
                     available_cores: List[int]):
         
-        print(f"checking if print works wihtin child {idx}")
-
         # this runs in a child process for each controller
         if self.set_affinity:
             # put rhc controller on a single specific core 
@@ -189,7 +186,6 @@ class ControlClusterClient(ABC):
                         LogType.EXCEP,
                         throw_when_excep=False)
                 break
-        return self._child_ps_were_alive
 
     def run(self):
             
@@ -229,24 +225,9 @@ class ControlClusterClient(ABC):
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
 
-        import time
-        time.sleep(60)
+        for process in self._processes:
+            process.join() # wait for processes to terminate
         
-        while not self._terminated:
-            nsecs =  1000000000 # 1 sec
-            PerfSleep.thread_sleep(nsecs) # we just keep it alive
-            if self._childs_all_dead():
-                Journal.log(self.__class__.__name__,
-                            "run",
-                            "no child process is alive -> will terminate",
-                            LogType.EXCEP,
-                            throw_when_excep = False)
-                break
-            else:
-                continue
-        
-        self.terminate() # closes all processe
-
     def terminate(self):
         
         if not self._terminated:
@@ -265,7 +246,7 @@ class ControlClusterClient(ABC):
                                         row_index=0,
                                         col_index=0) # send termination to controllers
         for process in self._processes:
-            process.join()  # Wait for 5 seconds for each process to exit gracefully
+            process.join()  # 
             Journal.log(self.__class__.__name__,
                     "_close_processes",
                     "Terminated child process " + str(process.name),
@@ -371,7 +352,6 @@ class ControlClusterClient(ABC):
                     info,
                     LogType.STAT,
                     throw_when_excep = True)
-            print(f"checking if print work here {i}")
             process = ctx.Process(target=self._spawn_controller, 
                             name=self.processes_basename + str(i),
                             args=(i, core_ids))
