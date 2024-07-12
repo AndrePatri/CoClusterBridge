@@ -87,6 +87,8 @@ class ControlClusterClient(ABC):
         self._child_ps_were_alive = False
         self._child_ps_spawn_timeout = 180.0 # [s]
         self._terminated = False
+
+        self._proc_closed=False
     
     def __del__(self):
         self.terminate()
@@ -224,11 +226,8 @@ class ControlClusterClient(ABC):
         self.cluster_stats.run()
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
-
-        for process in self._processes:
-            process.join() # wait for processes to terminate
-            print("exit code:")
-            print(process.exitcode)
+        
+        self._close_process() #
         
     def terminate(self):
         
@@ -238,21 +237,54 @@ class ControlClusterClient(ABC):
                             "terminating cluster...",
                             LogType.STAT,
                             throw_when_excep = True)
-            self._close_processes() # we terminate all the child processes
+            self._close_all() # we terminate all the child processes
             self._close_shared_mem() # and close the used shared memory
             self._terminated = True
-        
-    def _close_processes(self):
+    
+    def _close_process(self):
+        if not self._proc_closed:
+            for process in self._processes:
+                process.join() # wait for processes to terminate
+                exicode=process.exitcode
+                if exicode==0:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "successfully terminated child process " + str(process.name),
+                        LogType.STAT)
+                    self._proc_closed=True
+                elif exicode is None:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" is not terminated yet",
+                        LogType.WARN)
+                    self._proc_closed=False
+                elif exicode==1:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (uncaught exception)",
+                        LogType.EXCEP,
+                        throw_when_excep = False)
+                    self._proc_closed=True
+                elif exicode>1:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (sys.exit())",
+                        LogType.STAT)
+                    self._proc_closed=True
+                else: # exitcode <0
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (by signal)",
+                        LogType.EXCEP,
+                        throw_when_excep = False)
+                    self._proc_closed=True
+
+    def _close_all(self):
         # Wait for each process to exit gracefully or terminate forcefully
         self._remote_term.write_retry(True, 
                                         row_index=0,
                                         col_index=0) # send termination to controllers
-        for process in self._processes:
-            process.join()  # 
-            Journal.log(self.__class__.__name__,
-                    "_close_processes",
-                    "Terminated child process " + str(process.name),
-                    LogType.STAT)
+        self._close_process()
     
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
