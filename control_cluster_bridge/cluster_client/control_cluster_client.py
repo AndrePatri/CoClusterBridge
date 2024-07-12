@@ -227,6 +227,8 @@ class ControlClusterClient(ABC):
 
         for process in self._processes:
             process.join() # wait for processes to terminate
+            print("exit code:")
+            print(process.exitcode)
         
     def terminate(self):
         
