@@ -84,6 +84,8 @@ class ControlClusterClient(ABC):
         
         self._remote_term = None
 
+        self._child_ps_were_alive = False
+        self._child_ps_spawn_timeout = 180.0 # [s]
         self._terminated = False
     
     def __del__(self):
@@ -143,14 +145,48 @@ class ControlClusterClient(ABC):
         controller = self._generate_controller(idx=idx)
         controller.solve() # runs the solution loop
 
-    def _childs_all_dead(self):
-        
+    def _check_child_ps_status(self):
         for i in range(0, self.cluster_size):
             child_p = self._processes[i]
             if not child_p.is_alive():
                 self._child_alive[i] = False
+            else:
+                self._child_alive[i] = True
+                
+    def _childs_all_dead(self):
+        self._check_child_ps_status()
         return not any(self._child_alive) 
+    
+    def _childs_all_alive(self):
+        self._check_child_ps_status()
+        return all(self._child_alive) 
+
+    def _wait_for_child_ps(self):
         
+        timeout=0.0
+        update_dt_ns=1000000000
+        
+        while True:
+            if self._childs_all_alive():
+                Journal.log(self.__class__.__name__,
+                        "_wait_for_child_ps",
+                        f"all childs are alive",
+                        LogType.STAT)
+                self._child_ps_were_alive=True
+                break
+            else:
+                self._child_ps_were_alive=False
+            PerfSleep.thread_sleep(update_dt_ns) # we just keep it alive
+            timeout+=float(update_dt_ns)/1e9
+            if timeout>self._child_ps_spawn_timeout:
+                Journal.log(self.__class__.__name__,
+                        "_wait_for_child_ps",
+                        f"not all child ps alive withing {self._child_ps_spawn_timeout} s timeout!",
+                        LogType.EXCEP,
+                        throw_when_excep=False)
+                break
+        return self._child_ps_were_alive
+
     def run(self):
             
         self._spawn_processes()
@@ -193,6 +229,11 @@ class ControlClusterClient(ABC):
             nsecs =  1000000000 # 1 sec
             PerfSleep.thread_sleep(nsecs) # we just keep it alive
             if self._childs_all_dead():
+                Journal.log(self.__class__.__name__,
+                            "run",
+                            "no child process is alive -> will terminate",
+                            LogType.EXCEP,
+                            throw_when_excep = False)
                 break
             else:
                 continue
@@ -327,7 +368,9 @@ class ControlClusterClient(ABC):
             self._processes.append(process)
             self._child_alive.append(True)
             self._processes[i].start()
-            
+        
+        self._wait_for_child_ps() # blocking: waits that all child ps are alive
+
         self._is_cluster_ready = True
 
         Journal.log(self.__class__.__name__,
