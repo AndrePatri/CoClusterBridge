@@ -162,9 +162,10 @@ class ControlClusterClient(ABC):
         return all(self._child_alive) 
 
     def _wait_for_child_ps(self):
-        
+
+        import time
         timeout=0.0
-        update_dt_ns=1000000000
+        update_dt=1
         
         while True:
             if self._childs_all_alive():
@@ -176,8 +177,8 @@ class ControlClusterClient(ABC):
                 break
             else:
                 self._child_ps_were_alive=False
-            PerfSleep.thread_sleep(update_dt_ns) # we just keep it alive
-            timeout+=float(update_dt_ns)/1e9
+            time.sleep(update_dt)
+            timeout+=update_dt
             if timeout>self._child_ps_spawn_timeout:
                 Journal.log(self.__class__.__name__,
                         "_wait_for_child_ps",
