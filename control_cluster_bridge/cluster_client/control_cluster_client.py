@@ -229,8 +229,8 @@ class ControlClusterClient(ABC):
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
 
-        nsecs =  60000000000 
-        PerfSleep.thread_sleep(nsecs) 
+        import time
+        time.sleep(60)
         
         while not self._terminated:
             nsecs =  1000000000 # 1 sec
