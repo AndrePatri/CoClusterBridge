@@ -87,6 +87,8 @@ class ControlClusterClient(ABC):
         self._child_ps_were_alive = False
         self._child_ps_spawn_timeout = 180.0 # [s]
         self._terminated = False
+
+        self._proc_closed=False
     
     def __del__(self):
         self.terminate()
@@ -162,9 +164,10 @@ class ControlClusterClient(ABC):
         return all(self._child_alive) 
 
     def _wait_for_child_ps(self):
-        
+
+        import time
         timeout=0.0
-        update_dt_ns=1000000000
+        update_dt=1
         
         while True:
             if self._childs_all_alive():
@@ -176,8 +179,8 @@ class ControlClusterClient(ABC):
                 break
             else:
                 self._child_ps_were_alive=False
-            PerfSleep.thread_sleep(update_dt_ns) # we just keep it alive
-            timeout+=float(update_dt_ns)/1e9
+            time.sleep(update_dt)
+            timeout+=update_dt
             if timeout>self._child_ps_spawn_timeout:
                 Journal.log(self.__class__.__name__,
                         "_wait_for_child_ps",
@@ -185,7 +188,6 @@ class ControlClusterClient(ABC):
                         LogType.EXCEP,
                         throw_when_excep=False)
                 break
-        return self._child_ps_were_alive
 
     def run(self):
             
@@ -237,9 +239,9 @@ class ControlClusterClient(ABC):
                 break
             else:
                 continue
-        
-        self.terminate() # closes all processe
 
+        self._close_process() #
+        
     def terminate(self):
         
         if not self._terminated:
@@ -248,21 +250,54 @@ class ControlClusterClient(ABC):
                             "terminating cluster...",
                             LogType.STAT,
                             throw_when_excep = True)
-            self._close_processes() # we terminate all the child processes
+            self._close_all() # we terminate all the child processes
             self._close_shared_mem() # and close the used shared memory
             self._terminated = True
-        
-    def _close_processes(self):
+    
+    def _close_process(self):
+        if not self._proc_closed:
+            for process in self._processes:
+                process.join() # wait for processes to terminate
+                exicode=process.exitcode
+                if exicode==0:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "successfully terminated child process " + str(process.name),
+                        LogType.STAT)
+                    self._proc_closed=True
+                elif exicode is None:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" is not terminated yet",
+                        LogType.WARN)
+                    self._proc_closed=False
+                elif exicode==1:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (uncaught exception)",
+                        LogType.EXCEP,
+                        throw_when_excep = False)
+                    self._proc_closed=True
+                elif exicode>1:
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (sys.exit())",
+                        LogType.STAT)
+                    self._proc_closed=True
+                else: # exitcode <0
+                    Journal.log(self.__class__.__name__,
+                        "_close_process",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (by signal)",
+                        LogType.EXCEP,
+                        throw_when_excep = False)
+                    self._proc_closed=True
+
+    def _close_all(self):
         # Wait for each process to exit gracefully or terminate forcefully
         self._remote_term.write_retry(True, 
                                         row_index=0,
                                         col_index=0) # send termination to controllers
-        for process in self._processes:
-            process.join()  # Wait for 5 seconds for each process to exit gracefully
-            Journal.log(self.__class__.__name__,
-                    "_close_processes",
-                    "Terminated child process " + str(process.name),
-                    LogType.STAT)
+        self._close_process()
     
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
