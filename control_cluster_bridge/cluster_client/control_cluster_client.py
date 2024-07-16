@@ -232,7 +232,7 @@ class ControlClusterClient(ABC):
                 Journal.log(self.__class__.__name__,
                             "run",
                             "no child process is alive -> will terminate",
-                            LogType.EXCEP,
+                            LogType.WARN,
                             throw_when_excep = False)
                 break
             else:
