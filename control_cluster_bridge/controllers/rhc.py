@@ -351,7 +351,7 @@ class RHController(ABC):
         
         homing_full = self._homer_env.get_homing().reshape(1, 
                         self.robot_cmds.n_jnts())
-        
+    
         null_action = np.zeros((1, self.robot_cmds.n_jnts()), 
                         dtype=self._dtype)
         
@@ -617,8 +617,9 @@ class RHController(ABC):
     def _init_robot_homer(self):
         self._homer = RobotHomer(srdf_path=self.srdf_path, 
                             jnt_names=self._controller_side_jnt_names)
+        
         self._homer_env = RobotHomer(srdf_path=self.srdf_path, 
-                            jnt_names=self._env_side_jnt_names)
+                            jnt_names=self.robot_state.jnt_names())
         
     def _update_profiling_data(self):
 

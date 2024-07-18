@@ -97,7 +97,7 @@ class RobotHomer:
     def _assign_homing(self):
         # assign homing prb
         for joint in self.jnt_names: # joint is guaranteed to be in _homing_value_map (check was performed)
-            self._homing[:, self.joint_idx_map_prb[joint]] = self.joint_idx_map_prb[joint]
+            self._homing[:, self.joint_idx_map_prb[joint]] = self._homing_value_map_prb[joint]
 
     def get_homing(self):
         return self._homing.flatten()
