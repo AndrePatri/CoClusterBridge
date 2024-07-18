@@ -26,14 +26,14 @@ class RobotHomer:
 
     def __init__(self, 
             srdf_path: str, 
-            jnt_names_prb: List[str] = None,
+            jnt_names: List[str] = None,
             filter: bool = True):
 
         self._filter=filter
 
         self.srdf_path = srdf_path
 
-        self.jnt_names_prb = jnt_names_prb # coming from controller
+        self.jnt_names = jnt_names # coming from controller
         
         # open srdf and parse the homing field
         
@@ -64,14 +64,14 @@ class RobotHomer:
             self.homing_srdf.append(joint_value)
             self._homing_value_map[joint_name] =  float(joint_value) # joint name -> homing value
 
-        if self.jnt_names_prb is None:
+        if self.jnt_names is None:
             # we use the same joints in the SRDF
-            self.jnt_names_prb = self.jnt_names_srdf
+            self.jnt_names = self.jnt_names_srdf
 
         if self._filter: # remove some joints
-            self.jnt_names_prb = self._filter_jnt_names(self.jnt_names_prb)
+            self.jnt_names = self._filter_jnt_names(self.jnt_names)
 
-        self.n_dofs_prb = len(self.jnt_names_prb)
+        self.n_dofs_prb = len(self.jnt_names)
         self.n_dofs_srdf = len(self.jnt_names_srdf)
         if not self.n_dofs_prb==self.n_dofs_srdf:
             warn = f"Found {self.n_dofs_srdf} jnt in SRDF, while provided ones are {self.n_dofs_prb}!"
@@ -81,12 +81,12 @@ class RobotHomer:
                         LogType.WARN)
         self._check_jnt_names()
 
-        additional_jnts=list(set(self.jnt_names_srdf)-set(self.jnt_names_prb))
+        additional_jnts=list(set(self.jnt_names_srdf)-set(self.jnt_names))
         self._homing_value_map_prb=self._remove_keys_from_dict(self._homing_value_map,additional_jnts)
 
         self.joint_idx_map_prb = {}
         for joint in range(0, self.n_dofs_prb): # go through joints in the order they were provided
-            self.joint_idx_map_prb[self.jnt_names_prb[joint]] = joint # jnt name in prb -> joint index in homing matrix
+            self.joint_idx_map_prb[self.jnt_names[joint]] = joint # jnt name in prb -> joint index in homing matrix
 
         self._homing = np.full((1, self.n_dofs_prb), 
                         0.0, 
@@ -96,7 +96,7 @@ class RobotHomer:
 
     def _assign_homing(self):
         # assign homing prb
-        for joint in self.jnt_names_prb: # joint is guaranteed to be in _homing_value_map (check was performed)
+        for joint in self.jnt_names: # joint is guaranteed to be in _homing_value_map (check was performed)
             self._homing[:, self.joint_idx_map_prb[joint]] = self.joint_idx_map_prb[joint]
 
     def get_homing(self):
@@ -119,7 +119,7 @@ class RobotHomer:
 
     def _check_jnt_names(self):
         # Convert both lists to sets for efficient membership checking
-        names_prb = set(self.jnt_names_prb)
+        names_prb = set(self.jnt_names)
         names_srdf = set(self.jnt_names_srdf)
         
         # Check if all elements of set1 are present in set2

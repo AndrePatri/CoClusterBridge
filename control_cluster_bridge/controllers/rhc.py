@@ -126,6 +126,7 @@ class RHController(ABC):
         self._start_time = time.perf_counter() # used for profiling when in debug mode
 
         self._homer = None # robot homing manager
+        self._homer_env = None # used for setting homing to jnts not contained in rhc prb
 
         self._class_name_base = f"{self.__class__.__name__}"
         self._init()
@@ -344,17 +345,27 @@ class RHController(ABC):
         return True
 
     def set_cmds_to_homing(self):
-
-        homing = self._homer.get_homing().reshape(1, 
-                            self._homer.n_dofs_prb)
         
-        null_action = np.zeros((1, self._homer.n_dofs_prb), 
+        # we set homings also for joints which are not in the rhc homing map
+        # since this is usually required on env side
+        
+        homing_full = self._homer_env.get_homing().reshape(1, 
+                        self.robot_cmds.n_jnts())
+        
+        null_action = np.zeros((1, self.robot_cmds.n_jnts()), 
                         dtype=self._dtype)
         
-        self.robot_cmds.jnts_state.set(data=homing, data_type="q", robot_idxs=self.controller_index_np)
-        self.robot_cmds.jnts_state.set(data=null_action, data_type="v", robot_idxs=self.controller_index_np)
-        self.robot_cmds.jnts_state.set(data=null_action, data_type="eff", robot_idxs=self.controller_index_np)
-
+        self.robot_cmds.jnts_state.set(data=homing_full, data_type="q", 
+                            robot_idxs=self.controller_index_np,
+                            no_remap=True)
+        self.robot_cmds.jnts_state.set(data=null_action, data_type="v", 
+                            robot_idxs=self.controller_index_np,
+                            no_remap=True)
+        self.robot_cmds.jnts_state.set(data=null_action, data_type="eff", 
+                            robot_idxs=self.controller_index_np,
+                            no_remap=True)
+        
+        # write all joints (including homing for env-only ones)
         self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False) # only write data corresponding to this controller
     
@@ -605,7 +616,9 @@ class RHController(ABC):
 
     def _init_robot_homer(self):
         self._homer = RobotHomer(srdf_path=self.srdf_path, 
-                            jnt_names_prb=self._controller_side_jnt_names)
+                            jnt_names=self._controller_side_jnt_names)
+        self._homer_env = RobotHomer(srdf_path=self.srdf_path, 
+                            jnt_names=self._env_side_jnt_names)
         
     def _update_profiling_data(self):
 
@@ -630,7 +643,7 @@ class RHController(ABC):
     def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
-
+        # just writes rhc-side jnts. The rest remain to the default, which is the homing from SRDF
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_q_from_sol(), data_type="q", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_v_from_sol(), data_type="v", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_eff_from_sol(), data_type="eff", robot_idxs=self.controller_index_np)
