@@ -81,6 +81,9 @@ class RobotHomer:
                         LogType.WARN)
         self._check_jnt_names()
 
+        additional_jnts=list(set(self.jnt_names_srdf)-set(self.jnt_names_prb))
+        self._homing_value_map_prb=self._remove_keys_from_dict(self._homing_value_map,additional_jnts)
+
         self.joint_idx_map_prb = {}
         for joint in range(0, self.n_dofs_prb): # go through joints in the order they were provided
             self.joint_idx_map_prb[self.jnt_names_prb[joint]] = joint # jnt name in prb -> joint index in homing matrix
@@ -94,18 +97,22 @@ class RobotHomer:
     def _assign_homing(self):
         # assign homing prb
         for joint in self.jnt_names_prb: # joint is guaranteed to be in _homing_value_map (check was performed)
-            self._homing[:, self.joint_idx_map_prb[joint]] = self._homing_value_map[joint]
-                                                            
+            self._homing[:, self.joint_idx_map_prb[joint]] = self.joint_idx_map_prb[joint]
+
     def get_homing(self):
         return self._homing.flatten()
     
+    def get_homing_vals(self,jnt_names:List[str]):
+        homing_list=[]
+        for jnt_name in jnt_names: # using srdf map, since it may contain more joints
+            homing_list.append(self._homing_value_map[jnt_name])
+        return homing_list
+    
     def get_homing_map(self,from_prb:bool=True):
-        names_prb = set(self.jnt_names_prb)
-        names_srdf = set(self.jnt_names_srdf)
-        additional_jnts=list(names_srdf-names_prb)
-        if len(additional_jnts)>0:
-            self._homing_value_map=self._remove_keys_from_dict(self._homing_value_map,additional_jnts)
-        return self._homing_value_map
+        if from_prb:
+            return self._homing_value_map_prb
+        else:
+            return self._homing_value_map
     
     def _remove_keys_from_dict(self,dictionary, keys_to_remove):
         return {key: value for key, value in dictionary.items() if key not in keys_to_remove}

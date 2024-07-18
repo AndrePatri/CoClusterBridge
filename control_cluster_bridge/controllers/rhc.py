@@ -53,7 +53,7 @@ class RHController(ABC):
             verbose = False, 
             debug = False,
             timeout_ms: int = 60000,
-            allow_less_jnts: bool = False):
+            allow_less_jnts: bool = True):
         
         signal.signal(signal.SIGINT, self._handle_sigint)
 
@@ -346,9 +346,9 @@ class RHController(ABC):
     def set_cmds_to_homing(self):
 
         homing = self._homer.get_homing().reshape(1, 
-                            self.robot_cmds.n_jnts())
+                            self._homer.n_dofs_prb)
         
-        null_action = np.zeros((1, self.robot_cmds.n_jnts()), 
+        null_action = np.zeros((1, self._homer.n_dofs_prb), 
                         dtype=self._dtype)
         
         self.robot_cmds.jnts_state.set(data=homing, data_type="q", robot_idxs=self.controller_index_np)
