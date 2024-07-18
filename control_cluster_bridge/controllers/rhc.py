@@ -53,7 +53,7 @@ class RHController(ABC):
             verbose = False, 
             debug = False,
             timeout_ms: int = 60000,
-            allow_less_jnts: bool = True):
+            allow_less_jnts: bool = False):
         
         signal.signal(signal.SIGINT, self._handle_sigint)
 
@@ -685,17 +685,36 @@ class RHController(ABC):
 
     def _check_jnt_names_compatibility(self):
 
-        set_srvr = set(self._controller_side_jnt_names)
-        set_client  = set(self._env_side_jnt_names)
-        if not set_srvr == set_client:
-            message = "Server-side and client-side joint names do not match!\n" + \
-                "server side -> \n" + \
-                " ".join(self._env_side_jnt_names) + \
-                "\nclient side -> \n" + \
-                " ".join(self._controller_side_jnt_names)
+        set_rhc = set(self._controller_side_jnt_names)
+        set_env  = set(self._env_side_jnt_names)
+        
+        if not set_rhc == set_env:
+            rhc_is_missing=set_env-set_rhc
+            env_is_missing=set_rhc-set_env
+
             msg_type=LogType.WARN
-            if not self._allow_less_jnts: # raise exception
+            message=""
+            if not len(rhc_is_missing)==0: # allowed
+                message = "\nSome env-side joint names are missing on rhc-side!\n" + \
+                "ENV-SIDE-> \n" + \
+                " ".join(self._env_side_jnt_names) + \
+                "\nRHC-SIDE -> \n" + \
+                " ".join(self._controller_side_jnt_names) + "\n" \
+                "\nmissing -> \n" + \
+                " ".join(list(rhc_is_missing))
+                if not self._allow_less_jnts: # raise exception
+                    msg_type=LogType.EXCEP
+
+            if not len(env_is_missing)==0: # not allowed
+                message = "\nSome env-side joint names are missing on rhc-side!\n" + \
+                "ENV-SIDE-> \n" + \
+                " ".join(self._env_side_jnt_names) + \
+                "\nRHC-SIDE -> \n" + \
+                " ".join(self._controller_side_jnt_names) + "\n" \
+                "\nmissing -> \n" + \
+                " ".join(list(env_is_missing))
                 msg_type=LogType.EXCEP
+            
             Journal.log(self._class_name_base,
                     "_check_jnt_names_compatibility",
                     message,
