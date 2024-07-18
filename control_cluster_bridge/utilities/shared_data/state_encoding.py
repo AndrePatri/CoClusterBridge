@@ -133,12 +133,20 @@ class JntsState(SharedTWrapper):
         
         if jnts_remapping is not None:
             if not len(jnts_remapping) == self.n_jnts:
-                exception = f"Provided jnt remapping length {len(jnts_remapping)}" + \
-                    f"does not match n. joints {self.n_jnts}"
+                warning = f"Provided jnt remapping length {len(jnts_remapping)}" + \
+                    f"does not match n. joints {self.n_jnts}! Was this intentional?"
                 Journal.log(self.__class__.__name__,
-                    "update_jnts_remapping",
-                    exception,
-                    LogType.EXCEP,
+                    "set_jnts_remapping",
+                    warning,
+                    LogType.WARN,
+                    throw_when_excep = True)
+            if not len(jnts_remapping) <= self.n_jnts:
+                warning = f"Provided jnt remapping length {len(jnts_remapping)}" + \
+                    f"is higher than {self.n_jnts}. It should be <={self.n_jnts}"
+                Journal.log(self.__class__.__name__,
+                    "set_jnts_remapping",
+                    warning,
+                    LogType.WARN,
                     throw_when_excep = True)
             if self._with_torch_view:
                 import torch
@@ -330,14 +338,13 @@ class RootState(SharedTWrapper):
     
     def set_q_remapping(self, 
                 q_remapping: List[int] = None):
-        
+    
         if q_remapping is not None:
-
             if not len(q_remapping) == 4:
                 exception = f"Provided q remapping length {len(q_remapping)}" + \
                     f"is not 4!"
                 Journal.log(self.__class__.__name__,
-                    "update_jnts_remapping",
+                    "set_q_remapping",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)

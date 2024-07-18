@@ -52,9 +52,13 @@ class RHController(ABC):
             dtype = np.float32, 
             verbose = False, 
             debug = False,
-            timeout_ms: int = 60000):
+            timeout_ms: int = 60000,
+            allow_less_jnts: bool = True):
         
         signal.signal(signal.SIGINT, self._handle_sigint)
+
+        self._allow_less_jnts = allow_less_jnts # whether to allow less joints in rhc controller than the ones on the robot
+        # (e.g. some joints might not be desirable for control purposes)
 
         self.namespace = namespace
         self._dtype = dtype
@@ -319,7 +323,7 @@ class RHController(ABC):
         
         # retrieve env-side joint names from shared mem
         self._env_side_jnt_names = self.robot_state.jnt_names()
-        self._check_jnt_names_compatibility() # will raise exception
+        self._check_jnt_names_compatibility() # will raise exception if not self._allow_less_jnts
         if not self._got_jnt_names_from_controllers:
             exception = f"Cannot run the solve(). assign_env_side_jnt_names() was not called!"
             Journal.log(self._class_name_base,
@@ -327,8 +331,13 @@ class RHController(ABC):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
+
+        # robot homer guarantees that _controller_side_jnt_names is at least contained in self._env_side_jnt_names (or equal)
         self._to_controller = [self._env_side_jnt_names.index(element) for element in self._controller_side_jnt_names]
-        # set joint remappings for shared data
+        # set joint remappings for shared data from env data to controller
+        # all shared data is by convention specified according to the env (jnts are ordered that way)
+        # the remapping is used so that when data is returned, its a remapped view from env to controller,
+        # so that data can be assigned direclty from the rhc controller without any issues
         self.robot_state.set_jnts_remapping(jnts_remapping=self._to_controller)
         self.robot_cmds.set_jnts_remapping(jnts_remapping=self._to_controller)
 
@@ -679,15 +688,18 @@ class RHController(ABC):
         set_srvr = set(self._controller_side_jnt_names)
         set_client  = set(self._env_side_jnt_names)
         if not set_srvr == set_client:
-            exception = "Server-side and client-side joint names do not match!\n" + \
+            message = "Server-side and client-side joint names do not match!\n" + \
                 "server side -> \n" + \
                 " ".join(self._env_side_jnt_names) + \
                 "\nclient side -> \n" + \
-                " ".join(self._controller_side_jnt_names) 
+                " ".join(self._controller_side_jnt_names)
+            msg_type=LogType.WARN
+            if not self._allow_less_jnts: # raise exception
+                msg_type=LogType.EXCEP
             Journal.log(self._class_name_base,
                     "_check_jnt_names_compatibility",
-                    exception,
-                    LogType.EXCEP,
+                    message,
+                    msg_type,
                     throw_when_excep = True)
     
     def _get_cost_data(self):
