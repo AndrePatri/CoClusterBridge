@@ -226,12 +226,13 @@ class JntsState(SharedTWrapper):
             data,
             data_type: str,
             robot_idxs= None,
-            gpu: bool = False):
+            gpu: bool = False,
+            no_remap:bool=False):
 
         internal_data = self._retrieve_data(name=data_type,
                     gpu=gpu)
         
-        if self._jnts_remapping is None:
+        if self._jnts_remapping is None or no_remap:
             if robot_idxs is None:
                 internal_data[:, :] = data
             else:
