@@ -121,15 +121,18 @@ class RobotHomer:
         # Convert both lists to sets for efficient membership checking
         names_prb = set(self.jnt_names)
         names_srdf = set(self.jnt_names_srdf)
-        
+        missing_from_srdf=list(names_prb-names_srdf)
         # Check if all elements of set1 are present in set2
         ok=names_prb.issubset(names_srdf)
         if not ok:
-            excepion = f"Some of the provided joint names are not present in the SRDF!"
+            print(missing_from_srdf)
+            exception = f"Some of the provided joint names are not present in the SRDF! ->\n" + \
+                ", ".join(missing_from_srdf)
             Journal.log(self.__class__.__name__,
-                        "_check_jnt_names",
-                        excepion,
-                        throw_when_excep = True)
+                "_check_jnt_names",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep=True)
 
     def _filter_jnt_names(self, 
                         names: List[str]):
