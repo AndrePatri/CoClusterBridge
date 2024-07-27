@@ -42,7 +42,7 @@ class ControlClusterServer(ABC):
             control_dt: float,
             cluster_dt: float,
             jnt_names: List[str],
-            n_contact_sensors: int = -1,
+            n_contacts: int = 4,
             contact_linknames: List[str] = None,
             use_gpu: bool = False, 
             verbose = False, 
@@ -91,9 +91,12 @@ class ControlClusterServer(ABC):
         self._failed = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
 
         # other data
-        self._n_contact_sensors = n_contact_sensors
+        self._n_contacts = n_contacts
         self._contact_linknames = contact_linknames
-
+        if self._contact_linknames is None:
+            self._contact_linknames=[]
+            for i in range(self._n_contacts):
+                self._contact_linknames.append(f"contact_{i+1}")
         self._solution_time = np.nan
         self._start_time = np.nan
         
@@ -147,7 +150,7 @@ class ControlClusterServer(ABC):
                                 is_server=True,
                                 n_robots=self.cluster_size,
                                 n_jnts=self.n_dofs,
-                                n_contacts=self._n_contact_sensors,
+                                n_contacts=self._n_contacts,
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
                                 with_gpu_mirror=True,
@@ -160,7 +163,7 @@ class ControlClusterServer(ABC):
                                 is_server=True,
                                 n_robots=self.cluster_size,
                                 n_jnts=self.n_dofs,
-                                n_contacts=self._n_contact_sensors,
+                                n_contacts=self._n_contacts,
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
                                 with_gpu_mirror=True,
@@ -173,7 +176,7 @@ class ControlClusterServer(ABC):
                             is_server=True,
                             n_robots=self.cluster_size,
                             n_jnts=self.n_dofs,
-                            n_contacts=self._n_contact_sensors,
+                            n_contacts=self._n_contacts,
                             jnt_names=self.jnt_names,
                             contact_names=self._contact_linknames,
                             with_gpu_mirror = False,
@@ -186,7 +189,7 @@ class ControlClusterServer(ABC):
         self._rhc_status = RhcStatus(is_server=True,
                             cluster_size=self.cluster_size,
                             n_nodes=50, # just an ub which should fit for most cases
-                            n_contacts=self._n_contact_sensors,
+                            n_contacts=self._n_contacts,
                             namespace=self._namespace, 
                             verbose=self._verbose, 
                             vlevel=self._vlevel,
@@ -237,7 +240,7 @@ class ControlClusterServer(ABC):
         return self._n_controllers_connected
     
     def n_contact_sensors(self):
-        return self._n_contact_sensors
+        return self._n_contacts
     
     def contact_linknames(self):
         return self._contact_linknames

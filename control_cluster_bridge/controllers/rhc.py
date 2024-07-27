@@ -24,7 +24,7 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererClnt
+from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererClnt,RemoteTriggererSrvr
 
 from control_cluster_bridge.utilities.homing import RobotHomer
 from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
@@ -711,11 +711,11 @@ class RHController(ABC):
             if not len(rhc_is_missing)==0: # allowed
                 message = "\nSome env-side joint names are missing on rhc-side!\n" + \
                 "ENV-SIDE-> \n" + \
-                " ".join(self._env_side_jnt_names) + \
+                " ".join(self._env_side_jnt_names) + "\n" +\
                 "\nRHC-SIDE -> \n" + \
                 " ".join(self._controller_side_jnt_names) + "\n" \
-                "\nmissing -> \n" + \
-                " ".join(list(rhc_is_missing))
+                "\MISSING -> \n" + \
+                " ".join(list(rhc_is_missing)) + "\n"
                 if not self._allow_less_jnts: # raise exception
                     msg_type=LogType.EXCEP
 
