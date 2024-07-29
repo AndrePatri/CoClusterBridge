@@ -133,7 +133,7 @@ class JntsState(SharedTWrapper):
         
         if jnts_remapping is not None:
             if not len(jnts_remapping) == self.n_jnts:
-                warning = f"Provided jnt remapping length {len(jnts_remapping)}" + \
+                warning = f"Provided jnt remapping length {len(jnts_remapping)} " + \
                     f"does not match n. joints {self.n_jnts}! Was this intentional?"
                 Journal.log(self.__class__.__name__,
                     "set_jnts_remapping",
