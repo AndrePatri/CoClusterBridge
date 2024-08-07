@@ -751,11 +751,14 @@ class RHController(ABC):
         # we use rhc constr. viol to detect failures
         
         idx = self._get_fail_idx()
+        rhc_failed=idx>self._fail_idx_thresh
+        if rhc_failed: # clipping at threshold to avoid propagating infs/nans
+            idx=self._fail_idx_thresh 
         self.rhc_status.rhc_fail_idx.write_retry(idx, 
                                         row_index=self.controller_index,
                                         col_index=0) # write idx  on shared mem
-            
-        return idx >= self._fail_idx_thresh
+        
+        return rhc_failed
     
     def _update_rhc_internal(self):
         # data which is not enabled in the config is not actually 
