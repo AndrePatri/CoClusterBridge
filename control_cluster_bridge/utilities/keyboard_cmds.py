@@ -140,21 +140,24 @@ class RhcRefsFromKeyboard:
     def _update_base_height(self, 
                 decrement = False):
         
-        current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
-
+        # current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
+        # if decrement:
+        #     new_height_ref = current_p_ref[2] - self.height_dh
+        # else:
+        #     new_height_ref = current_p_ref[2] + self.height_dh
+        # current_p_ref[2] = new_height_ref
+        # self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+        #                             robot_idxs=self.cluster_idx_np)
+        
+        current_lin_v_ref = self.rhc_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
         if decrement:
-
-            new_height_ref = current_p_ref[2] - self.height_dh
-
+            new_ref = current_lin_v_ref[2] - self.dxy
         else:
-
-            new_height_ref = current_p_ref[2] + self.height_dh
-
-        current_p_ref[2] = new_height_ref
-
-        self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+            new_ref = current_lin_v_ref[2] + self.dxy
+        current_lin_v_ref[2] = new_ref
+        self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
-    
+        
     def _update_navigation(self, 
                     type: str,
                     increment = True):
