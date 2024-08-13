@@ -722,7 +722,7 @@ class RHController(ABC):
                 message = "\nSome env-side joint names are missing on rhc-side!\n" + \
                 "ENV-SIDE-> \n" + \
                 " ".join(self._env_side_jnt_names) + "\n" +\
-                "\nRHC-SIDE -> \n" + \
+                "RHC-SIDE -> \n" + \
                 " ".join(self._controller_side_jnt_names) + "\n" \
                 "\MISSING -> \n" + \
                 " ".join(list(rhc_is_missing)) + "\n"
@@ -730,10 +730,10 @@ class RHController(ABC):
                     msg_type=LogType.EXCEP
 
             if not len(env_is_missing)==0: # not allowed
-                message = "\nSome env-side joint names are missing on rhc-side!\n" + \
+                message = "\nSome rhc-side joint names are missing on env-side!\n" + \
                 "ENV-SIDE-> \n" + \
                 " ".join(self._env_side_jnt_names) + \
-                "\nRHC-SIDE -> \n" + \
+                "RHC-SIDE -> \n" + \
                 " ".join(self._controller_side_jnt_names) + "\n" \
                 "\nmissing -> \n" + \
                 " ".join(list(env_is_missing))
