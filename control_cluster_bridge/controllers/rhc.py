@@ -649,6 +649,14 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_v_from_sol(), data_type="v", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_eff_from_sol(), data_type="eff", robot_idxs=self.controller_index_np)
         
+        root_q_full_pred=self._get_root_full_q_from_sol(node_idx=1)
+        root_twist_pred=self._get_root_twist_from_sol(node_idx=1)
+        
+        if root_q_full_pred is not None:
+            self.robot_cmds.root_state.set(data=root_q_full_pred, data_type="q_full", robot_idxs=self.controller_index_np)
+        if root_twist_pred is not None:
+            self.robot_cmds.root_state.set(data=root_twist_pred, data_type="twist", robot_idxs=self.controller_index_np)
+
         f_contact = self._get_f_from_sol()
         contact_names = self.robot_state.contact_names()
         for i in range(len(contact_names)):
@@ -664,7 +672,9 @@ class RHController(ABC):
                                 read=False) # jnt state
         self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
                                 read=False) # contact state
-        
+        self.robot_cmds.root_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
+                                read=False) # root state, in case it was written
+
         # we also fill other data (cost, constr. violation, etc..)
         self.rhc_status.rhc_cost.write_retry(self._get_rhc_cost(), 
                                     row_index=self.controller_index,
@@ -860,6 +870,12 @@ class RHController(ABC):
     @abstractmethod
     def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
         pass
+
+    def _get_root_full_q_from_sol(self, node_idx=1) -> np.ndarray:
+        return None
+
+    def _get_root_twist_from_sol(self, node_idx=1) -> np.ndarray:
+        return None
 
     def _get_rhc_cost(self):
         # to be overridden
