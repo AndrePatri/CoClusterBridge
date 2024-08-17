@@ -160,38 +160,45 @@ class RhcRefsFromKeyboard:
         
     def _update_navigation(self, 
                     type: str,
-                    increment = True):
+                    increment = True,
+                    reset: bool=False):
 
         current_lin_v_ref = self.rhc_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
         current_omega_ref = self.rhc_refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
 
-        if type=="lateral_lin" and increment:
-            # lateral motion
-            current_lin_v_ref[1] = current_lin_v_ref[1] - self.dxy
-        if type=="lateral_lin" and not increment:
-            # lateral motion
-            current_lin_v_ref[1] = current_lin_v_ref[1] + self.dxy
-        if type=="frontal_lin" and not increment:
-            # frontal motion
-            current_lin_v_ref[0] = current_lin_v_ref[0] - self.dxy
-        if type=="frontal_lin" and increment:
-            # frontal motion
-            current_lin_v_ref[0] = current_lin_v_ref[0] + self.dxy
-        if type=="twist_roll" and increment:
-            # rotate counter-clockwise
-            current_omega_ref[0] = current_omega_ref[0] + self._dtwist 
-        if type=="twist_roll" and not increment:
-            current_omega_ref[0] = current_omega_ref[0] - self._dtwist 
-        if type=="twist_pitch" and increment:
-            # rotate counter-clockwise
-            current_omega_ref[1] = current_omega_ref[1] + self._dtwist 
-        if type=="twist_pitch" and not increment:
-            current_omega_ref[1] = current_omega_ref[1] - self._dtwist 
-        if type=="twist_yaw" and increment:
-            # rotate counter-clockwise
-            current_omega_ref[2] = current_omega_ref[2] + self._dtwist 
-        if type=="twist_yaw" and not increment:
-            current_omega_ref[2] = current_omega_ref[2] - self._dtwist 
+        if not reset:
+            if type=="lateral_lin" and increment:
+                # lateral motion
+                current_lin_v_ref[1] = current_lin_v_ref[1] - self.dxy
+            if type=="lateral_lin" and not increment:
+                # lateral motion
+                current_lin_v_ref[1] = current_lin_v_ref[1] + self.dxy
+            if type=="frontal_lin" and not increment:
+                # frontal motion
+                current_lin_v_ref[0] = current_lin_v_ref[0] - self.dxy
+            if type=="frontal_lin" and increment:
+                # frontal motion
+                current_lin_v_ref[0] = current_lin_v_ref[0] + self.dxy
+            if type=="twist_roll" and increment:
+                # rotate counter-clockwise
+                current_omega_ref[0] = current_omega_ref[0] + self._dtwist 
+            if type=="twist_roll" and not increment:
+                current_omega_ref[0] = current_omega_ref[0] - self._dtwist 
+            if type=="twist_pitch" and increment:
+                # rotate counter-clockwise
+                current_omega_ref[1] = current_omega_ref[1] + self._dtwist 
+            if type=="twist_pitch" and not increment:
+                current_omega_ref[1] = current_omega_ref[1] - self._dtwist 
+            if type=="twist_yaw" and increment:
+                # rotate counter-clockwise
+                current_omega_ref[2] = current_omega_ref[2] + self._dtwist 
+            if type=="twist_yaw" and not increment:
+                current_omega_ref[2] = current_omega_ref[2] - self._dtwist 
+        else:
+            if "twist" in type:
+                current_omega_ref[:]=0
+            if "lin" in type:
+                current_lin_v_ref[:]=0
 
         self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
@@ -296,6 +303,10 @@ class RhcRefsFromKeyboard:
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
+
+        if not self.enable_twist:
+            self._update_navigation(type="twist",reset=True)
+
         if self.enable_twist and key.char == "x":
             self.enable_twist_roll = not self.enable_twist_roll
             info = f"Twist roll change enabled: {self.enable_twist_roll}"
@@ -353,7 +364,10 @@ class RhcRefsFromKeyboard:
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
-            
+        
+        if not self.enable_navigation:
+            self._update_navigation(type="lin",reset=True)
+
         if key.char == "6" and self.enable_navigation:
             self._update_navigation(type="lateral_lin", 
                             increment = True)
@@ -419,6 +433,9 @@ class RhcRefsFromKeyboard:
             LogType.INFO,
             throw_when_excep = True)
         
+        self._update_navigation(reset=True,type="lin")
+        self._update_navigation(reset=True,type="twist")
+
         with keyboard.Listener(on_press=self._on_press, 
                                on_release=self._on_release) as listener:
 
