@@ -647,6 +647,7 @@ class RHController(ABC):
         # just writes rhc-side jnts. The rest remain to the default, which is the homing from SRDF
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_q_from_sol(), data_type="q", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_v_from_sol(), data_type="v", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_a_from_sol(), data_type="a", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_eff_from_sol(), data_type="eff", robot_idxs=self.controller_index_np)
         
         root_q_full_pred=self._get_root_full_q_from_sol(node_idx=1)
@@ -867,6 +868,10 @@ class RHController(ABC):
     def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
         pass
     
+    @abstractmethod
+    def _get_cmd_jnt_a_from_sol(self) -> np.ndarray:
+        pass
+
     @abstractmethod
     def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
         pass
