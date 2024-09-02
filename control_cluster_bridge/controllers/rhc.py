@@ -120,6 +120,7 @@ class RHController(ABC):
         self._n_resets = 0
         self._n_fails = 0
         self._fail_idx_thresh = 5e3
+        self._contact_f_thresh = 1e3
 
         self._failed = False
 
@@ -698,7 +699,9 @@ class RHController(ABC):
             for i in range(self.rhc_status.n_contacts):
                 contact_idx = i*3
                 z_idx = contact_idx+2
-                self.rhc_status.rhc_step_var.write_retry(data=f_contact[z_idx:(z_idx+1), :]/(self._contact_var_scale), 
+                contact_f=f_contact[z_idx:(z_idx+1), :]/(self._contact_var_scale)
+                np.clip(contact_f, out=contact_f, a_min=-self._contact_f_thresh, a_max=self._contact_f_thresh) # safety clamp
+                self.rhc_status.rhc_step_var.write_retry(data=contact_f, 
                                                     row_index=self.controller_index, 
                                                     col_index=i*self.rhc_status.n_nodes)
 
