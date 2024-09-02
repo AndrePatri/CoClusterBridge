@@ -42,7 +42,7 @@ class ControlClusterServer(ABC):
             control_dt: float,
             cluster_dt: float,
             jnt_names: List[str],
-            n_contacts: int = 4,
+            n_contacts: int,
             contact_linknames: List[str] = None,
             use_gpu: bool = False, 
             verbose = False, 
