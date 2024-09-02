@@ -93,7 +93,8 @@ class SharedSimInfo(SharedDataBase):
 
         self.init = None                                                  
 
-        self.sim_params_dict = sim_params_dict
+        import copy
+        self.sim_params_dict = copy.deepcopy(sim_params_dict)
         self._parse_sim_dict() # applies changes if needed
 
         self.param_keys = []
@@ -145,35 +146,24 @@ class SharedSimInfo(SharedDataBase):
         if self.sim_params_dict is not None:
         
             keys = list(self.sim_params_dict.keys())
+            single_value_types = (bool, int, float)
 
-            for key in keys:
-                
-                # we cannot mix types on a single entity of
-                # shared memory
-
+            for key in keys: # particular non scalar cases
                 if key == "gravity":
-                    
                     # only vector param. supported (for now)
-
                     gravity = self.sim_params_dict[key]
-
                     self.sim_params_dict["g_x"] = gravity[0]
                     self.sim_params_dict["g_y"] = gravity[1]
                     self.sim_params_dict["g_z"] = gravity[2]
-
                     self.sim_params_dict.pop('gravity') # removes
+                elif key == "cpu":
+                    self.sim_params_dict[key] = 0
+                elif key == "gpu" or \
+                        key == "cuda":
+                    self.sim_params_dict[key] = 1
+            # Create a new dictionary excluding non-single value types
+            self.sim_params_dict = {k: v for k, v in  self.sim_params_dict.items() if isinstance(v, single_value_types)}
 
-                else:
-        
-                    if self.sim_params_dict[key] == "cpu":
-        
-                        self.sim_params_dict[key] = 0
-
-                    if self.sim_params_dict[key] == "gpu" or \
-                        self.sim_params_dict[key] == "cuda":
-            
-                        self.sim_params_dict[key] = 1
-    
     def is_running(self):
 
         return self._is_running
