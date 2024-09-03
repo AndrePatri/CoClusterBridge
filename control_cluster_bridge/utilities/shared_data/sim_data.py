@@ -74,18 +74,18 @@ class DynamicSimInfoNames:
 
         return self.idx_dict[name]
     
-class SharedSimInfo(SharedDataBase):
+class SharedEnvInfo(SharedDataBase):
                            
     def __init__(self, 
                 namespace: str,
                 is_server = False, 
-                sim_params_dict: Dict = None,
+                env_params_dict: Dict = None,
                 safe: bool = True,
                 verbose = True, 
                 vlevel = VLevel.V2,
                 force_reconnection: bool = True):
         
-        self.namespace = namespace + "SharedSimInfo"
+        self.namespace = namespace + "SharedEnvInfo"
 
         self._terminate = False
         
@@ -94,7 +94,7 @@ class SharedSimInfo(SharedDataBase):
         self.init = None                                                  
 
         import copy
-        self.sim_params_dict = copy.deepcopy(sim_params_dict)
+        self.env_params_dict = copy.deepcopy(env_params_dict)
         self._parse_sim_dict() # applies changes if needed
 
         self.param_keys = []
@@ -105,7 +105,7 @@ class SharedSimInfo(SharedDataBase):
 
             # if client info is read on shared memory
 
-            self.param_keys = self.dynamic_info.get() + list(self.sim_params_dict.keys())
+            self.param_keys = self.dynamic_info.get() + list(self.env_params_dict.keys())
 
         # actual data
             
@@ -143,26 +143,26 @@ class SharedSimInfo(SharedDataBase):
     
     def _parse_sim_dict(self):
 
-        if self.sim_params_dict is not None:
+        if self.env_params_dict is not None:
         
-            keys = list(self.sim_params_dict.keys())
+            keys = list(self.env_params_dict.keys())
             single_value_types = (bool, int, float)
 
             for key in keys: # particular non scalar cases
                 if key == "gravity":
                     # only vector param. supported (for now)
-                    gravity = self.sim_params_dict[key]
-                    self.sim_params_dict["g_x"] = gravity[0]
-                    self.sim_params_dict["g_y"] = gravity[1]
-                    self.sim_params_dict["g_z"] = gravity[2]
-                    self.sim_params_dict.pop('gravity') # removes
+                    gravity = self.env_params_dict[key]
+                    self.env_params_dict["g_x"] = gravity[0]
+                    self.env_params_dict["g_y"] = gravity[1]
+                    self.env_params_dict["g_z"] = gravity[2]
+                    self.env_params_dict.pop('gravity') # removes
                 elif key == "cpu":
-                    self.sim_params_dict[key] = 0
+                    self.env_params_dict[key] = 0
                 elif key == "gpu" or \
                         key == "cuda":
-                    self.sim_params_dict[key] = 1
+                    self.env_params_dict[key] = 1
             # Create a new dictionary excluding non-single value types
-            self.sim_params_dict = {k: v for k, v in  self.sim_params_dict.items() if isinstance(v, single_value_types)}
+            self.env_params_dict = {k: v for k, v in  self.env_params_dict.items() if isinstance(v, single_value_types)}
 
     def is_running(self):
 
@@ -208,7 +208,7 @@ class SharedSimInfo(SharedDataBase):
 
         if self.is_server:
             
-            for i in range(len(list(self.sim_params_dict.keys()))):
+            for i in range(len(list(self.env_params_dict.keys()))):
                 
                 # writing static sim info
 
@@ -216,7 +216,7 @@ class SharedSimInfo(SharedDataBase):
 
                 # first m elements are custom info
                 self.param_values[dyn_info_size + i, 0] = \
-                    self.sim_params_dict[self.param_keys[dyn_info_size + i]]
+                    self.env_params_dict[self.param_keys[dyn_info_size + i]]
                                         
             self.shared_sim_data.write_retry(row_index=0,
                                     col_index=0,

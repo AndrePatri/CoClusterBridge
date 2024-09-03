@@ -10,7 +10,7 @@ from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
-from control_cluster_bridge.utilities.shared_data.sim_data import SharedSimInfo
+from control_cluster_bridge.utilities.shared_data.sim_data import SharedEnvInfo
 
 from lrhc_control.utils.shared_data.agent_refs import AgentRefs
 from lrhc_control.utils.shared_data.training_env import SharedTrainingEnvInfo
@@ -66,7 +66,7 @@ class Sharsor2RosBridge():
                                 is_server=False, 
                                 verbose=True, 
                                 vlevel=VLevel.V1))
-        self._clients.append(SharedSimInfo(namespace=self._namespace, 
+        self._clients.append(SharedEnvInfo(namespace=self._namespace, 
                                 is_server=False, 
                                 verbose=True, 
                                 vlevel=VLevel.V1))

@@ -6,7 +6,7 @@ from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindo
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
-from control_cluster_bridge.utilities.shared_data.sim_data import SharedSimInfo
+from control_cluster_bridge.utilities.shared_data.sim_data import SharedEnvInfo
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
 
@@ -833,7 +833,7 @@ class SimInfo(SharedDataWindow):
         
         is_server = False
         
-        self.shared_data_clients.append(SharedSimInfo(
+        self.shared_data_clients.append(SharedEnvInfo(
                                             namespace=self.namespace,
                                             is_server=is_server,
                                             safe=False))
@@ -848,7 +848,7 @@ class SimInfo(SharedDataWindow):
 
     def _initialize(self):
         
-        base_name = "SharedSimInfo"
+        base_name = "SharedEnvInfo"
         
         self.rt_plotters.append(RtPlotWindow(data_dim=len(self.shared_data_clients[0].param_keys),
                     n_data = 1,
