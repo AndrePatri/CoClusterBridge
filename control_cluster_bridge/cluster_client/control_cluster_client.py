@@ -143,8 +143,30 @@ class ControlClusterClient(ABC):
         #     # use all available cores
         #     self._set_affinity(core_idxs=available_cores,
         #                 controller_idx=idx)
-            
+
+        from SharsorIPCpp.PySharsorIPC import StringTensorClient
+        from perf_sleep.pyperfsleep import PerfSleep
+        shared_rhc_files = StringTensorClient(
+            basename="SharedRhcFilesDropDir", 
+            name_space=self._namespace,
+            verbose=self._verbose, 
+            vlevel=VLevel.V2)
+        shared_rhc_files.run()
+        
         controller = self._generate_controller(idx=idx)
+
+        this_controller_paths=controller.this_paths()
+        combined_paths = ", ".join(this_controller_paths) # we want a string for each controller
+        while True: # no failure in writing allowed
+            if not shared_rhc_files.write_vec([combined_paths], idx):
+                ns=1000000000
+                PerfSleep.thread_sleep(ns)
+                continue
+            else:
+                break
+
+        shared_rhc_files.close()
+
         controller.solve() # runs the solution loop
 
     def _check_child_ps_status(self):
@@ -190,11 +212,22 @@ class ControlClusterClient(ABC):
                 break
 
     def run(self):
-            
-        self._spawn_processes()
         
-        from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
+        # let's make the paths to the controllers files available on shared memory for db
+        from SharsorIPCpp.PySharsorIPC import StringTensorServer
         from perf_sleep.pyperfsleep import PerfSleep
+
+        shared_rhc_files = StringTensorServer(length=self.cluster_size, 
+            basename="SharedRhcFilesDropDir", 
+            name_space=self._namespace,
+            verbose=self._verbose, 
+            vlevel=VLevel.V2, 
+            force_reconnection=True)
+        shared_rhc_files.run()
+
+        self._spawn_processes()
+
+        from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
         
         from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
         from SharsorIPCpp.PySharsorIPC import dtype
@@ -230,6 +263,8 @@ class ControlClusterClient(ABC):
         while not self._terminated:
             nsecs =  1000000000 # 1 sec
             PerfSleep.thread_sleep(nsecs) # we just keep it alive
+            shared_rhc_files_val=[""]*shared_rhc_files.length()
+            shared_rhc_files.read_vec(shared_rhc_files_val, 0)
             if self._childs_all_dead():
                 Journal.log(self.__class__.__name__,
                             "run",
@@ -241,6 +276,7 @@ class ControlClusterClient(ABC):
                 continue
 
         self._close_process() #
+        shared_rhc_files.close()
         
     def terminate(self):
         

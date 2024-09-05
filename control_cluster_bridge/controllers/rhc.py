@@ -41,6 +41,8 @@ import numpy as np
 from perf_sleep.pyperfsleep import PerfSleep
 
 import signal
+import os
+import inspect
 
 class RHController(ABC):
 
@@ -132,6 +134,21 @@ class RHController(ABC):
         self._class_name_base = f"{self.__class__.__name__}"
         self._init()
 
+        if not hasattr(self, '_rhc_fpaths'):
+            self._rhc_fpaths = []
+        self._rhc_fpaths.append(os.path.abspath(__file__))
+        
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Get the file path of the class being initialized and append it to the list
+        if not hasattr(cls, '_rhc_fpaths'):
+            cls._rhc_fpaths = []
+        child_class_file_path = os.path.abspath(inspect.getfile(cls))
+        cls._rhc_fpaths.append(child_class_file_path)
+
+    def this_paths(self):
+        return self._rhc_fpaths
+    
     def __del__(self):
         self._close()
 
@@ -164,6 +181,12 @@ class RHController(ABC):
     def close(self):
         self._close()
 
+    def get_file_paths(self):
+        # can be overriden by child
+        base_paths = []
+        base_paths.append(self._this_path)
+        return base_paths
+    
     def init_rhc_task_cmds(self):
         
         self.rhc_refs = self._init_rhc_task_cmds()
