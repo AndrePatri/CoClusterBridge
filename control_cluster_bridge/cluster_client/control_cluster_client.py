@@ -265,6 +265,7 @@ class ControlClusterClient(ABC):
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
 
+
         self.cluster_data = SharedClusterInfo(namespace=self._namespace,
             is_server=True, 
             params_dict=self._custom_opts,
