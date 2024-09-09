@@ -138,7 +138,8 @@ class RhcRefsFromKeyboard:
                                                 read=False)
                                                 
     def _update_base_height(self, 
-                decrement = False):
+                decrement = False,
+                reset=False):
         
         # current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
         # if decrement:
@@ -155,6 +156,8 @@ class RhcRefsFromKeyboard:
         else:
             new_ref = current_lin_v_ref[2] + self.dxy
         current_lin_v_ref[2] = new_ref
+        if reset:
+            current_lin_v_ref[2]=0
         self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
         
@@ -285,7 +288,10 @@ class RhcRefsFromKeyboard:
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
-            
+        
+        if not self.enable_heightchange:
+            self._update_base_height(reset=True)
+
         if key.char == "+" and self.enable_heightchange:
             self._update_base_height(decrement=False)
         
