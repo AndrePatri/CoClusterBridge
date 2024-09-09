@@ -17,7 +17,7 @@
 # 
 from abc import ABC, abstractmethod
 
-from typing import List
+from typing import List, Dict
 
 import multiprocess as mp
 
@@ -42,10 +42,13 @@ class ControlClusterClient(ABC):
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False,
-            debug: bool = False):
+            debug: bool = False,
+            custom_opts: Dict = {}):
 
         # ciao :D
         #        CR 
+
+        self._custom_opts = custom_opts
 
         signal.signal(signal.SIGINT, self._handle_sigint)
 
@@ -81,6 +84,7 @@ class ControlClusterClient(ABC):
         # shared memory 
 
         self.cluster_stats = None
+        self.cluster_data = None
         
         self._remote_term = None
 
@@ -228,7 +232,8 @@ class ControlClusterClient(ABC):
         self._spawn_processes()
 
         from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-        
+        from control_cluster_bridge.utilities.shared_data.cluster_data import SharedClusterInfo
+
         from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
         from SharsorIPCpp.PySharsorIPC import dtype
 
@@ -251,14 +256,22 @@ class ControlClusterClient(ABC):
                                 col_index=0)
         
         self.cluster_stats = RhcProfiling(is_server=False, 
-                                    name=self._namespace,
-                                    verbose=self._verbose,
-                                    vlevel=VLevel.V2,
-                                    safe=True)
+            name=self._namespace,
+            verbose=self._verbose,
+            vlevel=VLevel.V2,
+            safe=True)
         
         self.cluster_stats.run()
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
+
+        self.cluster_data = SharedClusterInfo(namespace=self._namespace,
+            is_server=True, 
+            env_params_dict=self._custom_opts,
+            verbose=True,
+            vlevel=VLevel.V2,
+            force_reconnection=True)
+        self.cluster_data.run()
 
         while not self._terminated:
             nsecs =  1000000000 # 1 sec
@@ -338,6 +351,8 @@ class ControlClusterClient(ABC):
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
             self.cluster_stats.close()
+        if self.cluster_data is not None:
+            self.cluster_data.close()
         if self._remote_term is not None:
             self._remote_term.close()
 

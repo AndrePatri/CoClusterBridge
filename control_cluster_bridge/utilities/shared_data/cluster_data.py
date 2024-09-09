@@ -12,7 +12,7 @@ import numpy as np
 
 # Simulator info
 
-class SimData(SharedTWrapper):
+class ClusterData(SharedTWrapper):
                  
     def __init__(self,
         namespace = "",
@@ -23,7 +23,7 @@ class SimData(SharedTWrapper):
         force_reconnection: bool = False,
         safe: bool = True):
 
-        basename = "SharedSimData" 
+        basename = "SharedClusterData" 
 
         super().__init__(namespace = namespace,
             basename = basename,
@@ -37,26 +37,11 @@ class SimData(SharedTWrapper):
             safe = safe,
             force_reconnection=force_reconnection)
 
-class DynamicSimInfoNames:
+class DynamicClusterDataNames:
 
     def __init__(self):
 
-        self._keys = ["sim_rt_factor", 
-                "total_rt_factor",
-                "env_stepping_dt",
-                "task_prephysics_step_dt", 
-                "world_stepping_dt",
-                "cluster_state_update_dt",
-                "cluster_sol_time",
-                "OmniJntImpCntrl:time_to_update_state",
-                "OmniJntImpCntrl:time_to_set_refs",
-                "OmniJntImpCntrl:time_to_apply_cmds",
-                "time_to_get_states_from_sim",
-                "n_sim_steps",
-                "n_cluster_trigger_steps",
-                "n_cluster_sol_steps",
-                "sim_time",
-                "cluster_time"]
+        self._keys = []
         
         self.idx_dict = dict.fromkeys(self._keys, None)
 
@@ -74,18 +59,18 @@ class DynamicSimInfoNames:
 
         return self.idx_dict[name]
     
-class SharedEnvInfo(SharedDataBase):
+class SharedClusterInfo(SharedDataBase):
                            
     def __init__(self, 
                 namespace: str,
                 is_server = False, 
-                env_params_dict: Dict = None,
+                params_dict: Dict = None,
                 safe: bool = True,
                 verbose = True, 
                 vlevel = VLevel.V2,
                 force_reconnection: bool = True):
         
-        self.namespace = namespace + "SharedEnvInfo"
+        self.namespace = namespace + "SharedClusterInfo"
 
         self._terminate = False
         
@@ -94,22 +79,22 @@ class SharedEnvInfo(SharedDataBase):
         self.init = None                                                  
 
         import copy
-        self.env_params_dict = copy.deepcopy(env_params_dict)
+        self.cluster_params_dict = copy.deepcopy(params_dict)
         self._parse_sim_dict() # applies changes if needed
 
         self.param_keys = []
 
-        self.dynamic_info = DynamicSimInfoNames()
+        self.dynamic_info = DynamicClusterDataNames()
 
         if self.is_server:
 
             # if client info is read on shared memory
 
-            self.param_keys = self.dynamic_info.get() + list(self.env_params_dict.keys())
+            self.param_keys = self.dynamic_info.get() + list(self.cluster_params_dict.keys())
 
         # actual data
             
-        self.shared_sim_data = SimData(namespace = self.namespace,
+        self.shared_sim_data = ClusterData(namespace = self.namespace,
                     is_server = is_server, 
                     n_dims = len(self.param_keys), 
                     verbose = verbose, 
@@ -121,7 +106,7 @@ class SharedEnvInfo(SharedDataBase):
         if self.is_server:
 
             self.shared_sim_datanames = StringTensorServer(length = len(self.param_keys), 
-                                        basename = "SimDataNames", 
+                                        basename = "ClusterDataNames", 
                                         name_space = self.namespace,
                                         verbose = verbose, 
                                         vlevel = vlevel, 
@@ -130,7 +115,7 @@ class SharedEnvInfo(SharedDataBase):
         else:
 
             self.shared_sim_datanames = StringTensorClient(
-                                        basename = "SimDataNames", 
+                                        basename = "ClusterDataNames", 
                                         name_space = self.namespace,
                                         verbose = verbose, 
                                         vlevel = vlevel)
@@ -143,26 +128,26 @@ class SharedEnvInfo(SharedDataBase):
     
     def _parse_sim_dict(self):
 
-        if self.env_params_dict is not None:
+        if self.cluster_params_dict is not None:
         
-            keys = list(self.env_params_dict.keys())
+            keys = list(self.cluster_params_dict.keys())
             single_value_types = (bool, int, float)
 
             for key in keys: # particular non scalar cases
                 if key == "gravity":
                     # only vector param. supported (for now)
-                    gravity = self.env_params_dict[key]
-                    self.env_params_dict["g_x"] = gravity[0]
-                    self.env_params_dict["g_y"] = gravity[1]
-                    self.env_params_dict["g_z"] = gravity[2]
-                    self.env_params_dict.pop('gravity') # removes
+                    gravity = self.cluster_params_dict[key]
+                    self.cluster_params_dict["g_x"] = gravity[0]
+                    self.cluster_params_dict["g_y"] = gravity[1]
+                    self.cluster_params_dict["g_z"] = gravity[2]
+                    self.cluster_params_dict.pop('gravity') # removes
                 elif key == "cpu":
-                    self.env_params_dict[key] = 0
+                    self.cluster_params_dict[key] = 0
                 elif key == "gpu" or \
                         key == "cuda":
-                    self.env_params_dict[key] = 1
+                    self.cluster_params_dict[key] = 1
             # Create a new dictionary excluding non-single value types
-            self.env_params_dict = {k: v for k, v in  self.env_params_dict.items() if isinstance(v, single_value_types)}
+            self.cluster_params_dict = {k: v for k, v in  self.cluster_params_dict.items() if isinstance(v, single_value_types)}
 
     def is_running(self):
 
@@ -208,7 +193,7 @@ class SharedEnvInfo(SharedDataBase):
 
         if self.is_server:
             
-            for i in range(len(list(self.env_params_dict.keys()))):
+            for i in range(len(list(self.cluster_params_dict.keys()))):
                 
                 # writing static sim info
 
@@ -216,7 +201,7 @@ class SharedEnvInfo(SharedDataBase):
 
                 # first m elements are custom info
                 self.param_values[dyn_info_size + i, 0] = \
-                    self.env_params_dict[self.param_keys[dyn_info_size + i]]
+                    self.cluster_params_dict[self.param_keys[dyn_info_size + i]]
                                         
             self.shared_sim_data.write_retry(row_index=0,
                                     col_index=0,
@@ -237,7 +222,7 @@ class SharedEnvInfo(SharedDataBase):
                 exception = "The provided val should be a list of values!"
 
                 Journal.log(self.__class__.__name__,
-                    "write",
+                    "run",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
@@ -247,7 +232,7 @@ class SharedEnvInfo(SharedDataBase):
                 exception = "Name list and values length mismatch!"
 
                 Journal.log(self.__class__.__name__,
-                    "write",
+                    "run",
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True)
