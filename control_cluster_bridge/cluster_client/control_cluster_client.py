@@ -267,7 +267,7 @@ class ControlClusterClient(ABC):
 
         self.cluster_data = SharedClusterInfo(namespace=self._namespace,
             is_server=True, 
-            env_params_dict=self._custom_opts,
+            params_dict=self._custom_opts,
             verbose=True,
             vlevel=VLevel.V2,
             force_reconnection=True)
