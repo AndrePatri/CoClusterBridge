@@ -141,26 +141,17 @@ class RhcRefsFromKeyboard:
                 decrement = False,
                 reset=False):
         
-        # current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
-        # if decrement:
-        #     new_height_ref = current_p_ref[2] - self.height_dh
-        # else:
-        #     new_height_ref = current_p_ref[2] + self.height_dh
-        # current_p_ref[2] = new_height_ref
-        # self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
-        #                             robot_idxs=self.cluster_idx_np)
+        # update both base height and vel
         
-        current_lin_v_ref = self.rhc_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
+        current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
         if decrement:
-            new_ref = current_lin_v_ref[2] - self.dxy
+            new_height_ref = current_p_ref[2] - self.height_dh
         else:
-            new_ref = current_lin_v_ref[2] + self.dxy
-        current_lin_v_ref[2] = new_ref
-        if reset:
-            current_lin_v_ref[2]=0
-        self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
+            new_height_ref = current_p_ref[2] + self.height_dh
+        current_p_ref[2] = new_height_ref
+        self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
                                     robot_idxs=self.cluster_idx_np)
-        
+    
     def _update_navigation(self, 
                     type: str,
                     increment = True,
@@ -170,18 +161,24 @@ class RhcRefsFromKeyboard:
         current_omega_ref = self.rhc_refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
 
         if not reset:
-            if type=="lateral_lin" and increment:
-                # lateral motion
-                current_lin_v_ref[1] = current_lin_v_ref[1] - self.dxy
-            if type=="lateral_lin" and not increment:
-                # lateral motion
-                current_lin_v_ref[1] = current_lin_v_ref[1] + self.dxy
             if type=="frontal_lin" and not increment:
                 # frontal motion
                 current_lin_v_ref[0] = current_lin_v_ref[0] - self.dxy
             if type=="frontal_lin" and increment:
                 # frontal motion
                 current_lin_v_ref[0] = current_lin_v_ref[0] + self.dxy
+            if type=="lateral_lin" and increment:
+                # lateral motion
+                current_lin_v_ref[1] = current_lin_v_ref[1] - self.dxy
+            if type=="lateral_lin" and not increment:
+                # lateral motion
+                current_lin_v_ref[1] = current_lin_v_ref[1] + self.dxy
+            if type=="vertical_lin" and not increment:
+                # frontal motion
+                current_lin_v_ref[2] = current_lin_v_ref[2] - self.dxy
+            if type=="vertical_lin" and increment:
+                # frontal motion
+                current_lin_v_ref[2] = current_lin_v_ref[2] + self.dxy
             if type=="twist_roll" and increment:
                 # rotate counter-clockwise
                 current_omega_ref[0] = current_omega_ref[0] + self._dtwist 
@@ -374,17 +371,23 @@ class RhcRefsFromKeyboard:
         if not self.enable_navigation:
             self._update_navigation(type="lin",reset=True)
 
+        if key.char == "8" and self.enable_navigation:
+            self._update_navigation(type="frontal_lin",
+                            increment = True)
+        if key.char == "2" and self.enable_navigation:
+            self._update_navigation(type="frontal_lin",
+                            increment = False)
         if key.char == "6" and self.enable_navigation:
             self._update_navigation(type="lateral_lin", 
                             increment = True)
         if key.char == "4" and self.enable_navigation:
             self._update_navigation(type="lateral_lin",
                             increment = False)
-        if key.char == "8" and self.enable_navigation:
-            self._update_navigation(type="frontal_lin",
+        if key.char == "+" and self.enable_navigation:
+            self._update_navigation(type="vertical_lin", 
                             increment = True)
-        if key.char == "2" and self.enable_navigation:
-            self._update_navigation(type="frontal_lin",
+        if key.char == "-" and self.enable_navigation:
+            self._update_navigation(type="vertical_lin",
                             increment = False)
                 
     def _on_press(self, key):
