@@ -826,11 +826,11 @@ class RhcStatus(SharedDataBase):
                 else:
                     return None
             else:
-                if name == "q":
+                if name == "dts":
                     return self._dts_gpu
-                elif name == "v":
+                elif name == "horizons":
                     return self._horizons_gpu
-                elif name == "a":
+                elif name == "nnodes":
                     return self._nnodes_gpu
                 else:
                     return None
