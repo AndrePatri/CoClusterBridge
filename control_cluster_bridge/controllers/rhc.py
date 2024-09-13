@@ -458,6 +458,22 @@ class RHController(ABC):
         self.rhc_status.registration.synch_all(retry = True,
                                 read = False) # register
 
+        # writing some static info about this controller
+        self.rhc_status.rhc_static_info.set(data=np.array(self._dt),
+            data_type="dts",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        self.rhc_status.rhc_static_info.set(data=np.array(self._t_horizon),
+            data_type="horizons",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        self.rhc_status.rhc_static_info.set(data=np.array(self._n_nodes),
+            data_type="nnodes",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        self.rhc_status.rhc_static_info.synch_all(retry=True,
+            read=False)
+        
         Journal.log(self._class_name_base,
                     "_register_to_cluster",
                     "Done",

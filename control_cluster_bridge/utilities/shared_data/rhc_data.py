@@ -748,6 +748,117 @@ class RhcStatus(SharedDataBase):
                 with_gpu_mirror=with_gpu_mirror,
                 with_torch_view=with_torch_view,
                 fill_value = 0)
+    
+    class RhcStaticInfo(SharedTWrapper):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False, 
+                cluster_size: int = -1, 
+                verbose: bool = False, 
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False):
+            
+            basename = "RhcStaticInfo" # hardcoded
+            self.n_data = 3 # rhc dts, rhc horizon length, rhc n nodes
+            
+            self._n_rhcs = cluster_size
+
+            self._dts = None
+            self._horizons = None
+            self._nnodes = None
+
+            self._dts_gpu = None
+            self._horizons_gpu = None
+            self._nnodes_gpu = None
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server, 
+                n_rows = cluster_size, 
+                n_cols = self.n_data, 
+                verbose = verbose, 
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Float,
+                force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
+                fill_value = 0)
+        
+        def run(self):
+            # overriding parent 
+            super().run()
+            if not self.is_server:
+                self._n_rhcs=self.n_rows
+            self._init_views()
+
+        def _init_views(self):
+                
+            if self._with_torch_view:
+                self._dts = self.get_torch_mirror()[:, 0:1].view(self._n_rhcs, 1)
+                self._horizons = self.get_torch_mirror()[:, 1:2].view(self._n_rhcs, 1)
+                self._nnodes = self.get_torch_mirror()[:, 2:3].view(self._n_rhcs, 1)
+            else:
+                self._dts = self.get_numpy_mirror()[:, 0:1].view()
+                self._horizons = self.get_numpy_mirror()[:, 1:2].view()
+                self._nnodes = self.get_numpy_mirror()[:, 2:3].view()
+            
+            if self.gpu_mirror_exists():
+                # gpu views 
+                self._dts_gpu = self._gpu_mirror[:, 0:1].view(self._n_rhcs, 1)
+                self._horizons_gpu = self._gpu_mirror[:, 1:2].view(self._n_rhcs, 1)
+                self._nnodes_gpu = self._gpu_mirror[:, 2:3].view(self._n_rhcs, 1)
+
+        def _retrieve_data(self,
+                name: str,
+                gpu: bool = False):
+        
+            if not gpu:
+                if name == "dts":
+                    return self._dts
+                elif name == "horizons":
+                    return self._horizons
+                elif name == "nnodes":
+                    return self._nnodes
+                else:
+                    return None
+            else:
+                if name == "q":
+                    return self._dts_gpu
+                elif name == "v":
+                    return self._horizons_gpu
+                elif name == "a":
+                    return self._nnodes_gpu
+                else:
+                    return None
+        
+        def set(self,
+            data,
+            data_type: str,
+            rhc_idxs= None,
+            gpu: bool = False):
+
+            internal_data = self._retrieve_data(name=data_type,
+                        gpu=gpu)
+            if rhc_idxs is None:
+                internal_data[:, :] = data
+            else:
+                internal_data[rhc_idxs, :] = data
+
+        def get(self,
+            data_type: str,
+            rhc_idxs = None,
+            gpu: bool = False):
+
+            internal_data = self._retrieve_data(name=data_type,
+                        gpu=gpu)
+            if rhc_idxs is None:
+                return internal_data
+            else:
+                return internal_data[rhc_idxs, :]
             
     def __init__(self, 
             is_server = False, 
@@ -904,6 +1015,15 @@ class RhcStatus(SharedDataBase):
                                 with_gpu_mirror=with_gpu_mirror,
                                 with_torch_view=with_torch_view)
 
+        self.rhc_static_info = self.RhcStaticInfo(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=vlevel,
+                                force_reconnection=force_reconnection,
+                                with_gpu_mirror=with_gpu_mirror,
+                                with_torch_view=with_torch_view)
+
         self._is_runnning = False
 
         self._acquired_reg_sem = False
@@ -930,7 +1050,8 @@ class RhcStatus(SharedDataBase):
             self.rhc_nodes_cost.get_shared_mem(),
             self.rhc_nodes_constr_viol.get_shared_mem(),
             self.rhc_step_var.get_shared_mem(),
-            self.rhc_fail_idx.get_shared_mem()]
+            self.rhc_fail_idx.get_shared_mem(),
+            self.rhc_static_info.get_shared_mem()]
     
     def run(self):
 
@@ -948,6 +1069,7 @@ class RhcStatus(SharedDataBase):
         self.rhc_n_iter.run()
         self.rhc_step_var.run()
         self.rhc_fail_idx.run()
+        self.rhc_static_info.run()
 
         if not self.is_server:
     
@@ -975,6 +1097,7 @@ class RhcStatus(SharedDataBase):
             self.rhc_nodes_constr_viol.close()
             self.rhc_step_var.close()
             self.rhc_fail_idx.close()
+            self.rhc_static_info.close()
 
             self._is_runnning = False
 

@@ -66,7 +66,7 @@ class RtPlotWidget(pg.PlotWidget):
         if legend_list is not None and len(legend_list) != n_dims:
             Journal.log(self.__class__.__name__,
                 "__init__",
-                f"provided legend list length {len(legend_list)} does not match data dimension {n_dims}",
+                f"provided legend list length {len(legend_list)} for widget {base_name} does not match data dimension {n_dims}",
                 LogType.EXCEP,
                 throw_when_excep = True)
             
