@@ -16,7 +16,7 @@ from lrhc_control.utils.shared_data.agent_refs import AgentRefs
 from lrhc_control.utils.shared_data.training_env import SharedTrainingEnvInfo
 from lrhc_control.utils.shared_data.training_env import Observations, NextObservations
 from lrhc_control.utils.shared_data.training_env import TotRewards
-from lrhc_control.utils.shared_data.training_env import Rewards
+from lrhc_control.utils.shared_data.training_env import SubRewards
 from lrhc_control.utils.shared_data.training_env import Actions
 from lrhc_control.utils.shared_data.training_env import Terminations
 from lrhc_control.utils.shared_data.training_env import Truncations
@@ -90,7 +90,7 @@ class Sharsor2RosBridge():
                                 safe=False, 
                                 verbose=True, 
                                 vlevel=VLevel.V1))
-        self._clients.append(Rewards(namespace=self._namespace, 
+        self._clients.append(SubRewards(namespace=self._namespace, 
                                 is_server=False, 
                                 safe=False, 
                                 verbose=True, 
