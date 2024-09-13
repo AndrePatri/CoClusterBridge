@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import QSpacerItem, QSizePolicy
 from SharsorIPCpp.PySharsorIPC import VLevel
 
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCRefs
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCmds
+from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCmds, RHCPred
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RobotStates
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCInternal
 from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
@@ -185,6 +185,14 @@ class RtClusterDebugger(QMainWindow):
                     parent=None, 
                     verbose = self.verbose)
         
+        rhc_pred = RHCPred(update_data_dt=self.data_update_dt, 
+                    update_plot_dt=self.plot_update_dt,
+                    window_duration=self.window_length, 
+                    window_buffer_factor=self.window_buffer_factor, 
+                    namespace=self.namespace,
+                    parent=None, 
+                    verbose = self.verbose)
+        
         robot_state = RobotStates(update_data_dt=self.data_update_dt, 
                     update_plot_dt=self.plot_update_dt,
                     window_duration=self.window_length, 
@@ -245,7 +253,7 @@ class RtClusterDebugger(QMainWindow):
         self.base_spawnable_tabs = [sim_info, 
                             cluster_info,
                             rhc_status, 
-                            rhc_task_ref, rhc_cms, robot_state, 
+                            rhc_task_ref, rhc_cms, rhc_pred, robot_state, 
                             rhc_internal_costs,
                             rhc_internal_constr,
                             rhc_internal_data]

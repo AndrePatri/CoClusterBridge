@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 import time 
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
+from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds, RhcPred
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
@@ -71,7 +71,7 @@ class RHController(ABC):
         self._dt = dt
         self._n_intervals = self._n_nodes - 1 
         self._t_horizon = self._n_intervals * dt
-        
+        self._pred_node_idx=self._n_nodes-1 # prection is by default written on last node
         self.controller_index = None # will be assigned upon registration to a cluster
         self.controller_index_np = None 
 
@@ -98,6 +98,7 @@ class RHController(ABC):
         self.rhc_internal = None
         self.cluster_stats = None
         self.robot_cmds = None
+        self.robot_pred = None
         self.rhc_refs = None
         self._remote_triggerer = None
         self._remote_triggerer_timeout = timeout_ms # [ms]
@@ -164,6 +165,8 @@ class RHController(ABC):
             self._unregister_from_cluster()
             if self.robot_cmds is not None:
                 self.robot_cmds.close()
+            if self.robot_pred is not None:
+                self.robot_pred.close()
             if self.robot_state is not None:
                 self.robot_state.close()
             if self.rhc_status is not None:
@@ -212,6 +215,15 @@ class RHController(ABC):
                                 verbose=self._verbose,
                                 vlevel=VLevel.V2) 
         self.robot_cmds.run()
+        self.robot_pred = RhcPred(namespace=self.namespace,
+                                is_server=False,
+                                q_remapping=quat_remap, # remapping from environment to controller
+                                with_gpu_mirror=False,
+                                with_torch_view=False, 
+                                safe=False,
+                                verbose=self._verbose,
+                                vlevel=VLevel.V2)
+        self.robot_pred.run()
     
     def _rhc(self):
         if self._debug:
@@ -365,6 +377,7 @@ class RHController(ABC):
         # so that data can be assigned direclty from the rhc controller without any issues
         self.robot_state.set_jnts_remapping(jnts_remapping=self._to_controller)
         self.robot_cmds.set_jnts_remapping(jnts_remapping=self._to_controller)
+        self.robot_pred.set_jnts_remapping(jnts_remapping=self._to_controller)
 
         return True
 
@@ -668,19 +681,22 @@ class RHController(ABC):
     def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
-        # just writes rhc-side jnts. The rest remain to the default, which is the homing from SRDF
-        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_q_from_sol(), data_type="q", robot_idxs=self.controller_index_np)
-        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_v_from_sol(), data_type="v", robot_idxs=self.controller_index_np)
-        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_a_from_sol(), data_type="a", robot_idxs=self.controller_index_np)
-        self.robot_cmds.jnts_state.set(data=self._get_cmd_jnt_eff_from_sol(), data_type="eff", robot_idxs=self.controller_index_np)
+
+        # cmds for robot
+        self.robot_cmds.jnts_state.set(data=self._get_jnt_q_from_sol(node_idx=1), data_type="q", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_jnt_v_from_sol(node_idx=1), data_type="v", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_jnt_a_from_sol(node_idx=0), data_type="a", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=1), data_type="eff", robot_idxs=self.controller_index_np)
+        self.robot_cmds.root_state.set(data=self._get_root_full_q_from_sol(node_idx=1), data_type="q_full", robot_idxs=self.controller_index_np)
+        self.robot_cmds.root_state.set(data=self._get_root_twist_from_sol(node_idx=1), data_type="twist", robot_idxs=self.controller_index_np)
         
-        root_q_full_pred=self._get_root_full_q_from_sol(node_idx=1)
-        root_twist_pred=self._get_root_twist_from_sol(node_idx=1)
-        
-        if root_q_full_pred is not None:
-            self.robot_cmds.root_state.set(data=root_q_full_pred, data_type="q_full", robot_idxs=self.controller_index_np)
-        if root_twist_pred is not None:
-            self.robot_cmds.root_state.set(data=root_twist_pred, data_type="twist", robot_idxs=self.controller_index_np)
+        # prediction data from MPC horizon
+        self.robot_pred.jnts_state.set(data=self._get_jnt_q_from_sol(node_idx=self._pred_node_idx), data_type="q", robot_idxs=self.controller_index_np)
+        self.robot_pred.jnts_state.set(data=self._get_jnt_v_from_sol(node_idx=self._pred_node_idx), data_type="v", robot_idxs=self.controller_index_np)
+        self.robot_pred.jnts_state.set(data=self._get_jnt_a_from_sol(node_idx=self._pred_node_idx-1), data_type="a", robot_idxs=self.controller_index_np)
+        self.robot_pred.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=self._pred_node_idx), data_type="eff", robot_idxs=self.controller_index_np)
+        self.robot_pred.root_state.set(data=self._get_root_full_q_from_sol(node_idx=self._pred_node_idx), data_type="q_full", robot_idxs=self.controller_index_np)
+        self.robot_pred.root_state.set(data=self._get_root_twist_from_sol(node_idx=self._pred_node_idx), data_type="twist", robot_idxs=self.controller_index_np)
 
         f_contact = self._get_f_from_sol()
         contact_names = self.robot_state.contact_names()
@@ -887,26 +903,28 @@ class RHController(ABC):
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_q_from_sol(self) -> np.ndarray:
+    def _get_jnt_q_from_sol(self, node_idx=1) -> np.ndarray:
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_v_from_sol(self) -> np.ndarray:
+    def _get_jnt_v_from_sol(self, node_idx=1) -> np.ndarray:
         pass
     
     @abstractmethod
-    def _get_cmd_jnt_a_from_sol(self) -> np.ndarray:
+    def _get_jnt_a_from_sol(self, node_idx=1) -> np.ndarray:
         pass
 
     @abstractmethod
-    def _get_cmd_jnt_eff_from_sol(self) -> np.ndarray:
+    def _get_jnt_eff_from_sol(self, node_idx=1) -> np.ndarray:
+        pass
+    
+    @abstractmethod
+    def _get_root_full_q_from_sol(self, node_idx=1) -> np.ndarray:
         pass
 
-    def _get_root_full_q_from_sol(self, node_idx=1) -> np.ndarray:
-        return None
-
+    @abstractmethod
     def _get_root_twist_from_sol(self, node_idx=1) -> np.ndarray:
-        return None
+        pass
 
     def _get_rhc_cost(self):
         # to be overridden

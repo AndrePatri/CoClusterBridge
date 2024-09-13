@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QWidget
 from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds
+from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds, RhcPred
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.sim_data import SharedEnvInfo
@@ -266,6 +266,36 @@ class RHCmds(FullRobStateWindow):
             parent=parent, 
             verbose=verbose)
 
+class RHCPred(FullRobStateWindow):
+
+    def __init__(self,
+            update_data_dt: int,
+            update_plot_dt: int,
+            window_duration: int,
+            window_buffer_factor: int = 2,
+            namespace = "",
+            parent: QWidget = None, 
+            verbose = False):
+
+        name = "RhcPred"
+
+        rhc_cmds = RhcPred(namespace=namespace,
+                        is_server=False, 
+                        with_gpu_mirror=False, 
+                        safe=False,
+                        verbose=verbose,
+                        vlevel=VLevel.V2)
+                                            
+        super().__init__(shared_mem_client=rhc_cmds,
+            update_data_dt=update_data_dt,
+            update_plot_dt=update_plot_dt,
+            window_duration=window_duration,
+            window_buffer_factor=window_buffer_factor,
+            namespace=namespace,
+            name=name,
+            parent=parent, 
+            verbose=verbose)
+        
 class RHCRefs(SharedDataWindow):
 
     def __init__(self, 

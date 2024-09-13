@@ -89,7 +89,45 @@ class RhcCmds(FullRobState):
             verbose=verbose,
             vlevel=vlevel,
             fill_value=fill_value)
-        
+
+class RhcPred(FullRobState):
+
+    def __init__(self,
+            namespace: str,
+            is_server: bool,
+            n_robots: int = None,
+            n_jnts: int = None,
+            n_contacts: int = 1,
+            jnt_names: List[str] = None,
+            contact_names: List[str] = None,
+            q_remapping: List[int] = None,
+            with_gpu_mirror: bool = False,
+            with_torch_view: bool = False,
+            force_reconnection: bool = False,
+            safe: bool = True,
+            verbose: bool = False,
+            vlevel: VLevel = VLevel.V1,
+            fill_value=0):
+
+        basename = "RhcPred"
+
+        super().__init__(namespace=namespace,
+            basename=basename,
+            is_server=is_server,
+            n_robots=n_robots,
+            n_jnts=n_jnts,
+            n_contacts=n_contacts,
+            jnt_names=jnt_names,
+            contact_names=contact_names,
+            q_remapping=q_remapping,
+            with_gpu_mirror=with_gpu_mirror,
+            with_torch_view=with_torch_view,
+            force_reconnection=force_reconnection,
+            safe=safe,
+            verbose=verbose,
+            vlevel=vlevel,
+            fill_value=fill_value)
+     
 class RhcRefs(SharedDataBase):
     
     class RobotFullConfigRef(FullRobState):
