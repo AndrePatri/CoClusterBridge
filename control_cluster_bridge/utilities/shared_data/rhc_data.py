@@ -109,7 +109,7 @@ class RhcPred(FullRobState):
             vlevel: VLevel = VLevel.V1,
             fill_value=0):
 
-        basename = "RhcPred"
+        basename = "RhcPredictions"
 
         super().__init__(namespace=namespace,
             basename=basename,
