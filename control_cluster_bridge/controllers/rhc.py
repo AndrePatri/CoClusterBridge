@@ -686,7 +686,7 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.set(data=self._get_jnt_q_from_sol(node_idx=1), data_type="q", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_jnt_v_from_sol(node_idx=1), data_type="v", robot_idxs=self.controller_index_np)
         self.robot_cmds.jnts_state.set(data=self._get_jnt_a_from_sol(node_idx=0), data_type="a", robot_idxs=self.controller_index_np)
-        self.robot_cmds.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=1), data_type="eff", robot_idxs=self.controller_index_np)
+        self.robot_cmds.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=0), data_type="eff", robot_idxs=self.controller_index_np)
         self.robot_cmds.root_state.set(data=self._get_root_full_q_from_sol(node_idx=1), data_type="q_full", robot_idxs=self.controller_index_np)
         self.robot_cmds.root_state.set(data=self._get_root_twist_from_sol(node_idx=1), data_type="twist", robot_idxs=self.controller_index_np)
         
@@ -694,7 +694,7 @@ class RHController(ABC):
         self.robot_pred.jnts_state.set(data=self._get_jnt_q_from_sol(node_idx=self._pred_node_idx), data_type="q", robot_idxs=self.controller_index_np)
         self.robot_pred.jnts_state.set(data=self._get_jnt_v_from_sol(node_idx=self._pred_node_idx), data_type="v", robot_idxs=self.controller_index_np)
         self.robot_pred.jnts_state.set(data=self._get_jnt_a_from_sol(node_idx=self._pred_node_idx-1), data_type="a", robot_idxs=self.controller_index_np)
-        self.robot_pred.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=self._pred_node_idx), data_type="eff", robot_idxs=self.controller_index_np)
+        self.robot_pred.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=self._pred_node_idx-1), data_type="eff", robot_idxs=self.controller_index_np)
         self.robot_pred.root_state.set(data=self._get_root_full_q_from_sol(node_idx=self._pred_node_idx), data_type="q_full", robot_idxs=self.controller_index_np)
         self.robot_pred.root_state.set(data=self._get_root_twist_from_sol(node_idx=self._pred_node_idx), data_type="twist", robot_idxs=self.controller_index_np)
 
@@ -708,7 +708,7 @@ class RHController(ABC):
                                             robot_idxs=self.controller_index_np,
                                             contact_name=contact)
             
-        # write to shared mem
+        # write robot commands
         self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False) # jnt state
         self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
@@ -716,6 +716,12 @@ class RHController(ABC):
         self.robot_cmds.root_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
                                 read=False) # root state, in case it was written
 
+        # write robot pred
+        self.robot_pred.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
+                                read=False)
+        self.robot_pred.root_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
+                                read=False)
+        
         # we also fill other data (cost, constr. violation, etc..)
         self.rhc_status.rhc_cost.write_retry(self._get_rhc_cost(), 
                                     row_index=self.controller_index,
