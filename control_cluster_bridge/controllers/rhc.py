@@ -459,6 +459,8 @@ class RHController(ABC):
                                 read = False) # register
 
         # writing some static info about this controller
+        self.rhc_status.rhc_static_info.synch_all(retry = True,
+            read = True) # first read current static info from other controllers
         self.rhc_status.rhc_static_info.set(data=np.array(self._dt),
             data_type="dts",
             rhc_idxs=self.controller_index_np,
@@ -472,7 +474,7 @@ class RHController(ABC):
             rhc_idxs=self.controller_index_np,
             gpu=False)
         self.rhc_status.rhc_static_info.synch_all(retry=True,
-            read=False)
+            read=False) # write all to shared mem
         
         Journal.log(self._class_name_base,
                     "_register_to_cluster",
