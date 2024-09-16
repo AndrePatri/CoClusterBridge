@@ -17,8 +17,6 @@
 # 
 from pynput import keyboard
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
-
 from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
@@ -28,16 +26,18 @@ import math
 
 import numpy as np
 
-class RhcRefsFromKeyboard:
+class RefsFromKeyboard:
 
     def __init__(self, 
-                namespace: str, 
+                namespace: str,
+                shared_refs, 
                 verbose = False):
 
         self._verbose = verbose
 
         self.namespace = namespace
 
+        self._shared_refs=shared_refs
         self._closed = False
         
         self.enable_heightchange = False
@@ -53,8 +53,6 @@ class RhcRefsFromKeyboard:
         self._dtwist = 1.0 * math.pi / 180.0 # [rad]
 
         self.enable_phase_id_change = False
-
-        self.rhc_refs = None
 
         self.cluster_idx = -1
         self.cluster_idx_np = np.array(self.cluster_idx)
@@ -83,17 +81,12 @@ class RhcRefsFromKeyboard:
         
         self.env_index.run()
         
-        self._init_rhc_ref_subscriber()
+        self._init_ref_subscriber()
 
-    def _init_rhc_ref_subscriber(self):
-
-        self.rhc_refs = RhcRefs(namespace=self.namespace,
-                                is_server=False, 
-                                safe=False, 
-                                verbose=self._verbose,
-                                vlevel=VLevel.V2)
-
-        self.rhc_refs.run()
+    def _init_ref_subscriber(self):
+        
+        if not self._shared_refs.is_running():
+            self._shared_refs.run()
 
     def __del__(self):
 
@@ -103,9 +96,9 @@ class RhcRefsFromKeyboard:
     
     def _close(self):
         
-        if self.rhc_refs is not None:
+        if self.refs is not None:
 
-            self.rhc_refs.close()
+            self.refs.close()
 
         self._closed = True
     
@@ -119,35 +112,35 @@ class RhcRefsFromKeyboard:
             self.cluster_idx = env_index[0, 0].item()
             self.cluster_idx_np = self.cluster_idx
         
-            self.rhc_refs.rob_refs.synch_from_shared_mem()
-            self.rhc_refs.contact_flags.synch_all(read=True, retry=True)
-            self.rhc_refs.phase_id.synch_all(read=True, retry=True)
+            self.refs.rob_refs.synch_from_shared_mem()
+            self.refs.contact_flags.synch_all(read=True, retry=True)
+            self.refs.phase_id.synch_all(read=True, retry=True)
         
         else:
             
-            self.rhc_refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self.rhc_refs.rob_refs.root_state.n_cols,
+            self.refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self.refs.rob_refs.root_state.n_cols,
                                                 read=False)
 
-            self.rhc_refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self.rhc_refs.contact_flags.n_cols,
+            self.refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self.refs.contact_flags.n_cols,
                                                 read=False)
             
-            self.rhc_refs.phase_id.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self.rhc_refs.phase_id.n_cols,
+            self.refs.phase_id.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self.refs.phase_id.n_cols,
                                                 read=False)
                                                 
     def _update_base_height(self, 
                 decrement = False):
         
         # update both base height and vel
-        current_p_ref = self.rhc_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
+        current_p_ref = self.refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
         if decrement:
             new_height_ref = current_p_ref[2] - self.height_dh
         else:
             new_height_ref = current_p_ref[2] + self.height_dh
         current_p_ref[2] = new_height_ref
-        self.rhc_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+        self.refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
                                     robot_idxs=self.cluster_idx_np)
     
     def _update_navigation(self, 
@@ -155,8 +148,8 @@ class RhcRefsFromKeyboard:
                     increment = True,
                     reset: bool=False):
 
-        current_lin_v_ref = self.rhc_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
-        current_omega_ref = self.rhc_refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
+        current_lin_v_ref = self.refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
+        current_omega_ref = self.refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
 
         if not reset:
             if type=="frontal_lin" and not increment:
@@ -198,21 +191,21 @@ class RhcRefsFromKeyboard:
             if "lin" in type:
                 current_lin_v_ref[:]=0
 
-        self.rhc_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
+        self.refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
-        self.rhc_refs.rob_refs.root_state.set(data_type="omega",data=current_omega_ref,
+        self.refs.rob_refs.root_state.set(data_type="omega",data=current_omega_ref,
                                     robot_idxs=self.cluster_idx_np)
 
     def _update_phase_id(self,
                 phase_id: int = -1):
 
-        phase_id = self.rhc_refs.phase_id.get_numpy_mirror()
+        phase_id = self.refs.phase_id.get_numpy_mirror()
         phase_id[self.cluster_idx, 111] = phase_id
 
     def _set_contacts(self,
                 key,
                 is_contact: bool = True):
-        contact_flags = self.rhc_refs.contact_flags.get_numpy_mirror()
+        contact_flags = self.refs.contact_flags.get_numpy_mirror()
         if key.char == "7":
             contact_flags[self.cluster_idx, 0] = is_contact
         if key.char == "9":
@@ -450,7 +443,7 @@ class RhcRefsFromKeyboard:
 
 if __name__ == "__main__":  
 
-    keyb_cmds = RhcRefsFromKeyboard(namespace="kyon0", 
+    keyb_cmds = RefsFromKeyboard(namespace="kyon0", 
                             verbose=True)
 
     keyb_cmds.run()
