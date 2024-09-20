@@ -646,7 +646,7 @@ class RHController(ABC):
         self.set_cmds_to_homing()
 
         self._robot_mass = self._get_robot_mass() # uses child class implemented method
-        self._contact_f_scale = self._get_robot_mass() * 9.81 / self.rhc_status.n_contacts
+        self._contact_f_scale = self._get_robot_mass() * 9.81
 
         self.rhc_status.rhc_static_info.set(data=np.array(len(self._get_contacts())),
             data_type="ncontacts",
