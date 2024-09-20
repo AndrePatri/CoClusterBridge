@@ -1328,15 +1328,15 @@ class RHCStatus(SharedDataWindow):
                                     ylabel="[float]"))
         
         for i in range(self.shared_data_clients[0].n_contacts):
-            self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
-                                        n_data = self.shared_data_clients[0].n_nodes,
+            self.rt_plotters.append(RtPlotWindow(data_dim=3,
+                                        n_data=self.shared_data_clients[0].n_nodes,
                                         update_data_dt=self.update_data_dt, 
                                         update_plot_dt=self.update_plot_dt,
                                         window_duration=self.window_duration, 
                                         parent=None, 
-                                        base_name=f"Rhc Step Flag - contact n {i}", 
+                                        base_name=f"Rhc Contact f - contact n{i}", 
                                         window_buffer_factor=self.window_buffer_factor, 
-                                        legend_list=cluster_idx_legend, 
+                                        legend_list=["f_x", "f_y", "f_z"], 
                                         ylabel="[float]"))
 
         self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
@@ -1494,11 +1494,11 @@ class RHCStatus(SharedDataWindow):
             self.rt_plotters[12].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_mirror())
             
             n_contacts = self.shared_data_clients[0].n_contacts
-            tot_data = self.shared_data_clients[0].rhc_fcn.get_numpy_mirror()
+            tot_data = self.shared_data_clients[0].rhc_fcn.get_numpy_mirror()[index:index+1,:]
+            tot_data_cl_idx=tot_data.reshape(n_contacts,3*self.shared_data_clients[0].n_nodes)
             for i in range(n_contacts):
-                start_idx = self.shared_data_clients[0].n_nodes * i
-                single_contact_data = tot_data[:, start_idx:(start_idx+self.shared_data_clients[0].n_nodes)]
-                self.rt_plotters[13 + i].rt_plot_widget.update(single_contact_data)
+                single_contact_info=tot_data_cl_idx[i:i+1,:].reshape(self.shared_data_clients[0].n_nodes,3).T
+                self.rt_plotters[13 + i].rt_plot_widget.update(single_contact_info)
 
             self.rt_plotters[self.final_idx+1].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 0])
             self.rt_plotters[self.final_idx+2].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 1])
