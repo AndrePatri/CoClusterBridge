@@ -157,6 +157,18 @@ class FullRobStateWindow(SharedDataWindow):
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=contact_wrench_legend, 
                     ylabel="[N] - [Nm]"))
+
+        gravity_norm_legend=["gn_x_base_loc", "gn_y_base_loc", "gn_z_base_loc"]
+        self.rt_plotters.append(RtPlotWindow(data_dim=len(gravity_norm_legend),
+                    n_data = 1, 
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Normalized gravity vector (base local)",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=gravity_norm_legend, 
+                    ylabel="[N]"))
         
         # root state
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
@@ -172,6 +184,9 @@ class FullRobStateWindow(SharedDataWindow):
 
         # contact state
         self.grid.addFrame(self.rt_plotters[8].base_frame, 4, 0)
+
+        # gravity vector
+        self.grid.addFrame(self.rt_plotters[9].base_frame, 4, 1)
 
     def _init_shared_data(self):
         
@@ -205,6 +220,9 @@ class FullRobStateWindow(SharedDataWindow):
 
             # contact state
             self.rt_plotters[8].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches.get(data_type="w", robot_idxs=np_idx).flatten())
+
+            # norm. gravity 
+            self.rt_plotters[9].rt_plot_widget.update(self.shared_data_clients[0].root_state.get(data_type="gn", robot_idxs=np_idx).flatten())
 
 class RobotStates(FullRobStateWindow):
 
@@ -1454,7 +1472,7 @@ class RHCStatus(SharedDataWindow):
                                                     retry=False)
             self.shared_data_clients[0].rhc_nodes_constr_viol.synch_all(read = True, 
                                                     retry=False)
-            self.shared_data_clients[0].rhc_step_var.synch_all(read = True, 
+            self.shared_data_clients[0].rhc_fcn.synch_all(read = True, 
                                                     retry=False)
             self.shared_data_clients[0].rhc_fail_idx.synch_all(read = True, 
                                                     retry=False)
@@ -1476,7 +1494,7 @@ class RHCStatus(SharedDataWindow):
             self.rt_plotters[12].rt_plot_widget.update(self.shared_data_clients[0].rhc_nodes_constr_viol.get_numpy_mirror())
             
             n_contacts = self.shared_data_clients[0].n_contacts
-            tot_data = self.shared_data_clients[0].rhc_step_var.get_numpy_mirror()
+            tot_data = self.shared_data_clients[0].rhc_fcn.get_numpy_mirror()
             for i in range(n_contacts):
                 start_idx = self.shared_data_clients[0].n_nodes * i
                 single_contact_data = tot_data[:, start_idx:(start_idx+self.shared_data_clients[0].n_nodes)]

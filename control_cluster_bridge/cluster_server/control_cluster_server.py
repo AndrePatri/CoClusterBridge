@@ -202,15 +202,15 @@ class ControlClusterServer(ABC):
                             vlevel = self._vlevel,
                             fill_value=np.nan)
         self._rhc_status = RhcStatus(is_server=True,
-                            cluster_size=self.cluster_size,
-                            n_nodes=100, # just an ub which should fit for most cases
-                            n_contacts=self._n_contacts,
-                            namespace=self._namespace, 
-                            verbose=self._verbose, 
-                            vlevel=self._vlevel,
-                            force_reconnection=self._force_reconnection,
-                            with_gpu_mirror=False,
-                            with_torch_view=True)
+            n_nodes=40, # should be set to be able to fit the maximum horizon length in the whole cluster
+            n_contacts=self._n_contacts,
+            cluster_size=self.cluster_size,
+            namespace=self._namespace, 
+            verbose=self._verbose, 
+            vlevel=self._vlevel,
+            force_reconnection=self._force_reconnection,
+            with_gpu_mirror=False,
+            with_torch_view=True)
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
         cluster_info_dict["cluster_dt"] = self._cluster_dt

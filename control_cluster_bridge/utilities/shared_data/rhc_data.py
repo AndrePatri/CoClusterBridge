@@ -688,7 +688,7 @@ class RhcStatus(SharedDataBase):
                 with_torch_view=with_torch_view,
                 fill_value = np.nan)
     
-    class RhcStepVar(SharedTWrapper): 
+    class RhcFcNormalized(SharedTWrapper): 
 
         def __init__(self,
                 namespace = "",
@@ -702,13 +702,13 @@ class RhcStatus(SharedDataBase):
                 with_gpu_mirror: bool = False,
                 with_torch_view: bool = False):
             
-            basename = "StepVar" # hardcoded
+            basename = "RhcContactForces" # hardcoded
 
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
                 n_rows = cluster_size, 
-                n_cols = n_contacts * n_nodes, 
+                n_cols = n_contacts*3*n_nodes, 
                 verbose = verbose, 
                 vlevel = vlevel,
                 safe = False, # boolean operations are atomic on 64 bit systems
@@ -762,17 +762,19 @@ class RhcStatus(SharedDataBase):
                 with_torch_view: bool = False):
             
             basename = "RhcStaticInfo" # hardcoded
-            self.n_data = 3 # rhc dts, rhc horizon length, rhc n nodes
+            self.n_data = 4 # rhc dts, rhc horizon length, rhc n nodes, ncontacts
             
             self._n_rhcs = cluster_size
 
             self._dts = None
             self._horizons = None
             self._nnodes = None
+            self._ncontacts = None
 
             self._dts_gpu = None
             self._horizons_gpu = None
             self._nnodes_gpu = None
+            self._ncontacts_gpu = None
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -801,16 +803,19 @@ class RhcStatus(SharedDataBase):
                 self._dts = self.get_torch_mirror()[:, 0:1].view(self._n_rhcs, 1)
                 self._horizons = self.get_torch_mirror()[:, 1:2].view(self._n_rhcs, 1)
                 self._nnodes = self.get_torch_mirror()[:, 2:3].view(self._n_rhcs, 1)
+                self._ncontacts = self.get_torch_mirror()[:, 3:4].view(self._n_rhcs, 1)
             else:
                 self._dts = self.get_numpy_mirror()[:, 0:1].view()
                 self._horizons = self.get_numpy_mirror()[:, 1:2].view()
                 self._nnodes = self.get_numpy_mirror()[:, 2:3].view()
+                self._ncontacts = self.get_numpy_mirror()[:, 3:4].view()
             
             if self.gpu_mirror_exists():
                 # gpu views 
                 self._dts_gpu = self._gpu_mirror[:, 0:1].view(self._n_rhcs, 1)
                 self._horizons_gpu = self._gpu_mirror[:, 1:2].view(self._n_rhcs, 1)
                 self._nnodes_gpu = self._gpu_mirror[:, 2:3].view(self._n_rhcs, 1)
+                self._ncontacts_gpu = self._gpu_mirror[:, 3:4].view(self._n_rhcs, 1)
 
         def _retrieve_data(self,
                 name: str,
@@ -823,6 +828,8 @@ class RhcStatus(SharedDataBase):
                     return self._horizons
                 elif name == "nnodes":
                     return self._nnodes
+                elif name == "ncontacts":
+                    return self._nnodes
                 else:
                     return None
             else:
@@ -831,6 +838,8 @@ class RhcStatus(SharedDataBase):
                 elif name == "horizons":
                     return self._horizons_gpu
                 elif name == "nnodes":
+                    return self._nnodes_gpu
+                elif name == "ncontacts":
                     return self._nnodes_gpu
                 else:
                     return None
@@ -883,150 +892,31 @@ class RhcStatus(SharedDataBase):
         self.verbose = verbose
 
         self.vlevel = vlevel
+        self.force_reconnection=force_reconnection
 
         self.with_gpu_mirror = with_gpu_mirror
+        self.with_torch_view = with_torch_view
 
-        self.fails = self.FailFlagView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.resets = self.ResetFlagView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.trigger = self.TriggerFlagView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.activation_state = self.ActivationFlagView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.registration = self.RegistrationFlagView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-
-        self.controllers_counter = self.ControllersCounterView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.controllers_fail_counter = self.FailsCounterView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size,
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-
-        self.rhc_cost = self.RhcCostView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-
-        self.rhc_constr_viol = self.RhcCnstrViolationView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.rhc_nodes_cost = self.RhcNodesCostView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                n_nodes=self.n_nodes,
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-
-        self.rhc_nodes_constr_viol = self.RhcNodesCnstrViolationView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                n_nodes=self.n_nodes,
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-
-        self.rhc_n_iter = self.RhcNIterationsView(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-        
-        self.rhc_step_var = self.RhcStepVar(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                n_contacts=self.n_contacts,
-                                n_nodes=self.n_nodes,
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view) 
-        
-        self.rhc_fail_idx = self.RhcFailIndex(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
-
-        self.rhc_static_info = self.RhcStaticInfo(namespace=self.namespace, 
-                                is_server=self.is_server, 
-                                cluster_size=self.cluster_size, 
-                                verbose=self.verbose, 
-                                vlevel=vlevel,
-                                force_reconnection=force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view)
+        self.fails =None
+        self.resets=None
+        self.trigger=None
+        self.activation_state=None
+        self.registration=None
+        self.controllers_counter=None
+        self.controllers_fail_counter=None
+        self.rhc_cost=None
+        self.rhc_constr_viol=None
+        self.rhc_nodes_cost=None
+        self.rhc_nodes_constr_viol=None
+        self.rhc_n_iter=None
+        self.rhc_fcn=None
+        self.rhc_fail_idx=None
 
         self._is_runnning = False
 
         self._acquired_reg_sem = False
+
+        self._init_shared_memory()
         
     def __del__(self):
 
@@ -1049,12 +939,166 @@ class RhcStatus(SharedDataBase):
             self.rhc_n_iter.get_shared_mem(),
             self.rhc_nodes_cost.get_shared_mem(),
             self.rhc_nodes_constr_viol.get_shared_mem(),
-            self.rhc_step_var.get_shared_mem(),
+            self.rhc_fcn.get_shared_mem(),
             self.rhc_fail_idx.get_shared_mem(),
             self.rhc_static_info.get_shared_mem()]
     
-    def run(self):
+    def _init_shared_memory(self):
 
+        if self.is_server:
+            if self.n_contacts<=0:
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    "n_contacts<=0!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            if self.n_nodes<=0:
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    "n_nodes<=0!",
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+        self.rhc_static_info = self.RhcStaticInfo(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+
+        self.fails = self.FailFlagView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.resets = self.ResetFlagView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.trigger = self.TriggerFlagView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.activation_state = self.ActivationFlagView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.registration = self.RegistrationFlagView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+
+        self.controllers_counter = self.ControllersCounterView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.controllers_fail_counter = self.FailsCounterView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size,
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+
+        self.rhc_cost = self.RhcCostView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+
+        self.rhc_constr_viol = self.RhcCnstrViolationView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.rhc_nodes_cost = self.RhcNodesCostView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                n_nodes=self.n_nodes,
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+
+        self.rhc_nodes_constr_viol = self.RhcNodesCnstrViolationView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                n_nodes=self.n_nodes,
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+
+        self.rhc_n_iter = self.RhcNIterationsView(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+        self.rhc_fcn = self.RhcFcNormalized(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                n_contacts=self.n_contacts,
+                                n_nodes=self.n_nodes,
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view) 
+        
+        self.rhc_fail_idx = self.RhcFailIndex(namespace=self.namespace, 
+                                is_server=self.is_server, 
+                                cluster_size=self.cluster_size, 
+                                verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view)
+        
+    def run(self):
+                
+        self.rhc_static_info.run()
         self.resets.run()
         self.trigger.run()
         self.fails.run()
@@ -1067,15 +1111,13 @@ class RhcStatus(SharedDataBase):
         self.rhc_nodes_cost.run()
         self.rhc_nodes_constr_viol.run()
         self.rhc_n_iter.run()
-        self.rhc_step_var.run()
+        self.rhc_fcn.run()
         self.rhc_fail_idx.run()
-        self.rhc_static_info.run()
 
         if not self.is_server:
-    
             self.cluster_size = self.trigger.n_rows
             self.n_nodes = self.rhc_nodes_cost.n_cols
-            self.n_contacts = int(self.rhc_step_var.n_cols / self.n_nodes)
+            self.n_contacts = int(self.rhc_fcn.n_cols / (3*self.n_nodes))
 
         self._is_runnning = True
     
@@ -1095,7 +1137,7 @@ class RhcStatus(SharedDataBase):
             self.rhc_constr_viol.close()
             self.rhc_nodes_cost.close()
             self.rhc_nodes_constr_viol.close()
-            self.rhc_step_var.close()
+            self.rhc_fcn.close()
             self.rhc_fail_idx.close()
             self.rhc_static_info.close()
 

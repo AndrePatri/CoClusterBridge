@@ -123,7 +123,7 @@ class RHController(ABC):
         self._n_resets = 0
         self._n_fails = 0
         self._fail_idx_thresh = 5e3
-        self._contact_f_thresh = 1e3
+        self._contact_f_thresh = 1e5
 
         self._failed = False
 
@@ -580,11 +580,11 @@ class RHController(ABC):
         self._remote_term.run()
         
         self.rhc_status = RhcStatus(is_server=False,
-                                    namespace=self.namespace, 
-                                    verbose=self._verbose, 
-                                    vlevel=VLevel.V2,
-                                    with_torch_view=False, 
-                                    with_gpu_mirror=False)
+            namespace=self.namespace, 
+            verbose=self._verbose, 
+            vlevel=VLevel.V2,
+            with_torch_view=False, 
+            with_gpu_mirror=False)
         self.rhc_status.run() # rhc status (reg. flags, failure, tot cost, tot cnstrl viol, etc...)
         self._register_to_cluster() # registers the controller to the cluster
         self._init_states() # initializes shared mem. states
@@ -642,8 +642,13 @@ class RHController(ABC):
         self.set_cmds_to_homing()
 
         self._robot_mass = self._get_robot_mass() # uses child class implemented method
-        self._contact_var_scale = self._get_robot_mass() * 9.81 / self.rhc_status.n_contacts
+        self._contact_f_scale = self._get_robot_mass() * 9.81 / self.rhc_status.n_contacts
 
+        self.rhc_status.rhc_static_info.set(data=np.array(len(self._get_contacts())),
+            data_type="ncontacts",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        
         Journal.log(self._class_name_base,
                     "_init",
                     f"RHC controller initialized with index {self.controller_index}",
@@ -757,16 +762,15 @@ class RHController(ABC):
                                             row_index=self.controller_index, 
                                             col_index=0)
         
-        
         if f_contact is not None:
             for i in range(self.rhc_status.n_contacts):
                 contact_idx = i*3
-                z_idx = contact_idx+2
-                contact_f=f_contact[z_idx:(z_idx+1), :]/(self._contact_var_scale)
-                np.clip(contact_f, out=contact_f, a_min=-self._contact_f_thresh, a_max=self._contact_f_thresh) # safety clamp
-                self.rhc_status.rhc_step_var.write_retry(data=contact_f, 
-                                                    row_index=self.controller_index, 
-                                                    col_index=i*self.rhc_status.n_nodes)
+                contact_f=f_contact[contact_idx:(contact_idx+3), :]/(self._contact_f_scale)
+                np.clip(contact_f, out=contact_f, 
+                a_min=-self._contact_f_thresh, a_max=self._contact_f_thresh) # safety clamp
+                self.rhc_status.rhc_fcn.write_retry(data=contact_f.T.reshape(1, -1), 
+                    row_index=self.controller_index, 
+                    col_index=i*3*self.rhc_status.n_nodes)
 
     def _assign_controller_side_jnt_names(self, 
                         jnt_names: List[str]):

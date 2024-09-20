@@ -185,6 +185,32 @@ def world2base_frame(t_w: torch.Tensor, q_b: torch.Tensor, t_out: torch.Tensor):
     t_out[:, 4] = t_w[:, 3] * R_01 + t_w[:, 4] * R_11 + t_w[:, 5] * R_21
     t_out[:, 5] = t_w[:, 3] * R_02 + t_w[:, 4] * R_12 + t_w[:, 5] * R_22
 
+def world2base_frame3D(v_w: torch.Tensor, q_b: torch.Tensor, v_out: torch.Tensor):
+    """
+    Transforms a 3D  vector expressed in the WORLD frame to
+    the base frame using the given quaternion that describes the orientation
+    of the base with respect to the world frame. The result is written in v_out.
+    """
+    # q_b = q_b / q_b.norm(dim=1, keepdim=True)
+    q_w, q_i, q_j, q_k = q_b[:, 0], q_b[:, 1], q_b[:, 2], q_b[:, 3]
+    
+    R_00 = 1 - 2 * (q_j ** 2 + q_k ** 2)
+    R_01 = 2 * (q_i * q_j - q_k * q_w)
+    R_02 = 2 * (q_i * q_k + q_j * q_w)
+    
+    R_10 = 2 * (q_i * q_j + q_k * q_w)
+    R_11 = 1 - 2 * (q_i ** 2 + q_k ** 2)
+    R_12 = 2 * (q_j * q_k - q_i * q_w)
+    
+    R_20 = 2 * (q_i * q_k - q_j * q_w)
+    R_21 = 2 * (q_j * q_k + q_i * q_w)
+    R_22 = 1 - 2 * (q_i ** 2 + q_j ** 2)
+    
+    # Transform the velocity to the base frame using the transpose of the rotation matrix
+    v_out[:, 0] = v_w[:, 0] * R_00 + v_w[:, 1] * R_10 + v_w[:, 2] * R_20
+    v_out[:, 1] = v_w[:, 0] * R_01 + v_w[:, 1] * R_11 + v_w[:, 2] * R_21
+    v_out[:, 2] = v_w[:, 0] * R_02 + v_w[:, 1] * R_12 + v_w[:, 2] * R_22
+
 def xversor(q_b: torch.Tensor,
         vx_out: torch.Tensor):
     """
