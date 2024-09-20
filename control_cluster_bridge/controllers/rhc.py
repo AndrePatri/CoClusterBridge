@@ -142,6 +142,9 @@ class RHController(ABC):
         self._rhc_fpaths.append(os.path.abspath(__file__))
 
         self._contact_force_base_loc_aux=np.zeros((1,3),dtype=self._dtype)
+        self._norm_grav_vector_w=np.zeros((1,3),dtype=self._dtype)
+        self._norm_grav_vector_w[:, 2]=-1.0
+        self._norm_grav_vector_base_loc=np.zeros((1,3),dtype=self._dtype)
         
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -716,6 +719,7 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=0), data_type="eff", robot_idxs=self.controller_index_np)
         self.robot_cmds.root_state.set(data=self._get_root_full_q_from_sol(node_idx=1), data_type="q_full", robot_idxs=self.controller_index_np)
         self.robot_cmds.root_state.set(data=self._get_root_twist_from_sol(node_idx=1), data_type="twist", robot_idxs=self.controller_index_np)
+        self.robot_cmds.root_state.set(data=self._get_norm_grav_vector_from_sol(node_idx=0), data_type="gn", robot_idxs=self.controller_index_np)
 
         f_contact = self._get_f_from_sol()
         if f_contact is not None:
@@ -965,7 +969,13 @@ class RHController(ABC):
     @abstractmethod
     def _get_root_twist_from_sol(self, node_idx=1) -> np.ndarray:
         pass
-
+    
+    def _get_norm_grav_vector_from_sol(self, node_idx=1) -> np.ndarray:
+        rhc_q=self._get_root_full_q_from_sol(node_idx=node_idx)[:, 3:7]
+        world2base_frame(v_w=self._norm_grav_vector_w,q_b=rhc_q,v_out=self._norm_grav_vector_base_loc,
+            is_q_wijk=False)
+        return self._norm_grav_vector_base_loc
+    
     def _get_rhc_cost(self):
         # to be overridden
         return np.nan
