@@ -29,9 +29,9 @@ import numpy as np
 class RefsFromKeyboard:
 
     def __init__(self, 
-                namespace: str,
-                shared_refs, 
-                verbose = False):
+        namespace: str,
+        shared_refs, 
+        verbose = False):
 
         self._verbose = verbose
 
@@ -96,9 +96,9 @@ class RefsFromKeyboard:
     
     def _close(self):
         
-        if self.refs is not None:
+        if self._shared_refs is not None:
 
-            self.refs.close()
+            self._shared_refs.close()
 
         self._closed = True
     
@@ -112,35 +112,35 @@ class RefsFromKeyboard:
             self.cluster_idx = env_index[0, 0].item()
             self.cluster_idx_np = self.cluster_idx
         
-            self.refs.rob_refs.synch_from_shared_mem()
-            self.refs.contact_flags.synch_all(read=True, retry=True)
-            self.refs.phase_id.synch_all(read=True, retry=True)
+            self._shared_refs.rob_refs.synch_from_shared_mem()
+            self._shared_refs.contact_flags.synch_all(read=True, retry=True)
+            self._shared_refs.phase_id.synch_all(read=True, retry=True)
         
         else:
             
-            self.refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self.refs.rob_refs.root_state.n_cols,
+            self._shared_refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self._shared_refs.rob_refs.root_state.n_cols,
                                                 read=False)
 
-            self.refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self.refs.contact_flags.n_cols,
+            self._shared_refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self._shared_refs.contact_flags.n_cols,
                                                 read=False)
             
-            self.refs.phase_id.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self.refs.phase_id.n_cols,
+            self._shared_refs.phase_id.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self._shared_refs.phase_id.n_cols,
                                                 read=False)
                                                 
     def _update_base_height(self, 
                 decrement = False):
         
         # update both base height and vel
-        current_p_ref = self.refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
+        current_p_ref = self._shared_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
         if decrement:
             new_height_ref = current_p_ref[2] - self.height_dh
         else:
             new_height_ref = current_p_ref[2] + self.height_dh
         current_p_ref[2] = new_height_ref
-        self.refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
+        self._shared_refs.rob_refs.root_state.set(data_type="p",data=current_p_ref,
                                     robot_idxs=self.cluster_idx_np)
     
     def _update_navigation(self, 
@@ -148,8 +148,8 @@ class RefsFromKeyboard:
                     increment = True,
                     reset: bool=False):
 
-        current_lin_v_ref = self.refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
-        current_omega_ref = self.refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
+        current_lin_v_ref = self._shared_refs.rob_refs.root_state.get(data_type="v", robot_idxs=self.cluster_idx_np)
+        current_omega_ref = self._shared_refs.rob_refs.root_state.get(data_type="omega", robot_idxs=self.cluster_idx_np)
 
         if not reset:
             if type=="frontal_lin" and not increment:
@@ -191,21 +191,21 @@ class RefsFromKeyboard:
             if "lin" in type:
                 current_lin_v_ref[:]=0
 
-        self.refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
+        self._shared_refs.rob_refs.root_state.set(data_type="v",data=current_lin_v_ref,
                                     robot_idxs=self.cluster_idx_np)
-        self.refs.rob_refs.root_state.set(data_type="omega",data=current_omega_ref,
+        self._shared_refs.rob_refs.root_state.set(data_type="omega",data=current_omega_ref,
                                     robot_idxs=self.cluster_idx_np)
 
     def _update_phase_id(self,
                 phase_id: int = -1):
 
-        phase_id = self.refs.phase_id.get_numpy_mirror()
+        phase_id = self._shared_refs.phase_id.get_numpy_mirror()
         phase_id[self.cluster_idx, 111] = phase_id
 
     def _set_contacts(self,
                 key,
                 is_contact: bool = True):
-        contact_flags = self.refs.contact_flags.get_numpy_mirror()
+        contact_flags = self._shared_refs.contact_flags.get_numpy_mirror()
         if key.char == "7":
             contact_flags[self.cluster_idx, 0] = is_contact
         if key.char == "9":
@@ -382,7 +382,6 @@ class RefsFromKeyboard:
                             increment = False)
                 
     def _on_press(self, key):
-
         if self.launch_keyboard_cmds.read_retry(row_index=0,
                                             col_index=0)[0]:
             
