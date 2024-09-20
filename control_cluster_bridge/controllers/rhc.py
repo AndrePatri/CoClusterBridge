@@ -29,6 +29,8 @@ from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererCl
 from control_cluster_bridge.utilities.homing import RobotHomer
 from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
 
+from control_cluster_bridge.utilities.math_utils import world2base_frame
+
 from SharsorIPCpp.PySharsorIPC import VLevel
 from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
@@ -138,6 +140,8 @@ class RHController(ABC):
         if not hasattr(self, '_rhc_fpaths'):
             self._rhc_fpaths = []
         self._rhc_fpaths.append(os.path.abspath(__file__))
+
+        self._contact_force_base_loc_aux=np.zeros((1,3),dtype=self._dtype)
         
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -712,6 +716,24 @@ class RHController(ABC):
         self.robot_cmds.jnts_state.set(data=self._get_jnt_eff_from_sol(node_idx=0), data_type="eff", robot_idxs=self.controller_index_np)
         self.robot_cmds.root_state.set(data=self._get_root_full_q_from_sol(node_idx=1), data_type="q_full", robot_idxs=self.controller_index_np)
         self.robot_cmds.root_state.set(data=self._get_root_twist_from_sol(node_idx=1), data_type="twist", robot_idxs=self.controller_index_np)
+
+        f_contact = self._get_f_from_sol()
+        if f_contact is not None:
+            contact_names = self.robot_state.contact_names()
+            rhc_q_first_node=self._get_root_full_q_from_sol(node_idx=0)[:, 3:7]
+            for i in range(len(contact_names)):
+                contact = contact_names[i]
+                contact_idx = i*3
+                contact_force_world=f_contact[contact_idx:(contact_idx+3), 0:1].T
+                world2base_frame(v_w=contact_force_world, 
+                    q_b=rhc_q_first_node, 
+                    v_out=self._contact_force_base_loc_aux,
+                    is_q_wijk=False # horizon q is ijkw
+                    )
+                self.robot_cmds.contact_wrenches.set(data=self._contact_force_base_loc_aux/self._contact_f_scale, 
+                    data_type="f", 
+                    robot_idxs=self.controller_index_np,
+                    contact_name=contact)
         
         # prediction data from MPC horizon
         self.robot_pred.jnts_state.set(data=self._get_jnt_q_from_sol(node_idx=self._pred_node_idx), data_type="q", robot_idxs=self.controller_index_np)
@@ -721,16 +743,6 @@ class RHController(ABC):
         self.robot_pred.root_state.set(data=self._get_root_full_q_from_sol(node_idx=self._pred_node_idx), data_type="q_full", robot_idxs=self.controller_index_np)
         self.robot_pred.root_state.set(data=self._get_root_twist_from_sol(node_idx=self._pred_node_idx), data_type="twist", robot_idxs=self.controller_index_np)
 
-        f_contact = self._get_f_from_sol()
-        contact_names = self.robot_state.contact_names()
-        for i in range(len(contact_names)):
-            contact = contact_names[i]
-            contact_idx = i*3
-            self.robot_cmds.contact_wrenches.set(data=f_contact[contact_idx:(contact_idx+3), 0].T, 
-                                            data_type="f", 
-                                            robot_idxs=self.controller_index_np,
-                                            contact_name=contact)
-            
         # write robot commands
         self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False) # jnt state

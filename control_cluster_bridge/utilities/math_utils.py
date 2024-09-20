@@ -143,15 +143,19 @@ def base2world_frame(v_b: np.ndarray, q_b: np.ndarray, v_out: np.ndarray):
     v_out[:, 1] = v_x * R_10 + v_y * R_11 + v_z * R_12
     v_out[:, 2] = v_x * R_20 + v_y * R_21 + v_z * R_22
 
-def world2base_frame(v_w: np.ndarray, q_b: np.ndarray, v_out: np.ndarray):
+def world2base_frame(v_w: np.ndarray, q_b: np.ndarray, v_out: np.ndarray,
+        is_q_wijk: bool = True):
     """
     Transforms a velocity vector expressed in the WORLD frame to
     the base frame using the given quaternion that describes the orientation
     of the base with respect to the world frame. The result is written in v_out.
     """
     # q_b = q_b / q_b.norm(dim=1, keepdim=True)
-    q_w, q_i, q_j, q_k = q_b[:, 0], q_b[:, 1], q_b[:, 2], q_b[:, 3]
-    
+    if is_q_wijk:
+        q_w, q_i, q_j, q_k = q_b[:, 0], q_b[:, 1], q_b[:, 2], q_b[:, 3]
+    else:
+        q_w, q_i, q_j, q_k = q_b[:, 3], q_b[:, 0], q_b[:, 1], q_b[:, 2]
+
     R_00 = 1 - 2 * (q_j ** 2 + q_k ** 2)
     R_01 = 2 * (q_i * q_j - q_k * q_w)
     R_02 = 2 * (q_i * q_k + q_j * q_w)
