@@ -469,10 +469,17 @@ class RHController(ABC):
         # actually register to cluster
         self.rhc_status.controllers_counter.synch_all(retry = True,
                                                 read = False) # writes to shared mem
+        
+        # read current registration state
+        self.rhc_status.registration.synch_all(retry = True,
+                                                read = True)
+        registrations = self.rhc_status.registration.get_numpy_mirror()
+        self.controller_index = self._assign_cntrl_index(registrations)
+        self._class_name_base = self._class_name_base+str(self.controller_index)
+        self.controller_index_np = np.array(self.controller_index)
         registrations[self.controller_index, 0] = True
         self.rhc_status.registration.synch_all(retry = True,
-                                read = False) 
-        
+                                        read = False) 
         self._registered = True
 
         # we can now release everything so that other controllers can register
@@ -490,13 +497,7 @@ class RHController(ABC):
             dtype=dtype.Bool)
         self._remote_term.run()
         
-        # read current registration state
-        self.rhc_status.registration.synch_all(retry = True,
-                                                read = True)
-        registrations = self.rhc_status.registration.get_numpy_mirror()
-        self.controller_index = self._assign_cntrl_index(registrations)
-        self._class_name_base = self._class_name_base+str(self.controller_index)
-        self.controller_index_np = np.array(self.controller_index)
+        
 
         # other initializations
         self._init_states() # initializes shared mem. states
