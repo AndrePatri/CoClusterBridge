@@ -573,7 +573,7 @@ class RHController(ABC):
             data_type="ncontacts",
             rhc_idxs=self.controller_index_np,
             gpu=False)
-        self.rhc_status.rhc_static_info.set(data=np.array(self.controller_index_np),
+        self.rhc_status.rhc_static_info.set(data=np.array(self.robot_mass()),
             data_type="robot_mass",
             rhc_idxs=self.controller_index_np,
             gpu=False)
