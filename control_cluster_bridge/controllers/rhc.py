@@ -73,9 +73,10 @@ class RHController(ABC):
         self._dt = dt
         self._n_intervals = self._n_nodes - 1 
         self._t_horizon = self._n_intervals * dt
-        self._pred_node_idx=self._n_nodes-1 # prection is by default written on last node
+        self._set_rhc_pred_idx() # prection is by default written on last node
         self.controller_index = None # will be assigned upon registration to a cluster
         self.controller_index_np = None 
+        self._robot_mass=1.0
 
         self.srdf_path = srdf_path # using for parsing robot homing
 
@@ -166,6 +167,10 @@ class RHController(ABC):
                 "SIGINT received",
                 LogType.WARN)
         self._term_req_received = True
+    
+    def _set_rhc_pred_idx(self):
+        # default to last node
+        self._pred_node_idx=self._n_nodes-1
 
     def _close(self):
         if not self._closed:
@@ -426,14 +431,22 @@ class RHController(ABC):
     
     def _register_to_cluster(self):
         
+        self.rhc_status = RhcStatus(is_server=False,
+            namespace=self.namespace, 
+            verbose=self._verbose, 
+            vlevel=VLevel.V2,
+            with_torch_view=False, 
+            with_gpu_mirror=False)
+        self.rhc_status.run() # rhc status (reg. flags, failure, tot cost, tot cnstrl viol, etc...)
+
         # acquire semaphores since we have to perform non-atomic operations
         # on the whole memory views
         self.rhc_status.registration.data_sem_acquire()
         self.rhc_status.controllers_counter.data_sem_acquire()
         self.rhc_status.controllers_counter.synch_all(retry = True,
                                                 read = True)
-        
         available_spots = self.rhc_status.cluster_size
+        # from here on all pre registration ops can be done
 
         # incrementing cluster controllers counter
         controllers_counter = self.rhc_status.controllers_counter.get_numpy_mirror()
@@ -447,11 +460,22 @@ class RHController(ABC):
                     exception,
                     LogType.EXCEP,
                     throw_when_excep = True) 
-                    
+        
+        # now we can register -> it's good practice to do potentially
+        # heave ops like rhc initialization here, once we know it's worth it
+        
         # increment controllers counter
         controllers_counter += 1 
-        self.rhc_status.controllers_counter.synch_all(retry = True,
-                                                read = False) # writes to shared mem
+        
+        self._remote_term = SharedTWrapper(namespace=self.namespace,
+            basename="RemoteTermination",
+            is_server=False,
+            verbose = self._verbose, 
+            vlevel = VLevel.V2,
+            with_gpu_mirror=False,
+            with_torch_view=True,
+            dtype=dtype.Bool)
+        self._remote_term.run()
         
         # read current registration state
         self.rhc_status.registration.synch_all(retry = True,
@@ -461,9 +485,63 @@ class RHController(ABC):
         self._class_name_base = self._class_name_base+str(self.controller_index)
         self.controller_index_np = np.array(self.controller_index)
 
-        registrations[self.controller_index, 0] = True
-        self.rhc_status.registration.synch_all(retry = True,
-                                read = False) # register
+        # other initializations
+        self._init_states() # initializes shared mem. states
+        self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
+                                        verbose=self._verbose,
+                                        vlevel=VLevel.V2) # remote triggering
+        self._remote_triggerer.run()
+        self.cluster_stats = RhcProfiling(is_server=False, 
+                                    name=self.namespace,
+                                    verbose=self._verbose,
+                                    vlevel=VLevel.V2,
+                                    safe=True) # profiling data
+        self.cluster_stats.run()
+        self.cluster_stats.synch_info()
+        self._init_problem() # we call the child's initialization method for the actual problem
+        self._create_jnt_maps()
+        self.init_rhc_task_cmds() # initializes rhc interface to external commands (defined by child class)
+        self._consinstency_checks() # sanity checks
+
+        if self._debug:
+            # internal solution is published on shared mem
+            # we assume the user has made available the cost
+            # and constraint data at this point (e.g. through
+            # the solution of a bootstrap)
+            cost_data = self._get_cost_data()
+            constr_data = self._get_constr_data()
+            config = RhcInternal.Config(is_server=True, 
+                        enable_q= True, 
+                        enable_v=True, 
+                        enable_a=True, 
+                        enable_a_dot=False, 
+                        enable_f=True,
+                        enable_f_dot=False, 
+                        enable_eff=False, 
+                        cost_names=cost_data[0], 
+                        cost_dims=cost_data[1],
+                        constr_names=constr_data[0],
+                        constr_dims=constr_data[1],
+                        )
+            self.rhc_internal = RhcInternal(config=config, 
+                                    namespace=self.namespace,
+                                    rhc_index = self.controller_index,
+                                    n_contacts=self.n_contacts,
+                                    n_jnts=self.n_dofs,
+                                    jnt_names=self._controller_side_jnt_names,
+                                    n_nodes=self._n_nodes,
+                                    verbose = self._verbose,
+                                    vlevel=VLevel.V2,
+                                    force_reconnection=True,
+                                    safe=True)
+            self.rhc_internal.run()
+
+        if self._homer is None:
+            self._init_robot_homer() # call this in case it wasn't called by child
+        self.set_cmds_to_homing()
+
+        self._robot_mass = self._get_robot_mass() # uses child class implemented method
+        self._contact_f_scale = self._get_robot_mass() * 9.81
 
         # writing some static info about this controller
         self.rhc_status.rhc_static_info.synch_all(retry = True,
@@ -480,8 +558,22 @@ class RHController(ABC):
             data_type="nnodes",
             rhc_idxs=self.controller_index_np,
             gpu=False)
+        # writing some static rhc info which is only available after problem init
+        self.rhc_status.rhc_static_info.set(data=np.array(len(self._get_contacts())),
+            data_type="ncontacts",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        self.rhc_status.rhc_static_info.set(data=np.array(self.robot_mass()),
+            data_type="robot_mass",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        self.rhc_status.rhc_static_info.set(data=np.array(self._pred_node_idx),
+            data_type="pred_node_idx",
+            rhc_idxs=self.controller_index_np,
+            gpu=False)
+        
         self.rhc_status.rhc_static_info.synch_all(retry=True,
-            read=False) # write all to shared mem
+            read=False) # write all static info to shared mem
         
         Journal.log(self._class_name_base,
                     "_register_to_cluster",
@@ -489,12 +581,19 @@ class RHController(ABC):
                     LogType.STAT,
                     throw_when_excep = True)
 
+        # actually register to cluster
+        self.rhc_status.controllers_counter.synch_all(retry = True,
+                                                read = False) # writes to shared mem
+        registrations[self.controller_index, 0] = True
+        self.rhc_status.registration.synch_all(retry = True,
+                                read = False) 
+        
+        self._registered = True
+
         # we can now release everything
         self.rhc_status.controllers_counter.data_sem_release()
         self.rhc_status.registration.data_sem_release()
         
-        self._registered = True
-                              
     def _unregister_from_cluster(self):
         
         if self._received_trigger:
@@ -568,7 +667,7 @@ class RHController(ABC):
             
     def _init(self):
 
-        stat = f"Initializing RHC controller " + \
+        stat = f"Trying to initialize RHC controller " + \
             f"with dt: {self._dt} s, t_horizon: {self._t_horizon} s, n_intervals: {self._n_intervals}"
         Journal.log(self._class_name_base,
                     "_init",
@@ -576,89 +675,11 @@ class RHController(ABC):
                     LogType.STAT,
                     throw_when_excep = True)
         
-        self._remote_term = SharedTWrapper(namespace=self.namespace,
-            basename="RemoteTermination",
-            is_server=False,
-            verbose = self._verbose, 
-            vlevel = VLevel.V2,
-            with_gpu_mirror=False,
-            with_torch_view=True,
-            dtype=dtype.Bool)
-        self._remote_term.run()
-        
-        self.rhc_status = RhcStatus(is_server=False,
-            namespace=self.namespace, 
-            verbose=self._verbose, 
-            vlevel=VLevel.V2,
-            with_torch_view=False, 
-            with_gpu_mirror=False)
-        self.rhc_status.run() # rhc status (reg. flags, failure, tot cost, tot cnstrl viol, etc...)
         self._register_to_cluster() # registers the controller to the cluster
-        self._init_states() # initializes shared mem. states
-        self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
-                                        verbose=self._verbose,
-                                        vlevel=VLevel.V2) # remote triggering
-        self._remote_triggerer.run()
-        self.cluster_stats = RhcProfiling(is_server=False, 
-                                    name=self.namespace,
-                                    verbose=self._verbose,
-                                    vlevel=VLevel.V2,
-                                    safe=True) # profiling data
-        self.cluster_stats.run()
-        self.cluster_stats.synch_info()
-        self._init_problem() # we call the child's initialization method for the actual problem
-        self._create_jnt_maps()
-        self.init_rhc_task_cmds() # initializes rhc interface to external commands (defined by child class)
-        self._consinstency_checks() # sanity checks
-
-        if self._debug:
-            # internal solution is published on shared mem
-            # we assume the user has made available the cost
-            # and constraint data at this point (e.g. through
-            # the solution of a bootstrap)
-            cost_data = self._get_cost_data()
-            constr_data = self._get_constr_data()
-            config = RhcInternal.Config(is_server=True, 
-                        enable_q= True, 
-                        enable_v=True, 
-                        enable_a=True, 
-                        enable_a_dot=False, 
-                        enable_f=True,
-                        enable_f_dot=False, 
-                        enable_eff=False, 
-                        cost_names=cost_data[0], 
-                        cost_dims=cost_data[1],
-                        constr_names=constr_data[0],
-                        constr_dims=constr_data[1],
-                        )
-            self.rhc_internal = RhcInternal(config=config, 
-                                    namespace=self.namespace,
-                                    rhc_index = self.controller_index,
-                                    n_contacts=self.n_contacts,
-                                    n_jnts=self.n_dofs,
-                                    jnt_names=self._controller_side_jnt_names,
-                                    n_nodes=self._n_nodes,
-                                    verbose = self._verbose,
-                                    vlevel=VLevel.V2,
-                                    force_reconnection=True,
-                                    safe=True)
-            self.rhc_internal.run()
-
-        if self._homer is None:
-            self._init_robot_homer() # call this in case it wasn't called by child
-        self.set_cmds_to_homing()
-
-        self._robot_mass = self._get_robot_mass() # uses child class implemented method
-        self._contact_f_scale = self._get_robot_mass() * 9.81
-
-        self.rhc_status.rhc_static_info.set(data=np.array(len(self._get_contacts())),
-            data_type="ncontacts",
-            rhc_idxs=self.controller_index_np,
-            gpu=False)
         
         Journal.log(self._class_name_base,
                     "_init",
-                    f"RHC controller initialized with index {self.controller_index}",
+                    f"RHC controller initialized with cluster index {self.controller_index}",
                     LogType.STAT,
                     throw_when_excep = True)
 

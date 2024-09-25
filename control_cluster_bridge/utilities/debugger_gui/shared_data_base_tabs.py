@@ -1173,7 +1173,7 @@ class RHCStatus(SharedDataWindow):
 
     def _post_shared_init(self):
         
-        self.grid_n_rows = 9 + int(self.shared_data_clients[0].n_contacts/2)
+        self.grid_n_rows = 10 + int(self.shared_data_clients[0].n_contacts/2)
 
         self.grid_n_cols = 2
 
@@ -1339,17 +1339,19 @@ class RHCStatus(SharedDataWindow):
                                         legend_list=["f_x", "f_y", "f_z"], 
                                         ylabel="[float]"))
 
+
+        dt_leg = ["dts_" + item for item in cluster_idx_legend]
         self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
-                n_data =1,
+                n_data=1,
                 update_data_dt=self.update_data_dt, 
                 update_plot_dt=self.update_plot_dt,
                 window_duration=self.window_duration, 
                 parent=None, 
                 base_name=f"Rhc static info - dts", 
                 window_buffer_factor=self.window_buffer_factor, 
-                legend_list=["dts"], 
+                legend_list=dt_leg, 
                 ylabel="[float/int]"))
-
+        h_leg = ["horizon_" + item for item in cluster_idx_legend]
         self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
                 n_data =1,
                 update_data_dt=self.update_data_dt, 
@@ -1358,9 +1360,9 @@ class RHCStatus(SharedDataWindow):
                 parent=None, 
                 base_name=f"Rhc static info - horizons", 
                 window_buffer_factor=self.window_buffer_factor, 
-                legend_list=["horizons"], 
+                legend_list=h_leg, 
                 ylabel="[float/int]"))
-        
+        nnodes_leg = ["nnodes_" + item for item in cluster_idx_legend]
         self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
                 n_data =1,
                 update_data_dt=self.update_data_dt, 
@@ -1369,9 +1371,42 @@ class RHCStatus(SharedDataWindow):
                 parent=None, 
                 base_name=f"Rhc static info - nnodes", 
                 window_buffer_factor=self.window_buffer_factor, 
-                legend_list=["nnodes"], 
+                legend_list=nnodes_leg, 
                 ylabel="[float/int]"))
-                
+        ncont_leg = ["ncontacts_" + item for item in cluster_idx_legend]
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                n_data =1,
+                update_data_dt=self.update_data_dt, 
+                update_plot_dt=self.update_plot_dt,
+                window_duration=self.window_duration, 
+                parent=None, 
+                base_name=f"Rhc static info - n_contacts", 
+                window_buffer_factor=self.window_buffer_factor, 
+                legend_list=ncont_leg, 
+                ylabel="[float/int]"))
+        mass_leg = ["mass_" + item for item in cluster_idx_legend]
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                n_data =1,
+                update_data_dt=self.update_data_dt, 
+                update_plot_dt=self.update_plot_dt,
+                window_duration=self.window_duration, 
+                parent=None, 
+                base_name=f"Rhc static info - robot mass", 
+                window_buffer_factor=self.window_buffer_factor,
+                legend_list=mass_leg,
+                ylabel="[float/int]"))
+        pred_idx_leg = ["rhc_pred_idx_" + item for item in cluster_idx_legend]
+        self.rt_plotters.append(RtPlotWindow(data_dim=cluster_size,
+                n_data =1,
+                update_data_dt=self.update_data_dt, 
+                update_plot_dt=self.update_plot_dt,
+                window_duration=self.window_duration, 
+                parent=None, 
+                base_name=f"Rhc static info - rhc prediction idx", 
+                window_buffer_factor=self.window_buffer_factor,
+                legend_list=pred_idx_leg,
+                ylabel="[float/int]"))
+        
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
         self.grid.addFrame(self.rt_plotters[2].base_frame, 1, 0)
@@ -1402,6 +1437,9 @@ class RHCStatus(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[self.final_idx+1].base_frame, self.final_row+1, 0)
         self.grid.addFrame(self.rt_plotters[self.final_idx+2].base_frame, self.final_row+1, 1)
         self.grid.addFrame(self.rt_plotters[self.final_idx+3].base_frame, self.final_row+2, 0)
+        self.grid.addFrame(self.rt_plotters[self.final_idx+4].base_frame, self.final_row+2, 1)
+        self.grid.addFrame(self.rt_plotters[self.final_idx+5].base_frame, self.final_row+3, 0)
+        self.grid.addFrame(self.rt_plotters[self.final_idx+6].base_frame, self.final_row+3, 1)
 
     def _finalize_grid(self):
         
@@ -1503,5 +1541,9 @@ class RHCStatus(SharedDataWindow):
             self.rt_plotters[self.final_idx+1].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 0])
             self.rt_plotters[self.final_idx+2].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 1])
             self.rt_plotters[self.final_idx+3].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 2])
+            self.rt_plotters[self.final_idx+4].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 3])
+            self.rt_plotters[self.final_idx+5].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 4])
+            self.rt_plotters[self.final_idx+6].rt_plot_widget.update(self.shared_data_clients[0].rhc_static_info.get_numpy_mirror()[:, 5])
+
 
             

@@ -762,7 +762,8 @@ class RhcStatus(SharedDataBase):
                 with_torch_view: bool = False):
             
             basename = "RhcStaticInfo" # hardcoded
-            self.n_data = 4 # rhc dts, rhc horizon length, rhc n nodes, ncontacts
+            self.n_data = 6 # rhc dts, rhc horizon length, rhc n nodes, ncontacts,
+            # robot mass, pred node idx
             
             self._n_rhcs = cluster_size
 
@@ -770,11 +771,15 @@ class RhcStatus(SharedDataBase):
             self._horizons = None
             self._nnodes = None
             self._ncontacts = None
+            self._robot_mass = None
+            self._pred_node_idx = None
 
             self._dts_gpu = None
             self._horizons_gpu = None
             self._nnodes_gpu = None
             self._ncontacts_gpu = None
+            self._robot_mass_gpu = None
+            self._pred_node_idx_gpu = None
 
             super().__init__(namespace = namespace,
                 basename = basename,
@@ -804,11 +809,16 @@ class RhcStatus(SharedDataBase):
                 self._horizons = self.get_torch_mirror()[:, 1:2].view(self._n_rhcs, 1)
                 self._nnodes = self.get_torch_mirror()[:, 2:3].view(self._n_rhcs, 1)
                 self._ncontacts = self.get_torch_mirror()[:, 3:4].view(self._n_rhcs, 1)
+                self._robot_mass = self.get_torch_mirror()[:, 4:5].view(self._n_rhcs, 1)
+                self._pred_node_idx = self.get_torch_mirror()[:, 5:6].view(self._n_rhcs, 1)
+
             else:
                 self._dts = self.get_numpy_mirror()[:, 0:1].view()
                 self._horizons = self.get_numpy_mirror()[:, 1:2].view()
                 self._nnodes = self.get_numpy_mirror()[:, 2:3].view()
                 self._ncontacts = self.get_numpy_mirror()[:, 3:4].view()
+                self._robot_mass = self.get_numpy_mirror()[:, 4:5].view()
+                self._pred_node_idx = self.get_numpy_mirror()[:, 5:6].view()
             
             if self.gpu_mirror_exists():
                 # gpu views 
@@ -816,6 +826,8 @@ class RhcStatus(SharedDataBase):
                 self._horizons_gpu = self._gpu_mirror[:, 1:2].view(self._n_rhcs, 1)
                 self._nnodes_gpu = self._gpu_mirror[:, 2:3].view(self._n_rhcs, 1)
                 self._ncontacts_gpu = self._gpu_mirror[:, 3:4].view(self._n_rhcs, 1)
+                self._robot_mass_gpu = self._gpu_mirror[:, 4:5].view(self._n_rhcs, 1)
+                self._pred_node_idx_gpu= self._gpu_mirror[:, 5:6].view(self._n_rhcs, 1)
 
         def _retrieve_data(self,
                 name: str,
@@ -829,7 +841,11 @@ class RhcStatus(SharedDataBase):
                 elif name == "nnodes":
                     return self._nnodes
                 elif name == "ncontacts":
-                    return self._nnodes
+                    return self._ncontacts
+                elif name == "robot_mass":
+                    return self._robot_mass
+                elif name == "pred_node_idx":
+                    return self._pred_node_idx
                 else:
                     return None
             else:
@@ -840,7 +856,11 @@ class RhcStatus(SharedDataBase):
                 elif name == "nnodes":
                     return self._nnodes_gpu
                 elif name == "ncontacts":
-                    return self._nnodes_gpu
+                    return self._ncontacts_gpu
+                elif name == "robot_mass":
+                    return self._robot_mass_gpu
+                elif name == "pred_node_idx":
+                    return self._pred_node_idx_gpu
                 else:
                     return None
         
