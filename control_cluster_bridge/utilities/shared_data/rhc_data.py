@@ -788,7 +788,7 @@ class RhcStatus(SharedDataBase):
                 n_cols = self.n_data, 
                 verbose = verbose, 
                 vlevel = vlevel,
-                safe = False, # boolean operations are atomic on 64 bit systems
+                safe = True,
                 dtype=dtype.Float,
                 force_reconnection=force_reconnection,
                 with_gpu_mirror=with_gpu_mirror,
