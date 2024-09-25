@@ -461,12 +461,25 @@ class RHController(ABC):
                     LogType.EXCEP,
                     throw_when_excep = True) 
         
-        # now we can register -> it's good practice to do potentially
-        # heave ops like rhc initialization here, once we know it's worth it
-        
+        # now we can register 
+
         # increment controllers counter
         controllers_counter += 1 
+
+        # actually register to cluster
+        self.rhc_status.controllers_counter.synch_all(retry = True,
+                                                read = False) # writes to shared mem
+        registrations[self.controller_index, 0] = True
+        self.rhc_status.registration.synch_all(retry = True,
+                                read = False) 
         
+        self._registered = True
+
+        # we can now release everything so that other controllers can register
+        self.rhc_status.controllers_counter.data_sem_release()
+        self.rhc_status.registration.data_sem_release()
+        
+        # now all heavy stuff that would otherwise make the registration slow
         self._remote_term = SharedTWrapper(namespace=self.namespace,
             basename="RemoteTermination",
             is_server=False,
@@ -487,10 +500,6 @@ class RHController(ABC):
 
         # other initializations
         self._init_states() # initializes shared mem. states
-        self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
-                                        verbose=self._verbose,
-                                        vlevel=VLevel.V2) # remote triggering
-        self._remote_triggerer.run()
         self.cluster_stats = RhcProfiling(is_server=False, 
                                     name=self.namespace,
                                     verbose=self._verbose,
@@ -575,24 +584,17 @@ class RHController(ABC):
         self.rhc_status.rhc_static_info.synch_all(retry=True,
             read=False) # write all static info to shared mem
         
+        # for last we create the trigger client
+        self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
+                                        verbose=self._verbose,
+                                        vlevel=VLevel.V2) # remote triggering
+        self._remote_triggerer.run()
+
         Journal.log(self._class_name_base,
                     "_register_to_cluster",
                     "Done",
                     LogType.STAT,
                     throw_when_excep = True)
-
-        # actually register to cluster
-        self.rhc_status.controllers_counter.synch_all(retry = True,
-                                                read = False) # writes to shared mem
-        registrations[self.controller_index, 0] = True
-        self.rhc_status.registration.synch_all(retry = True,
-                                read = False) 
-        
-        self._registered = True
-
-        # we can now release everything
-        self.rhc_status.controllers_counter.data_sem_release()
-        self.rhc_status.registration.data_sem_release()
         
     def _unregister_from_cluster(self):
         
