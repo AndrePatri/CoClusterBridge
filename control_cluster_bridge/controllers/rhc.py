@@ -775,7 +775,7 @@ class RHController(ABC):
         # write robot commands
         self.robot_cmds.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.jnts_state.n_cols,
                                 read=False) # jnt state
-        self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
+        self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.contact_wrenches.n_cols,
                                 read=False) # contact state
         self.robot_cmds.root_state.synch_retry(row_index=self.controller_index, col_index=0, n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
                                 read=False) # root state, in case it was written
