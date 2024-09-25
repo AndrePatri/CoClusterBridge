@@ -445,6 +445,7 @@ class RHController(ABC):
         self.rhc_status.controllers_counter.data_sem_acquire()
         self.rhc_status.controllers_counter.synch_all(retry = True,
                                                 read = True)
+
         available_spots = self.rhc_status.cluster_size
         # from here on all pre registration ops can be done
 
@@ -468,7 +469,7 @@ class RHController(ABC):
 
         # actually register to cluster
         self.rhc_status.controllers_counter.synch_all(retry = True,
-                                                read = False) # writes to shared mem
+            read = False) # writes to shared mem
         
         # read current registration state
         self.rhc_status.registration.synch_all(retry = True,
@@ -480,12 +481,13 @@ class RHController(ABC):
         registrations[self.controller_index, 0] = True
         self.rhc_status.registration.synch_all(retry = True,
                                         read = False) 
-        self._registered = True
 
         # we can now release everything so that other controllers can register
         self.rhc_status.controllers_counter.data_sem_release()
         self.rhc_status.registration.data_sem_release()
-        
+
+        self._registered = True
+
         # now all heavy stuff that would otherwise make the registration slow
         self._remote_term = SharedTWrapper(namespace=self.namespace,
             basename="RemoteTermination",
@@ -496,8 +498,6 @@ class RHController(ABC):
             with_torch_view=True,
             dtype=dtype.Bool)
         self._remote_term.run()
-        
-        
 
         # other initializations
         self._init_states() # initializes shared mem. states
@@ -573,7 +573,7 @@ class RHController(ABC):
             data_type="ncontacts",
             rhc_idxs=self.controller_index_np,
             gpu=False)
-        self.rhc_status.rhc_static_info.set(data=np.array(self.robot_mass()),
+        self.rhc_status.rhc_static_info.set(data=np.array(self.controller_index_np),
             data_type="robot_mass",
             rhc_idxs=self.controller_index_np,
             gpu=False)
@@ -582,8 +582,9 @@ class RHController(ABC):
             rhc_idxs=self.controller_index_np,
             gpu=False)
         
-        self.rhc_status.rhc_static_info.synch_all(retry=True,
-            read=False) # write all static info to shared mem
+        self.rhc_status.rhc_static_info.synch_retry(row_index=self.controller_index, 
+            col_index=0, n_rows=1, n_cols=self.rhc_status.rhc_static_info.n_cols,
+            read=False)
         
         # for last we create the trigger client
         self._remote_triggerer = RemoteTriggererClnt(namespace=self.namespace,
@@ -593,7 +594,7 @@ class RHController(ABC):
 
         Journal.log(self._class_name_base,
                     "_register_to_cluster",
-                    "Done",
+                    f"controller {self.controller_index_np} registered",
                     LogType.STAT,
                     throw_when_excep = True)
         
