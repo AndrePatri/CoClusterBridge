@@ -525,8 +525,7 @@ class ControlClusterServer(ABC):
             # n_envs x 3232 bit -> with 160 env -> 0.51712MB
             # if the controllers runs at for example 0.03s
             # -> 17.24 MB/s of TX from GPU
-            self._robot_states.synch_mirror(from_gpu=True,
-                non_blocking=False)
+            self._robot_states.synch_mirror(from_gpu=True)
         else:
             # only write to shared mem (gpu mirror is not used)
             self._robot_states.synch_to_shared_mem()
@@ -535,9 +534,10 @@ class ControlClusterServer(ABC):
 
         if self._using_gpu:
             self._rhc_cmds.synch_mirror(from_gpu=False,
-                non_blocking=False) # read from shared mem and then copy to GPU
+                non_blocking=True) # read from shared mem and then copy to GPU
             # in a similar way to the rhc_state, this requires a copy, this time, from CPU to GPU (RX) of
             # n_envs x 3232 bit / update_dt
+            # we can do the copy as non_blocking since from CPU->GPU it's safe
         else:
             # only read cmds from shared mem
             self._rhc_cmds.synch_from_shared_mem()
