@@ -842,23 +842,24 @@ class FullRobState(SharedDataBase):
         self._is_running = True
         
     def synch_mirror(self,
-                from_gpu: bool):
+                from_gpu: bool,
+                non_blocking: bool = False):
 
         if self._with_gpu_mirror:
             if from_gpu:
                 # synchs root_state and jnt_state (which will normally live on GPU)
                 # with the shared state data using the aggregate view (normally on CPU)
                 # this requires (not so nice) COPIES FROM GPU TO CPU
-                self.root_state.synch_mirror(from_gpu=True)
-                self.jnts_state.synch_mirror(from_gpu=True)
-                self.contact_wrenches.synch_mirror(from_gpu=True)
+                self.root_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
+                self.jnts_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
+                self.contact_wrenches.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.synch_to_shared_mem()
             else:
                 self.synch_from_shared_mem()
                 # copy from CPU to GPU
-                self.root_state.synch_mirror(from_gpu=False)
-                self.jnts_state.synch_mirror(from_gpu=False)
-                self.contact_wrenches.synch_mirror(from_gpu=False)
+                self.root_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
+                self.jnts_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
+                self.contact_wrenches.synch_mirror(from_gpu=False,non_blocking=non_blocking)
 
             #torch.cuda.synchronize() # this way we ensure that after this the state on GPU
             # is fully updated
