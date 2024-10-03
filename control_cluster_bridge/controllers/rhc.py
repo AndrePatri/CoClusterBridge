@@ -16,18 +16,21 @@
 # along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from abc import ABC, abstractmethod
+# from perf_sleep.pyperfsleep import PerfSleep
+# from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
 
 import time 
+
+import numpy as np
 
 from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds, RhcPred
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
 from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
 from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererClnt,RemoteTriggererSrvr
+from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererClnt
 
 from control_cluster_bridge.utilities.homing import RobotHomer
-from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
 
 from control_cluster_bridge.utilities.math_utils import world2base_frame
 
@@ -36,11 +39,8 @@ from SharsorIPCpp.PySharsorIPC import Journal, LogType
 from SharsorIPCpp.PySharsor.wrappers.shared_data_view import SharedTWrapper
 from SharsorIPCpp.PySharsorIPC import dtype
 
-from typing import List, TypeVar, Union
-
-import numpy as np
-
-from perf_sleep.pyperfsleep import PerfSleep
+from typing import List
+# from typing import TypeVar, Union
 
 import signal
 import os
@@ -58,7 +58,7 @@ class RHController(ABC):
             debug = False,
             timeout_ms: int = 60000,
             allow_less_jnts: bool = True):
-        
+    
         signal.signal(signal.SIGINT, self._handle_sigint)
 
         self._allow_less_jnts = allow_less_jnts # whether to allow less joints in rhc controller than the ones on the robot
@@ -136,6 +136,7 @@ class RHController(ABC):
         self._homer_env = None # used for setting homing to jnts not contained in rhc prb
 
         self._class_name_base = f"{self.__class__.__name__}"
+
         self._init()
 
         if not hasattr(self, '_rhc_fpaths'):
@@ -343,6 +344,7 @@ class RHController(ABC):
                 self.rhc_status.trigger.write_retry(False, 
                     row_index=self.controller_index,
                     col_index=0) # allow next solution trigger 
+            
             self._remote_triggerer.ack() # send ack signal to server
             self._received_trigger = False
             
@@ -491,11 +493,12 @@ class RHController(ABC):
             verbose = self._verbose, 
             vlevel = VLevel.V2,
             with_gpu_mirror=False,
-            with_torch_view=True,
+            with_torch_view=False,
             dtype=dtype.Bool)
         self._remote_term.run()
 
         # other initializations
+        
         self._init_states() # initializes shared mem. states
         self.cluster_stats = RhcProfiling(is_server=False, 
                                     name=self.namespace,
