@@ -287,10 +287,6 @@ class RHController(ABC):
                     f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
                     LogType.INFO,
                     throw_when_excep = True) 
-            
-        self.rhc_status.trigger.write_retry(False, 
-                                row_index=self.controller_index,
-                                col_index=0) # allow next solution trigger 
 
     def _rhc_min(self):
 
@@ -320,9 +316,6 @@ class RHController(ABC):
                     
         self._write_cmds_from_sol() # we update the views of the cmds
         # from the latest solution even if failed
-        self.rhc_status.trigger.write_retry(False, 
-                                row_index=self.controller_index,
-                                col_index=0) # allow next solution trigger
         
     def solve(self):
         
@@ -347,6 +340,9 @@ class RHController(ABC):
             if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
                         col_index=0)[0]:
                 self._rhc() # run solution
+                self.rhc_status.trigger.write_retry(False, 
+                    row_index=self.controller_index,
+                    col_index=0) # allow next solution trigger 
             self._remote_triggerer.ack() # send ack signal to server
             self._received_trigger = False
             
