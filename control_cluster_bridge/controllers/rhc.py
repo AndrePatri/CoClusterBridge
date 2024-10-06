@@ -682,7 +682,7 @@ class RHController(ABC):
         
         Journal.log(self._class_name_base,
                     "_init",
-                    f"RHC controller initialized with cluster index {self.controller_index}",
+                    f"RHC controller initialized with cluster index {self.controller_index} on process {os.getpid()}",
                     LogType.STAT,
                     throw_when_excep = True)
 
