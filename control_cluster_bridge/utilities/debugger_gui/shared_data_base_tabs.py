@@ -380,7 +380,7 @@ class RHCRefs(SharedDataWindow):
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
             window_duration = window_duration,
-            grid_n_rows = 5,
+            grid_n_rows = 4,
             grid_n_cols = 2,
             window_buffer_factor = window_buffer_factor,
             namespace = namespace,
@@ -464,6 +464,48 @@ class RHCRefs(SharedDataWindow):
                     legend_list=[""], 
                     ylabel="[int]"))
         
+        contact_pos_legend = [""] * self.shared_data_clients[0].rob_refs.contact_pos.n_cols
+        contact_names = self.shared_data_clients[0].rob_refs.contact_names()
+
+        for i in range(self.shared_data_clients[0].n_contacts()):
+            contact_pos_legend[i] = "p_x - " + contact_names[i]
+        for i in range(self.shared_data_clients[0].n_contacts()):
+            contact_pos_legend[self.shared_data_clients[0].n_contacts()+i] = "p_y - " + contact_names[i]
+        for i in range(self.shared_data_clients[0].n_contacts()):
+            contact_pos_legend[2*self.shared_data_clients[0].n_contacts()+i] = "p_z - " + contact_names[i]
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=len(contact_pos_legend),
+                    n_data = 1, 
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Contact pos",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=contact_pos_legend, 
+                    ylabel="[m]"))
+        
+        contact_vel_legend = [""] * self.shared_data_clients[0].rob_refs.contact_vel.n_cols
+        contact_names = self.shared_data_clients[0].rob_refs.contact_names()
+
+        for i in range(self.shared_data_clients[0].n_contacts()):
+            contact_vel_legend[i] = "v_x - " + contact_names[i]
+        for i in range(self.shared_data_clients[0].n_contacts()):
+            contact_vel_legend[self.shared_data_clients[0].n_contacts()+i] = "v_y - " + contact_names[i]
+        for i in range(self.shared_data_clients[0].n_contacts()):
+            contact_vel_legend[2*self.shared_data_clients[0].n_contacts()+i] = "v_z - " + contact_names[i]
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=len(contact_vel_legend),
+                    n_data = 1, 
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Contact vel",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=contact_vel_legend, 
+                    ylabel="[m]"))
+        
         # root state
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
         self.grid.addFrame(self.rt_plotters[1].base_frame, 0, 1)
@@ -471,6 +513,8 @@ class RHCRefs(SharedDataWindow):
         self.grid.addFrame(self.rt_plotters[3].base_frame, 1, 1)
         self.grid.addFrame(self.rt_plotters[4].base_frame, 2, 0)
         self.grid.addFrame(self.rt_plotters[5].base_frame, 2, 1)
+        self.grid.addFrame(self.rt_plotters[6].base_frame, 3, 0)
+        self.grid.addFrame(self.rt_plotters[7].base_frame, 3, 1)
         
     def _init_shared_data(self):
         
@@ -535,6 +579,10 @@ class RHCRefs(SharedDataWindow):
             phase_id = self.shared_data_clients[0].phase_id.get_numpy_mirror()
             self.rt_plotters[4].rt_plot_widget.update(contact_flags[index, :])
             self.rt_plotters[5].rt_plot_widget.update(phase_id[index, :])
+
+            # contact_pos e vel
+            self.rt_plotters[6].rt_plot_widget.update(self.shared_data_clients[0].rob_refs.contact_pos.get(data_type="p", robot_idxs=np_idx).flatten())
+            self.rt_plotters[7].rt_plot_widget.update(self.shared_data_clients[0].rob_refs.contact_vel.get(data_type="v", robot_idxs=np_idx).flatten())
 
 class RHCInternal(SharedDataWindow):
 
