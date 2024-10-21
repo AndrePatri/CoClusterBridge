@@ -67,7 +67,9 @@ class ControlClusterServer(ABC):
         self._using_gpu = use_gpu
         if self._using_gpu:
             self._torch_device = torch.device("cuda")
-
+        else:
+            self._torch_device = torch.device("cpu"
+                                              )
         # shared mem objects
         self._namespace = namespace # unique ID for shared memory and cluster
         self._force_reconnection = force_reconnection
@@ -154,7 +156,7 @@ class ControlClusterServer(ABC):
                                 n_contacts=self._n_contacts,
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
-                                with_gpu_mirror=True,
+                                with_gpu_mirror=self._using_gpu,
                                 with_torch_view=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
@@ -167,7 +169,7 @@ class ControlClusterServer(ABC):
                                 n_contacts=self._n_contacts,
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
-                                with_gpu_mirror=True,
+                                with_gpu_mirror=self._using_gpu,
                                 with_torch_view=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
@@ -180,7 +182,7 @@ class ControlClusterServer(ABC):
                                 n_contacts=self._n_contacts,
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
-                                with_gpu_mirror=True,
+                                with_gpu_mirror=self._using_gpu,
                                 with_torch_view=True,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
@@ -194,7 +196,7 @@ class ControlClusterServer(ABC):
                             n_contacts=self._n_contacts,
                             jnt_names=self.jnt_names,
                             contact_names=self._contact_linknames,
-                            with_gpu_mirror = False,
+                            with_gpu_mirror = self._using_gpu,
                             with_torch_view=False,
                             force_reconnection = self._force_reconnection,
                             safe = False,
