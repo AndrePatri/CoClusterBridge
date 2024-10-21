@@ -639,7 +639,7 @@ class ContactWrenches(SharedTWrapper):
 
         internal_data = self._retrieve_data(name=data_type,
                     gpu=gpu)
-        
+        data_length=int(internal_data.shape[1]/self.n_contacts)
         if not contact_name in self.contact_names:
             contact_list = "\t".join(self.contact_names)
             exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
@@ -654,12 +654,12 @@ class ContactWrenches(SharedTWrapper):
             if contact_idx is None:
                 internal_data[:, :] = data
             else:
-                internal_data[:, (contact_idx * 3):((contact_idx+1) * 3)] = data
+                internal_data[:, (contact_idx*data_length):((contact_idx+1)*data_length)] = data
         else:
             if contact_idx is None:
                 internal_data[robot_idxs, :] = data
             else:
-                internal_data[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)] = data
+                internal_data[robot_idxs, (contact_idx*data_length):((contact_idx+1)*data_length)] = data
         
     def get(self,
             data_type: str,
@@ -669,7 +669,7 @@ class ContactWrenches(SharedTWrapper):
 
         internal_data = self._retrieve_data(name=data_type,
                     gpu=gpu)
-        
+        data_length=int(internal_data.shape[1]/self.n_contacts)
         if contact_name is not None:
             if not contact_name in self.contact_names:
                 contact_list = "\t".join(self.contact_names)
@@ -681,15 +681,451 @@ class ContactWrenches(SharedTWrapper):
                     throw_when_excep = True)
             contact_idx = self.contact_names.index(contact_name)
             if robot_idxs is None:
-                return internal_data[:, (contact_idx * 3):((contact_idx+1) * 3)]
+                return internal_data[:, (contact_idx*data_length):((contact_idx+1)*data_length)]
             else:
-                return internal_data[robot_idxs, (contact_idx * 3):((contact_idx+1) * 3)]
+                return internal_data[robot_idxs, (contact_idx*data_length):((contact_idx+1)*data_length)]
         else:
             if robot_idxs is None:
                 return internal_data[:, :]
             else:
                 return internal_data[robot_idxs, :]
+
+class ContactPos(SharedTWrapper):
+
+    def __init__(self,
+            namespace = "",
+            is_server = False, 
+            n_robots: int = None, 
+            n_contacts: int = None,
+            contact_names: List[str] = None,
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0,
+            safe: bool = True,
+            force_reconnection: bool = False,
+            with_gpu_mirror: bool = False,
+            with_torch_view: bool = False,
+            fill_value = 0):
+        
+        basename = "ContactPos"
+
+        self.n_robots = n_robots
+        self.n_contacts = n_contacts
+        self.contact_names = contact_names
+
+        if is_server:
+            self.shared_contact_names = StringTensorServer(length = self.n_contacts, 
+                                        basename = basename + "Names", 
+                                        name_space = namespace,
+                                        verbose = verbose, 
+                                        vlevel = vlevel,
+                                        safe = safe,
+                                        force_reconnection = force_reconnection)
+        else:
+            self.shared_contact_names = StringTensorClient(
+                                        basename = basename + "Names", 
+                                        name_space = namespace,
+                                        verbose = verbose, 
+                                        vlevel = vlevel,
+                                        safe = safe)
             
+        n_cols = self.n_contacts * 3 # cartesian pos * n_contats
+
+        super().__init__(namespace = namespace,
+            basename = basename,
+            is_server = is_server, 
+            n_rows = n_robots, 
+            n_cols = n_cols, 
+            dtype = sharsor_dtype.Float,
+            verbose = verbose, 
+            vlevel = vlevel,
+            fill_value = fill_value, 
+            safe = safe,
+            force_reconnection=force_reconnection,
+            with_gpu_mirror=with_gpu_mirror,
+            with_torch_view=with_torch_view)
+
+        self._p=None
+        self._p_x=None
+        self._p_y=None
+        self._p_z=None
+
+        self._p_gpu = None
+        self._p_x_gpu = None
+        self._p_y_gpu = None
+        self._p_z_gpu = None
+
+    def run(self):
+        
+        # overriding parent 
+
+        super().run()
+        
+        if not self.is_server:
+
+            self.n_robots = self.n_rows
+            self.n_contacts = int(self.n_cols/3)
+
+        self._init_views()
+
+        # retrieving contact names
+        self.shared_contact_names.run()
+
+        if self.is_server:
+            if self.contact_names is None:
+                self.contact_names = [""] * self.n_contacts
+            else:
+                if not len(self.contact_names) == self.n_contacts:
+                    exception = f"Joint names list length {len(self.contact_names)} " + \
+                        f"does not match the number of joints {self.n_contacts}"
+                    Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            written = self.shared_contact_names.write_vec(self.contact_names, 0)
+            if not written:
+                exception = "Could not write contact names on shared memory!"
+                Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+        else:
+            self.contact_names = [""] * self.n_contacts
+            while not self.shared_contact_names.read_vec(self.contact_names, 0):
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    "Could not read contact names on shared memory. Retrying...",
+                    LogType.WARN,
+                    throw_when_excep = True)
+            
+    def _init_views(self):
+
+        if self._with_torch_view:
+            self._p = self.get_torch_mirror()[:, :].view(self.n_robots, self.n_cols)
+            self._p_x = self.get_torch_mirror()[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
+            self._p_y = self.get_torch_mirror()[:, self.n_contacts:(2*self.n_contacts)].view(self.n_robots, self.n_contacts)
+            self._p_z = self.get_torch_mirror()[:, (2*self.n_contacts):(3*self.n_contacts)].view(self.n_robots, self.n_contacts)
+        else:
+            self._p = self.get_numpy_mirror()[:, :].view()
+            self._p_x = self.get_numpy_mirror()[:, 0:self.n_contacts].view()
+            self._p_y = self.get_numpy_mirror()[:, self.n_contacts:(2*self.n_contacts)].view()
+            self._p_z = self.get_numpy_mirror()[:, (2*self.n_contacts):(3*self.n_contacts)].view()
+
+        if self.gpu_mirror_exists():
+            self._p_gpu = self._gpu_mirror[:, 0:self.n_cols].view(self.n_robots, 
+                    self.n_cols)
+            self._p_x_gpu = self._gpu_mirror[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
+            self._p_y_gpu = self._gpu_mirror[:, self.n_contacts:(2*self.n_contacts)].view(self.n_robots, self.n_contacts)
+            self._p_z_gpu = self._gpu_mirror[:, (2*self.n_contacts):(3*self.n_contacts)].view(self.n_robots, self.n_contacts)
+            
+    def _retrieve_data(self,
+                name: str,
+                gpu: bool = False):
+        
+        if not gpu:
+            if name == "p":
+                return self._p
+            elif name == "p_x":
+                return self._p_x
+            elif name == "p_y":
+                return self._p_y
+            elif name == "p_z":
+                return self._p_z
+            else:
+                return None
+        else:
+            if name == "p":
+                return self._p_gpu
+            elif name == "p_x":
+                return self._p_x_gpu
+            elif name == "p_y":
+                return self._p_y_gpu
+            elif name == "p_z":
+                return self._p_z_gpu
+            else:
+                return None
+     
+    def set(self,
+            data,
+            data_type: str,
+            contact_name: str,
+            robot_idxs = None,
+            gpu: bool = False):
+
+        internal_data = self._retrieve_data(name=data_type,
+                    gpu=gpu)
+        data_length=int(internal_data.shape[1]/self.n_contacts)
+
+        if not contact_name in self.contact_names:
+            contact_list = "\t".join(self.contact_names)
+            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+            Journal.log(self.__class__.__name__,
+                "set_f_contact",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        contact_idx = self.contact_names.index(contact_name)
+        
+        if robot_idxs is None:
+            if contact_idx is None:
+                internal_data[:, :] = data
+            else:
+                internal_data[:, (contact_idx*data_length):(contact_idx+1)*data_length] = data
+        else:
+            if contact_idx is None:
+                internal_data[robot_idxs, :] = data
+            else:
+                internal_data[robot_idxs, contact_idx*data_length:(contact_idx+1)*data_length] = data
+        
+    def get(self,
+            data_type: str,
+            contact_name: str = None,
+            robot_idxs = None,
+            gpu: bool = False):
+
+        internal_data = self._retrieve_data(name=data_type,
+                    gpu=gpu)
+        data_length=int(internal_data.shape[1]/self.n_contacts)
+
+        if contact_name is not None:
+            if not contact_name in self.contact_names:
+                contact_list = "\t".join(self.contact_names)
+                exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+                Journal.log(self.__class__.__name__,
+                    "get_f_contact",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            contact_idx = self.contact_names.index(contact_name)
+            if robot_idxs is None:
+                return internal_data[:, (contact_idx*data_length):((contact_idx+1)*data_length)]
+            else:
+                return internal_data[robot_idxs, (contact_idx*data_length):((contact_idx+1)*data_length)]
+        else:
+            if robot_idxs is None:
+                return internal_data[:, :]
+            else:
+                return internal_data[robot_idxs, :]
+
+class ContactVel(SharedTWrapper):
+
+    def __init__(self,
+            namespace = "",
+            is_server = False, 
+            n_robots: int = None, 
+            n_contacts: int = None,
+            contact_names: List[str] = None,
+            verbose: bool = False, 
+            vlevel: VLevel = VLevel.V0,
+            safe: bool = True,
+            force_reconnection: bool = False,
+            with_gpu_mirror: bool = False,
+            with_torch_view: bool = False,
+            fill_value = 0):
+        
+        basename = "ContactVel"
+
+        self.n_robots = n_robots
+        self.n_contacts = n_contacts
+        self.contact_names = contact_names
+
+        if is_server:
+            self.shared_contact_names = StringTensorServer(length = self.n_contacts, 
+                                        basename = basename + "Names", 
+                                        name_space = namespace,
+                                        verbose = verbose, 
+                                        vlevel = vlevel,
+                                        safe = safe,
+                                        force_reconnection = force_reconnection)
+        else:
+            self.shared_contact_names = StringTensorClient(
+                                        basename = basename + "Names", 
+                                        name_space = namespace,
+                                        verbose = verbose, 
+                                        vlevel = vlevel,
+                                        safe = safe)
+            
+        n_cols = self.n_contacts * 3 # cartesian pos * n_contats
+
+        super().__init__(namespace = namespace,
+            basename = basename,
+            is_server = is_server, 
+            n_rows = n_robots, 
+            n_cols = n_cols, 
+            dtype = sharsor_dtype.Float,
+            verbose = verbose, 
+            vlevel = vlevel,
+            fill_value = fill_value, 
+            safe = safe,
+            force_reconnection=force_reconnection,
+            with_gpu_mirror=with_gpu_mirror,
+            with_torch_view=with_torch_view)
+
+        self._v=None
+        self._v_x=None
+        self._v_y=None
+        self._v_z=None
+
+        self._v_gpu = None
+        self._v_x_gpu = None
+        self._v_y_gpu = None
+        self._v_z_gpu = None
+
+    def run(self):
+        
+        # overriding parent 
+
+        super().run()
+        
+        if not self.is_server:
+
+            self.n_robots = self.n_rows
+            self.n_contacts = int(self.n_cols/3)
+
+        self._init_views()
+
+        # retrieving contact names
+        self.shared_contact_names.run()
+
+        if self.is_server:
+            if self.contact_names is None:
+                self.contact_names = [""] * self.n_contacts
+            else:
+                if not len(self.contact_names) == self.n_contacts:
+                    exception = f"Joint names list length {len(self.contact_names)} " + \
+                        f"does not match the number of joints {self.n_contacts}"
+                    Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+            written = self.shared_contact_names.write_vec(self.contact_names, 0)
+            if not written:
+                exception = "Could not write contact names on shared memory!"
+                Journal.log(self.__class__.__name__,
+                        "run",
+                        exception,
+                        LogType.EXCEP,
+                        throw_when_excep = True)
+        else:
+            self.contact_names = [""] * self.n_contacts
+            while not self.shared_contact_names.read_vec(self.contact_names, 0):
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    "Could not read contact names on shared memory. Retrying...",
+                    LogType.WARN,
+                    throw_when_excep = True)
+            
+    def _init_views(self):
+
+        if self._with_torch_view:
+            self._v = self.get_torch_mirror()[:, :].view(self.n_robots, self.n_cols)
+            self._v_x = self.get_torch_mirror()[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
+            self._v_y = self.get_torch_mirror()[:, self.n_contacts:(2*self.n_contacts)].view(self.n_robots, self.n_contacts)
+            self._v_z = self.get_torch_mirror()[:, (2*self.n_contacts):(3*self.n_contacts)].view(self.n_robots, self.n_contacts)
+        else:
+            self._v = self.get_numpy_mirror()[:, :].view()
+            self._v_x = self.get_numpy_mirror()[:, 0:self.n_contacts].view()
+            self._v_y = self.get_numpy_mirror()[:, self.n_contacts:(2*self.n_contacts)].view()
+            self._v_z = self.get_numpy_mirror()[:, (2*self.n_contacts):(3*self.n_contacts)].view()
+
+        if self.gpu_mirror_exists():
+            self._v_gpu = self._gpu_mirror[:, 0:self.n_cols].view(self.n_robots, 
+                    self.n_cols)
+            self._v_x_gpu = self._gpu_mirror[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
+            self._v_y_gpu = self._gpu_mirror[:, self.n_contacts:(2*self.n_contacts)].view(self.n_robots, self.n_contacts)
+            self._v_z_gpu = self._gpu_mirror[:, (2*self.n_contacts):(3*self.n_contacts)].view(self.n_robots, self.n_contacts)
+            
+    def _retrieve_data(self,
+                name: str,
+                gpu: bool = False):
+        
+        if not gpu:
+            if name == "v":
+                return self._v
+            elif name == "v_x":
+                return self._v_x
+            elif name == "v_y":
+                return self._v_y
+            elif name == "v_z":
+                return self._v_z
+            else:
+                return None
+        else:
+            if name == "v":
+                return self._v_gpu
+            elif name == "v_x":
+                return self._v_x_gpu
+            elif name == "v_y":
+                return self._v_y_gpu
+            elif name == "v_z":
+                return self._v_z_gpu
+            else:
+                return None
+     
+    def set(self,
+            data,
+            data_type: str,
+            contact_name: str,
+            robot_idxs = None,
+            gpu: bool = False):
+
+        internal_data = self._retrieve_data(name=data_type,
+                    gpu=gpu)
+        data_length=int(internal_data.shape[1]/self.n_contacts)
+
+        if not contact_name in self.contact_names:
+            contact_list = "\t".join(self.contact_names)
+            exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+            Journal.log(self.__class__.__name__,
+                "set_f_contact",
+                exception,
+                LogType.EXCEP,
+                throw_when_excep = True)
+        contact_idx = self.contact_names.index(contact_name)
+        
+        if robot_idxs is None:
+            if contact_idx is None:
+                internal_data[:, :] = data
+            else:
+                internal_data[:, (contact_idx*data_length):(contact_idx+1)*data_length] = data
+        else:
+            if contact_idx is None:
+                internal_data[robot_idxs, :] = data
+            else:
+                internal_data[robot_idxs, contact_idx*data_length:(contact_idx+1)*data_length] = data
+        
+    def get(self,
+            data_type: str,
+            contact_name: str = None,
+            robot_idxs = None,
+            gpu: bool = False):
+
+        internal_data = self._retrieve_data(name=data_type,
+                    gpu=gpu)
+        data_length=int(internal_data.shape[1]/self.n_contacts)
+
+        if contact_name is not None:
+            if not contact_name in self.contact_names:
+                contact_list = "\t".join(self.contact_names)
+                exception = f"Contact name {contact_name} not in contact list [{contact_list}]"
+                Journal.log(self.__class__.__name__,
+                    "get_f_contact",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
+            contact_idx = self.contact_names.index(contact_name)
+            if robot_idxs is None:
+                return internal_data[:, (contact_idx*data_length):((contact_idx+1)*data_length)]
+            else:
+                return internal_data[robot_idxs, (contact_idx*data_length):((contact_idx+1)*data_length)]
+        else:
+            if robot_idxs is None:
+                return internal_data[:, :]
+            else:
+                return internal_data[robot_idxs, :]
+                        
 class FullRobState(SharedDataBase):
 
     def __init__(self,
@@ -771,6 +1207,32 @@ class FullRobState(SharedDataBase):
                             with_torch_view=with_torch_view,
                             fill_value=fill_value)
         
+        self.contact_pos = ContactPos(namespace=self._namespace + self._basename, 
+                            is_server=self._is_server,
+                            n_robots=self._n_robots,
+                            n_contacts=self._n_contacts,
+                            contact_names=self._contact_names,
+                            verbose=self._verbose,
+                            vlevel=self._vlevel,
+                            safe=self._safe,
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror,
+                            with_torch_view=with_torch_view,
+                            fill_value=fill_value)
+
+        self.contact_vel = ContactVel(namespace=self._namespace + self._basename, 
+                            is_server=self._is_server,
+                            n_robots=self._n_robots,
+                            n_contacts=self._n_contacts,
+                            contact_names=self._contact_names,
+                            verbose=self._verbose,
+                            vlevel=self._vlevel,
+                            safe=self._safe,
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror,
+                            with_torch_view=with_torch_view,
+                            fill_value=fill_value)
+
         self._is_running = False
     
     def __del__(self):
@@ -780,7 +1242,9 @@ class FullRobState(SharedDataBase):
     def get_shared_mem(self):
         return [self.root_state.get_shared_mem(),
             self.jnts_state.get_shared_mem(),
-            self.contact_wrenches.get_shared_mem()]
+            self.contact_wrenches.get_shared_mem(),
+            self.contact_pos.get_shared_mem(),
+            self.contact_vel.get_shared_mem()]
     
     def n_robots(self):
 
@@ -824,6 +1288,8 @@ class FullRobState(SharedDataBase):
         self.jnts_state.run()
 
         self.contact_wrenches.run()
+        self.contact_pos.run()
+        self.contact_vel.run()
 
         if not self._is_server:
 
@@ -853,6 +1319,8 @@ class FullRobState(SharedDataBase):
                 self.root_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.jnts_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_wrenches.synch_mirror(from_gpu=True,non_blocking=non_blocking)
+                self.contact_pos.synch_mirror(from_gpu=True,non_blocking=non_blocking)
+                self.contact_vel.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.synch_to_shared_mem()
             else:
                 self.synch_from_shared_mem()
@@ -860,7 +1328,8 @@ class FullRobState(SharedDataBase):
                 self.root_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.jnts_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.contact_wrenches.synch_mirror(from_gpu=False,non_blocking=non_blocking)
-
+                self.contact_pos.synch_mirror(from_gpu=False,non_blocking=non_blocking)
+                self.contact_vel.synch_mirror(from_gpu=True,non_blocking=non_blocking)
             #torch.cuda.synchronize() # this way we ensure that after this the state on GPU
             # is fully updated
     
@@ -870,6 +1339,8 @@ class FullRobState(SharedDataBase):
         self.root_state.synch_all(read = True, retry = True)
         self.jnts_state.synch_all(read = True, retry = True)
         self.contact_wrenches.synch_all(read = True, retry = True)
+        self.contact_pos.synch_all(read = True, retry = True)
+        self.contact_vel.synch_all(read = True, retry = True)
 
     def synch_to_shared_mem(self):
 
@@ -877,9 +1348,13 @@ class FullRobState(SharedDataBase):
         self.root_state.synch_all(read = False, retry = True)
         self.jnts_state.synch_all(read = False, retry = True)
         self.contact_wrenches.synch_all(read = False, retry = True)
+        self.contact_pos.synch_all(read = False, retry = True)
+        self.contact_vel.synch_all(read = False, retry = True)
         
     def close(self):
 
         self.root_state.close()
         self.jnts_state.close()
         self.contact_wrenches.close()
+        self.contact_pos.close()
+        self.contact_vel.close()
