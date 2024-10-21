@@ -53,7 +53,13 @@ class RefsFromKeyboard:
         self._dtwist = 1.0 * math.pi / 180.0 # [rad]
 
         self.enable_phase_id_change = False
-
+        self._phase_id_current=0
+        self._contact_dpos=0.02
+        self.enable_contact_pos_change= False
+        self.enable_contact_pos_change_ci = [False]*4
+        self.enable_contact_pos_change_xyz = [False]*3
+        n_contacts=4
+        self.contact_pos_change_vals = np.zeros((3, n_contacts))
         self.cluster_idx = -1
         self.cluster_idx_np = np.array(self.cluster_idx)
 
@@ -87,6 +93,8 @@ class RefsFromKeyboard:
         
         if not self._shared_refs.is_running():
             self._shared_refs.run()
+        
+        self._contact_names=self._shared_refs.rob_refs.contact_pos.contact_names
 
     def __del__(self):
 
@@ -121,7 +129,10 @@ class RefsFromKeyboard:
             self._shared_refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self._shared_refs.rob_refs.root_state.n_cols,
                                                 read=False)
-
+            self._shared_refs.rob_refs.contact_pos.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self._shared_refs.rob_refs.contact_pos.n_cols,
+                                                read=False)
+            
             self._shared_refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self._shared_refs.contact_flags.n_cols,
                                                 read=False)
@@ -199,8 +210,9 @@ class RefsFromKeyboard:
     def _update_phase_id(self,
                 phase_id: int = -1):
 
-        phase_id = self._shared_refs.phase_id.get_numpy_mirror()
-        phase_id[self.cluster_idx, 111] = phase_id
+        phase_id_shared = self._shared_refs.phase_id.get_numpy_mirror()
+        phase_id_shared[self.cluster_idx, :] = phase_id
+        self._phase_id_current=phase_id
 
     def _set_contacts(self,
                 key,
@@ -293,7 +305,7 @@ class RefsFromKeyboard:
             self.enable_twist = not self.enable_twist
             info = f"Twist change enabled: {self.enable_twist}"
             Journal.log(self.__class__.__name__,
-                "_set_navigation",
+                "_set_linvel",
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
@@ -305,7 +317,7 @@ class RefsFromKeyboard:
             self.enable_twist_roll = not self.enable_twist_roll
             info = f"Twist roll change enabled: {self.enable_twist_roll}"
             Journal.log(self.__class__.__name__,
-                "_set_navigation",
+                "_set_linvel",
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
@@ -313,7 +325,7 @@ class RefsFromKeyboard:
             self.enable_twist_pitch = not self.enable_twist_pitch
             info = f"Twist pitch change enabled: {self.enable_twist_pitch}"
             Journal.log(self.__class__.__name__,
-                "_set_navigation",
+                "_set_linvel",
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
@@ -321,7 +333,7 @@ class RefsFromKeyboard:
             self.enable_twist_yaw = not self.enable_twist_yaw
             info = f"Twist yaw change enabled: {self.enable_twist_yaw}"
             Journal.log(self.__class__.__name__,
-                "_set_navigation",
+                "_set_linvel",
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
@@ -347,14 +359,14 @@ class RefsFromKeyboard:
                 self._update_navigation(type="twist_yaw",
                                     increment = False)
             
-    def _set_navigation(self,
+    def _set_linvel(self,
                 key):
 
         if key.char == "n":
             self.enable_navigation = not self.enable_navigation
             info = f"Navigation enabled: {self.enable_navigation}"
             Journal.log(self.__class__.__name__,
-                "_set_navigation",
+                "_set_linvel",
                 info,
                 LogType.INFO,
                 throw_when_excep = True)
@@ -380,7 +392,50 @@ class RefsFromKeyboard:
         if key.char == "-" and self.enable_navigation:
             self._update_navigation(type="vertical_lin",
                             increment = False)
+    
+    def _set_contact_target_pos(self,
+            key):
+
+        if key.char == "P" and (self._phase_id_current==0):
+                    
+            self.enable_contact_pos_change = not self.enable_contact_pos_change
+            info = f"Contact pos change enabled: {self.enable_contact_pos_change}"
+            Journal.log(self.__class__.__name__,
+                "_set_phase_id",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+
+            if not self.enable_contact_pos_change:
+                self.contact_pos_change_vals[:, :]=0
                 
+        if self.enable_contact_pos_change:
+            if key.char == "7":
+                self.enable_contact_pos_change_ci[0] = not self.enable_contact_pos_change_ci[0]
+            if key.char == "9":
+                self.enable_contact_pos_change_ci[1] = not self.enable_contact_pos_change_ci[1]
+            if key.char == "1":
+                self.enable_contact_pos_change_ci[2] = not self.enable_contact_pos_change_ci[2]
+            if key.char == "3":
+                self.enable_contact_pos_change_ci[3] = not self.enable_contact_pos_change_ci[3]
+            if key.char == "x":
+                self.enable_contact_pos_change_xyz[0] = not self.enable_contact_pos_change_xyz[0]
+            if key.char == "y":
+                self.enable_contact_pos_change_xyz[1] = not self.enable_contact_pos_change_xyz[1]
+            if key.char == "z":
+                self.enable_contact_pos_change_xyz[2] = not self.enable_contact_pos_change_xyz[2]
+       
+            if key.char == "+":
+                self.contact_pos_change_vals[np.ix_(self.enable_contact_pos_change_xyz,
+                    self.enable_contact_pos_change_ci)]+= self._contact_dpos
+            if key.char == "-":
+                self.contact_pos_change_vals[np.ix_(self.enable_contact_pos_change_xyz,
+                    self.enable_contact_pos_change_ci)]-= self._contact_dpos
+                
+        current_contact_pos_trgt = self._shared_refs.rob_refs.contact_pos.get(data_type="p", 
+                                            robot_idxs=self.cluster_idx_np)
+        current_contact_pos_trgt[:] = self.contact_pos_change_vals.flatten()
+
     def _on_press(self, key):
         if self.launch_keyboard_cmds.read_retry(row_index=0,
                                             col_index=0)[0]:
@@ -389,18 +444,18 @@ class RefsFromKeyboard:
             # current cluster index
 
             if hasattr(key, 'char'):
-                                
                 # phase ids
-                # self._set_phase_id(key)
+                self._set_phase_id(key)
                 # stepping phases (if phase id allows it)
                 self._set_contacts(key=key, 
                             is_contact=False)
                 # height change
                 self._set_base_height(key)
                 # (linear) navigation cmds
-                self._set_navigation(key)
+                self._set_linvel(key)
                 # orientation (twist)
                 self._set_twist(key)
+                self._set_contact_target_pos(key)
 
             self._synch(read=False)
 
@@ -436,7 +491,7 @@ class RefsFromKeyboard:
         self._update_navigation(reset=True,type="twist")
 
         with keyboard.Listener(on_press=self._on_press, 
-                               on_release=self._on_release) as listener:
+                    on_release=self._on_release) as listener:
 
             listener.join()
 
