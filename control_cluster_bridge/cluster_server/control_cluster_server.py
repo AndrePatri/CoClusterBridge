@@ -106,8 +106,11 @@ class ControlClusterServer(ABC):
         self._n_steps_per_cntrl = -1
 
         self._solution_counter = 0
-        self._pre_trigger_counter = 0
         self._trigger_counter = 0
+
+        self._pre_triggered=False
+        self._triggered=False
+        self._got_fresh_sol=False
 
         self._print_frequency = 100 # number of "steps" at which sporadic logs are printed
 
@@ -268,12 +271,6 @@ class ControlClusterServer(ABC):
     def solution_time(self):
         return self._solution_time
     
-    def pretriggered(self):
-        return (self._pre_trigger_counter - self._trigger_counter) == 1
-    
-    def triggered(self):
-        return (self._trigger_counter - self._solution_counter) == 1
-    
     def solution_counter(self):
         return self._solution_counter
     
@@ -296,8 +293,8 @@ class ControlClusterServer(ABC):
         self._now_active[:, :] = self._rhc_status.activation_state.get_torch_mirror(gpu=False) & \
                             self._rhc_status.registration.get_torch_mirror(gpu=False) # controllers have to be registered
                             # to be considered active
-        self._pre_trigger_counter +=1
-    
+        self._pre_triggered=True
+
     def trigger_solution(self):
         # performs checks and triggers cluster solution
         if self._debug:
@@ -312,7 +309,10 @@ class ControlClusterServer(ABC):
         # which are ACTIVE using the latest available state
         if self._debug:
             self._post_trigger_logs() # debug info
-        self._trigger_counter +=1
+
+        self._pre_triggered=False
+        self._triggered=True
+        self._got_fresh_sol=False
     
     def _trigger_solution(self):
         # trigger all
@@ -342,6 +342,8 @@ class ControlClusterServer(ABC):
 
         self._was_running = self._is_running
         self._solution_counter += 1
+        self._triggered=False
+        self._got_fresh_sol=True
     
     def _wait_for_solution(self):
 
@@ -516,6 +518,12 @@ class ControlClusterServer(ABC):
 
         return self._is_running
 
+    def pretriggered(self):
+        return self._pre_triggered
+    
+    def triggered(self):
+        return self._triggered
+    
     def _set_rhc_state(self):
 
         if self._using_gpu:
