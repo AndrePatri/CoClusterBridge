@@ -3,11 +3,11 @@ from PyQt5.QtWidgets import QWidget
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import GridFrameWidget
 from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 
 from typing import TypeVar
 
-class SharedDataWindow():
+class SharedDataWindow(ABC):
 
     def __init__(self, 
             update_data_dt: int,
