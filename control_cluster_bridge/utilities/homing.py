@@ -108,6 +108,9 @@ class RobotHomer:
             homing_list.append(self._homing_value_map[jnt_name])
         return homing_list
     
+    def get_homing_val(self,jnt_name:str):
+        return self._homing_value_map[jnt_name]
+    
     def get_homing_map(self,from_prb:bool=True):
         if from_prb:
             return self._homing_value_map_prb
