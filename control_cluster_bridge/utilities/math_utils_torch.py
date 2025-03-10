@@ -125,6 +125,10 @@ def hor2w_frame(t_h: torch.Tensor,
     t_out[:, 4] = t_h[:, 3] * x_proj_y + t_h[:, 4] * y_proj_y
     t_out[:, 5] = t_h[:, 5]  # z-component remains the same
 
+def normalize_quaternion(q):
+    # Normalizes the quaternion
+    return q / torch.norm(q, dim=-1, keepdim=True)
+    
 def base2world_frame(t_b: torch.Tensor, 
         q_b: torch.Tensor, 
         t_out: torch.Tensor):
