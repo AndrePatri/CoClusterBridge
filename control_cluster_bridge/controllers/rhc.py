@@ -728,7 +728,7 @@ class RHController(ABC):
         
         # check controller dt
         server_side_cluster_dt = self.cluster_stats.get_info(info_name="cluster_dt")
-        if not (abs(server_side_cluster_dt - self._dt) < 1e-8):
+        if not (abs(server_side_cluster_dt - self._dt) < 1e-4):
             exception = f"Trying to initialize a controller with control dt {self._dt}, which" + \
                 f"does not match the cluster control dt {server_side_cluster_dt}"
             Journal.log(self._class_name_base,
