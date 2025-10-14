@@ -3,7 +3,7 @@
 ![icon.svg](docs/images/logo.png)
 
 </h2>
-If you have a beautiful CPU-based controller developed, for example, with CPU-based Trajectory Optimization tools and want to train and deploy  a *Reinforcement Learning-based Model Predictive Control* policy without having to rewrite your whole controller on GPU, then this might be the right tool for you. 
+If you have already developed a beautiful MPC controller on CPU and want to embed it within a RL pipeline while keeping the MPCs on CPU, then this might be the right tool for you. 
 
-MPCHive is a tool for bridging parallel simulations (typically GPU-based), with a cluster of CPU-based (receding-horizon) controllers while properly handling controllers synchronization and triggering. It also supports full CPU operation.
-For an example application, please have a look at [IBRIDO](https://github.com/AndrePatri/IBRIDO).
+MPCHive is a tool for bridging parallel simulations (typically GPU-based), with a cluster (or "hive") of CPU-based MPCs, while properly handling controllers' synchronization and triggering (full CPU operation is also supported).
+One direct application for MPCHive is for developing RL-augmented MPC policies as done in [IBRIDO](https://github.com/AndrePatri/AugMPC), but it can also be used in a standalone fashion for swarm robotics (e.g. when having a fleet of MPC-controlled robots) or for massive MPC benchmarking.
