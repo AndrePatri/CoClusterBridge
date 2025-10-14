@@ -6,21 +6,21 @@ from EigenIPC.PyEigenIPC import VLevel
 from EigenIPC.PyEigenIPC import LogType
 from EigenIPC.PyEigenIPC import Journal
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
-from control_cluster_bridge.utilities.shared_data.sim_data import SharedEnvInfo
+from mpc_hive.utilities.shared_data.rhc_data import RobotState
+from mpc_hive.utilities.shared_data.rhc_data import RhcRefs
+from mpc_hive.utilities.shared_data.rhc_data import RhcCmds
+from mpc_hive.utilities.shared_data.rhc_data import RhcStatus
+from mpc_hive.utilities.shared_data.sim_data import SharedEnvInfo
 
-from lrhc_control.utils.shared_data.agent_refs import AgentRefs
-from lrhc_control.utils.shared_data.training_env import SharedTrainingEnvInfo
-from lrhc_control.utils.shared_data.training_env import Observations, NextObservations
-from lrhc_control.utils.shared_data.training_env import TotRewards
-from lrhc_control.utils.shared_data.training_env import SubRewards
-from lrhc_control.utils.shared_data.training_env import Actions
-from lrhc_control.utils.shared_data.training_env import Terminations
-from lrhc_control.utils.shared_data.training_env import Truncations
-from lrhc_control.utils.shared_data.training_env import EpisodesCounter, TaskRandCounter
+from aug_mpc.utils.shared_data.agent_refs import AgentRefs
+from aug_mpc.utils.shared_data.training_env import SharedTrainingEnvInfo
+from aug_mpc.utils.shared_data.training_env import Observations, NextObservations
+from aug_mpc.utils.shared_data.training_env import TotRewards
+from aug_mpc.utils.shared_data.training_env import SubRewards
+from aug_mpc.utils.shared_data.training_env import Actions
+from aug_mpc.utils.shared_data.training_env import Terminations
+from aug_mpc.utils.shared_data.training_env import Truncations
+from aug_mpc.utils.shared_data.training_env import EpisodesCounter, TaskRandCounter
 
 import argparse
 import time 

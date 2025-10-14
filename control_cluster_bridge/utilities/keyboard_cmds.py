@@ -1,19 +1,19 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
+# This file is part of MPCHive and distributed under the General Public License version 2 license.
 # 
-# CoClusterBridge is free software: you can redistribute it and/or modify
+# MPCHive is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# CoClusterBridge is distributed in the hope that it will be useful,
+# MPCHive is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
+# along with MPCHive.  If not, see <http://www.gnu.org/licenses/>.
 # 
 
 from EigenIPC.PyEigenIPCExt.wrappers.shared_data_view import SharedTWrapper
@@ -709,7 +709,7 @@ class RefsFromKeyboard:
 
         self._read_from_stdin=read_from_stdin
         if read_from_stdin:
-            from control_cluster_bridge.utilities.keyboard_listener_stdin import KeyListenerStdin
+            from mpc_hive.utilities.keyboard_listener_stdin import KeyListenerStdin
             import time
 
             with KeyListenerStdin(on_press=self._on_press, 

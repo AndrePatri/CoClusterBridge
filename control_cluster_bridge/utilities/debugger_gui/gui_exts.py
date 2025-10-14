@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QWidget
 
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import GridFrameWidget
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
+from mpc_hive.utilities.debugger_gui.plot_utils import GridFrameWidget
+from mpc_hive.utilities.debugger_gui.plot_utils import RtPlotWindow
 
 from abc import abstractmethod, ABC
 
@@ -180,7 +180,7 @@ SharedDataWindowChild = TypeVar('SharedDataWindowChild', bound='SharedDataWindow
 
 # Example of extension
 
-from control_cluster_bridge.utilities.shared_data.jnt_imp_control import JntImpCntrlData
+from mpc_hive.utilities.shared_data.jnt_imp_control import JntImpCntrlData
 
 from EigenIPC.PyEigenIPC import VLevel
 

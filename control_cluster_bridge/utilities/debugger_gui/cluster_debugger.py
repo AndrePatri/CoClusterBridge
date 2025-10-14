@@ -1,19 +1,19 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
+# This file is part of MPCHive and distributed under the General Public License version 2 license.
 # 
-# CoClusterBridge is free software: you can redistribute it and/or modify
+# MPCHive is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# CoClusterBridge is distributed in the hope that it will be useful,
+# MPCHive is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
+# along with MPCHive.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
@@ -22,25 +22,25 @@ from PyQt5.QtWidgets import QSpacerItem, QSizePolicy
 
 from EigenIPC.PyEigenIPC import VLevel
 
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCRefs
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCmds, RHCPred, RHCPredDelta
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RobotStates
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCInternal
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import SimInfo
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCProfiling
-from control_cluster_bridge.utilities.debugger_gui.shared_data_base_tabs import RHCStatus
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import RHCRefs
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import RHCmds, RHCPred, RHCPredDelta
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import RobotStates
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import RHCInternal
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import SimInfo
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import RHCProfiling
+from mpc_hive.utilities.debugger_gui.shared_data_base_tabs import RHCStatus
 
 from EigenIPC.PyEigenIPC import dtype
 from EigenIPC.PyEigenIPCExt.wrappers.shared_data_view import SharedTWrapper
 from EigenIPC.PyEigenIPC import VLevel
 from EigenIPC.PyEigenIPC import Journal
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
+from mpc_hive.utilities.shared_data.rhc_data import RhcStatus
 
-from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindowChild
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
+from mpc_hive.utilities.debugger_gui.gui_exts import SharedDataWindowChild
+from mpc_hive.utilities.debugger_gui.plot_utils import WidgetUtils
 
-from control_cluster_bridge.utilities.sysutils import PathsGetter
+from mpc_hive.utilities.sysutils import PathsGetter
 
 import torch
 

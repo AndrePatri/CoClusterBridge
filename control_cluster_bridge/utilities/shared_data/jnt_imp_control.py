@@ -4,7 +4,7 @@ from EigenIPC.PyEigenIPC import VLevel
 from EigenIPC.PyEigenIPC import LogType
 from EigenIPC.PyEigenIPC import Journal
 
-from control_cluster_bridge.utilities.shared_data.abstractions import SharedDataBase
+from mpc_hive.utilities.shared_data.abstractions import SharedDataBase
 
 from typing import List
 

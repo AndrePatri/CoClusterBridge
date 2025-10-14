@@ -1,19 +1,19 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
+# This file is part of MPCHive and distributed under the General Public License version 2 license.
 # 
-# CoClusterBridge is free software: you can redistribute it and/or modify
+# MPCHive is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# CoClusterBridge is distributed in the hope that it will be useful,
+# MPCHive is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
+# along with MPCHive.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from abc import ABC, abstractmethod
 
@@ -26,7 +26,7 @@ from EigenIPC.PyEigenIPC import VLevel
 
 import signal
 
-from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage, get_system_memory
+from mpc_hive.utilities.cpu_utils.core_utils import get_memory_usage, get_system_memory
 
 class ControlClusterClient(ABC):
 
@@ -65,7 +65,7 @@ class ControlClusterClient(ABC):
         # in a isolated core, if they fit
         self.core_ids_override_list = core_ids_override_list
 
-        from control_cluster_bridge.utilities.cpu_utils.core_utils import get_isolated_cores
+        from mpc_hive.utilities.cpu_utils.core_utils import get_isolated_cores
         self.isolated_cores = get_isolated_cores()[1] # available isolated
         # cores 
 
@@ -251,8 +251,8 @@ class ControlClusterClient(ABC):
 
         self._spawn_processes()
 
-        from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-        from control_cluster_bridge.utilities.shared_data.cluster_data import SharedClusterInfo
+        from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
+        from mpc_hive.utilities.shared_data.cluster_data import SharedClusterInfo
 
         from EigenIPC.PyEigenIPCExt.wrappers.shared_data_view import SharedTWrapper
         from EigenIPC.PyEigenIPC import dtype
@@ -456,7 +456,7 @@ class ControlClusterClient(ABC):
         from EigenIPC.PyEigenIPC import LogType
         from EigenIPC.PyEigenIPC import dtype as eigenipc_dtype 
         from EigenIPC.PyEigenIPC import Journal
-        from control_cluster_bridge.utilities.shared_data.abstractions import SharedDataBase
+        from mpc_hive.utilities.shared_data.abstractions import SharedDataBase
 
         from typing import List
 

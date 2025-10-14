@@ -1,38 +1,38 @@
 # Copyright (C) 2023  Andrea Patrizi (AndrePatri, andreapatrizi1b6e6@gmail.com)
 # 
-# This file is part of CoClusterBridge and distributed under the General Public License version 2 license.
+# This file is part of MPCHive and distributed under the General Public License version 2 license.
 # 
-# CoClusterBridge is free software: you can redistribute it and/or modify
+# MPCHive is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 # 
-# CoClusterBridge is distributed in the hope that it will be useful,
+# MPCHive is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with CoClusterBridge.  If not, see <http://www.gnu.org/licenses/>.
+# along with MPCHive.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from abc import ABC, abstractmethod
 # from perf_sleep.pyperfsleep import PerfSleep
-# from control_cluster_bridge.utilities.cpu_utils.core_utils import get_memory_usage
+# from mpc_hive.utilities.cpu_utils.core_utils import get_memory_usage
 
 import time 
 
 import numpy as np
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcCmds, RhcPred, RhcPredDelta
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
-from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.remote_triggering import RemoteTriggererClnt
+from mpc_hive.utilities.shared_data.rhc_data import RobotState
+from mpc_hive.utilities.shared_data.rhc_data import RhcCmds, RhcPred, RhcPredDelta
+from mpc_hive.utilities.shared_data.rhc_data import RhcStatus
+from mpc_hive.utilities.shared_data.rhc_data import RhcInternal
+from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
+from mpc_hive.utilities.remote_triggering import RemoteTriggererClnt
 
-from control_cluster_bridge.utilities.homing import RobotHomer
+from mpc_hive.utilities.homing import RobotHomer
 
-from control_cluster_bridge.utilities.math_utils import world2base_frame
+from mpc_hive.utilities.math_utils import world2base_frame
 
 from EigenIPC.PyEigenIPC import VLevel
 from EigenIPC.PyEigenIPC import Journal, LogType

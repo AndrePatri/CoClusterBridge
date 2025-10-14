@@ -1,18 +1,18 @@
 from PyQt5.QtWidgets import QWidget
 
-from control_cluster_bridge.utilities.debugger_gui.gui_exts import SharedDataWindow
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import RtPlotWindow
+from mpc_hive.utilities.debugger_gui.gui_exts import SharedDataWindow
+from mpc_hive.utilities.debugger_gui.plot_utils import RtPlotWindow
 
-from control_cluster_bridge.utilities.shared_data.rhc_data import RobotState, RhcCmds, RhcPred, RhcPredDelta
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcInternal
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcStatus
-from control_cluster_bridge.utilities.shared_data.sim_data import SharedEnvInfo
-from control_cluster_bridge.utilities.shared_data.cluster_profiling import RhcProfiling
-from control_cluster_bridge.utilities.shared_data.rhc_data import RhcRefs
+from mpc_hive.utilities.shared_data.rhc_data import RobotState, RhcCmds, RhcPred, RhcPredDelta
+from mpc_hive.utilities.shared_data.rhc_data import RhcInternal
+from mpc_hive.utilities.shared_data.rhc_data import RhcStatus
+from mpc_hive.utilities.shared_data.sim_data import SharedEnvInfo
+from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
+from mpc_hive.utilities.shared_data.rhc_data import RhcRefs
 
 from EigenIPC.PyEigenIPC import VLevel
 
-from control_cluster_bridge.utilities.debugger_gui.plot_utils import WidgetUtils
+from mpc_hive.utilities.debugger_gui.plot_utils import WidgetUtils
 
 import numpy as np
 
