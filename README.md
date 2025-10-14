@@ -1,6 +1,6 @@
 <h2 align="center" style="text-decoration: none;"> <img src="https://img.shields.io/badge/License-GPLv2-purple.svg" alt="License">
 
-![icon.svg](docs/images/mpc_hive_logo.svg)
+![icon.svg](docs/images/logo.svg)
 
 </h2>
 If you have already developed a beautiful MPC controller on CPU and want to embed it within a RL pipeline while keeping the MPCs on CPU, then this might be the right tool for you. 
