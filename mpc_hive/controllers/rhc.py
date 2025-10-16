@@ -742,7 +742,7 @@ class RHController(ABC):
         control_side_contact_names = set(self._get_contacts())
 
         if not server_side_contact_names == control_side_contact_names:
-            warn = f"Controller-side contact names do not match server-side joint names!" + \
+            warn = f"Controller-side contact names do not match server-side names!" + \
                 f"\nServer: {self.robot_state.contact_names()}\n Controller: {self._get_contacts()}"
             Journal.log(self._class_name_base,
                         "_consinstency_checks",
