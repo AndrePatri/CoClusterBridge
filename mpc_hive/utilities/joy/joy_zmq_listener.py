@@ -63,6 +63,7 @@ class JoyListenerZMQ:
 
         # state holders (default neutral)
         self.sticks = np.zeros(4, dtype=np.float32)  # left_x,left_y,right_x,right_y
+        self.stick_press = np.zeros(2, dtype=bool) # left, right
         self.triggers = np.zeros(2, dtype=np.float32)  # left, right
         self.bumpers = np.zeros(2, dtype=bool)  # left, right
         self.face = np.zeros(4, dtype=bool)  # X, B, A, Y (keeps the size)
@@ -173,6 +174,7 @@ class JoyListenerZMQ:
 
         # Clear previous arrays to defaults
         self.sticks[:] = 0.0
+        self.stick_press[:] = False
         self.triggers[:] = 0.0
         self.bumpers[:] = False
         self.face[:] = False
@@ -216,7 +218,7 @@ class JoyListenerZMQ:
             # try axes[2] and axes[4]
             self.triggers[0] = get_axis(2)
             self.triggers[1] = get_axis(4)
-
+        
         # Buttons: typical mapping (but may differ):
         # 0:A, 1:B, 2:X, 3:Y, 4:LB, 5:RB, 6:BACK, 7:START, 8:GUIDE, 9:L3, 10:R3
         def get_button(i, default=False):
@@ -245,6 +247,9 @@ class JoyListenerZMQ:
         self.back_start_home[1] = get_button(7)  # start
         # guide/home may be button 8 (or absent)
         self.back_start_home[2] = get_button(8)
+
+        self.stick_press[0]=get_button(9)
+        self.stick_press[1]=get_button(10)
 
         # hats: take first hat if present
         if len(raw_hats) >= 1:
@@ -323,6 +328,7 @@ class JoyListenerZMQ:
 
             # Copy arrays so we don't print while they are being updated
             sticks = self.sticks.copy()       # left_x, left_y, right_x, right_y
+            sticks_press = self.stick_press.copy() # left, right
             triggers = self.triggers.copy()   # left, right
             bumpers = self.bumpers.copy()     # left, right
             face = self.face.copy()           # X, B, A, Y (kept as in class)
@@ -341,6 +347,7 @@ class JoyListenerZMQ:
                     return x
 
             print("  sticks (left_x,left_y,right_x,right_y):", [r(v) for v in sticks])
+            print("  sticks press (LB,RB):", [bool(x) for x in sticks_press])
             print("  triggers (L,R):", [r(v) for v in triggers])
             print("  bumpers (LB,RB):", [bool(x) for x in bumpers])
             print("  face (X,B,A,Y):", [bool(x) for x in face])
