@@ -177,7 +177,7 @@ def world2base_frame(v_w: np.ndarray, q_b: np.ndarray, v_out: np.ndarray,
     v_out[:, 2] = v_x * R_02 + v_y * R_12 + v_z * R_22
 
 def world2base_frame_twist(t_w: np.ndarray, q_b: np.ndarray, t_out: np.ndarray,
-        is_q_wijk: bool = True):
+        is_q_wijk: bool = True, linvel: bool = True, omega: bool = True):
     """
     Transforms a twist vector expressed in the WORLD frame to
     the base frame using the given quaternion that describes the orientation
@@ -201,12 +201,15 @@ def world2base_frame_twist(t_w: np.ndarray, q_b: np.ndarray, t_out: np.ndarray,
     R_21 = 2 * (q_j * q_k + q_i * q_w)
     R_22 = 1 - 2 * (q_i ** 2 + q_j ** 2)
     
-    t_out[:, 0] = t_w[:, 0] * R_00 + t_w[:, 1] * R_10 + t_w[:, 2] * R_20
-    t_out[:, 1] = t_w[:, 0] * R_01 + t_w[:, 1] * R_11 + t_w[:, 2] * R_21
-    t_out[:, 2] = t_w[:, 0] * R_02 + t_w[:, 1] * R_12 + t_w[:, 2] * R_22
-    t_out[:, 3] = t_w[:, 3] * R_00 + t_w[:, 4] * R_10 + t_w[:, 5] * R_20
-    t_out[:, 4] = t_w[:, 3] * R_01 + t_w[:, 4] * R_11 + t_w[:, 5] * R_21
-    t_out[:, 5] = t_w[:, 3] * R_02 + t_w[:, 4] * R_12 + t_w[:, 5] * R_22
+    if linvel:
+        t_out[:, 0] = t_w[:, 0] * R_00 + t_w[:, 1] * R_10 + t_w[:, 2] * R_20
+        t_out[:, 1] = t_w[:, 0] * R_01 + t_w[:, 1] * R_11 + t_w[:, 2] * R_21
+        t_out[:, 2] = t_w[:, 0] * R_02 + t_w[:, 1] * R_12 + t_w[:, 2] * R_22
+
+    if omega:
+        t_out[:, 3] = t_w[:, 3] * R_00 + t_w[:, 4] * R_10 + t_w[:, 5] * R_20
+        t_out[:, 4] = t_w[:, 3] * R_01 + t_w[:, 4] * R_11 + t_w[:, 5] * R_21
+        t_out[:, 5] = t_w[:, 3] * R_02 + t_w[:, 4] * R_12 + t_w[:, 5] * R_22
 
 if __name__ == "__main__":  
 

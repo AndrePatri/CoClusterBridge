@@ -79,13 +79,13 @@ class JoyListenerZMQ:
         self.hats = []
 
     def __enter__(self):
-        self._start_listener()
+        self.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
-    def _start_listener(self):
+    def start(self):
         if self.listener_thread and self.listener_thread.is_alive():
             return
         self.listener_thread = threading.Thread(target=self._poll_joy, name="JoyListenerZMQ")
@@ -398,7 +398,7 @@ def main():
     listener = JoyListenerZMQ(connect=args.connect, topic=args.topic, poll_interval=args.poll_interval, on_message=on_message)
 
     # start listening using context manager (optional)
-    listener._start_listener()
+    listener.start()
     print("Listener started. Press Ctrl-C to exit.")
     try:
         while not listener.done:
