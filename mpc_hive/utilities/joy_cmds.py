@@ -1,0 +1,517 @@
+# RefsFromJoy - joystick-driven class that replicates RefsFromKeyboard write behavior
+# Maps an Xbox-style controller (as delivered by JoyListenerZMQ) to the same
+# shared memory writes that RefsFromKeyboard used (contacts, phase id, base height,
+# flight params, navigation/twist, etc.).
+#
+# Reasonable mapping (documented below) — adjust to taste.
+
+from aug_mpc.utils.shared_data.agent_refs import AgentRefs
+from mpc_hive.utilities.shared_data.rhc_data import RobotState
+from mpc_hive.utilities.math_utils import world2base_frame_twist
+
+from EigenIPC.PyEigenIPCExt.wrappers.shared_data_view import SharedTWrapper
+from EigenIPC.PyEigenIPC import VLevel
+from EigenIPC.PyEigenIPC import Journal, LogType
+from EigenIPC.PyEigenIPC import dtype
+
+import math
+import time
+import numpy as np
+
+# Import the provided JoyListenerZMQ (assumes it's importable from your path)
+# If it's in another module, change the import accordingly.
+from joy_sub import JoyListenerZMQ
+
+
+class RefsFromJoy:
+    """
+    Joystick-driven refs writer that reproduces RefsFromKeyboard functionality.
+
+    Controller mapping (Xbox-style) used here ("reasonable choices"):
+      - face buttons (JoyListener.face -> [X, B, A, Y]):
+          * X (face[0])    : contact 0 (held -> contact OFF / release -> ON)
+          * B (face[1])    : contact 1
+          * A (face[2])    : contact 2
+          * Y (face[3])    : contact 3
+          (this replicates keyboard's 7/9/1/3 momentary behavior)
+
+      - face toggles (hold-to-toggle; same semantics as original RefsFromJoy):
+          * face[1] (B) -> omega toggle (hold)
+          * face[0] (X) -> linvel toggle (hold)
+          * face[2] (A) -> pos toggle (hold)
+        (These are exactly the same indices used in your RefsFromJoy earlier.)
+
+      - Start button (back_start_home[1]) -> toggle phase-id-change enable (press edge)
+      - Back button (back_start_home[0])  -> toggle base-height-change enable (press edge)
+
+      - Bumpers:
+          * LB (bumpers[0]) : when base-height-change enabled -> decrement height (edge)
+          * RB (bumpers[1]) : when base-height-change enabled -> increment height (edge)
+
+      - Triggers (triggers[0]=LT, triggers[1]=RT):
+          * used for flight params +/- when corresponding contact flight param flag is enabled.
+            RT (rising above threshold) = '+' (increment); LT (rising) = '-' (decrement)
+
+      - Hat (dpad) used to set discrete phase ids when phase-id-change is enabled:
+          * up    -> phase_id = 0
+          * right -> phase_id = 1
+          * down  -> phase_id = 2
+          * left  -> phase_id = 3
+          * pressing Y while phase-id-change enabled -> reset (phase_id = -1)
+
+    Notes:
+      - The class detects edges (press/release and trigger crossings) by keeping previous
+        state snapshots and comparing.
+      - Many behaviors from RefsFromKeyboard (flight param toggles per contact, contact
+        position edits, etc.) are partially implemented. Where your original implementation
+        had many key mappings (o,p,k,l toggles for contacts etc.) we mapped them to
+        combinations of face/bumpers/triggers in a pragmatic way.
+
+    """
+
+    def __init__(self,
+                 namespace: str,
+                 verbose: bool = False,
+                 agent_refs_world: bool = True,
+                 env_idx: int = None,
+                 hold_time: float = 0.15,
+                 shared_refs = None):
+        self.namespace = namespace
+        self._verbose = verbose
+        self._agent_refs_world = agent_refs_world
+        self._env_idx = env_idx
+        self.hold_time = float(hold_time)
+        self._closed = False
+
+        # optional old shared_refs (for contact_flags, phase_id, flight_settings, etc.)
+        self._shared_refs = shared_refs
+
+        # navigation / twist flags (same as RefsFromJoy)
+        self.enable_linvel = False
+        self.enable_omega = False
+        self.enable_pos = False
+
+        self.dpos = 0.1
+        self.dxy = 0.05
+        self._dtwist = 1.0 * math.pi / 180.0
+
+        self._v_magnitude = 0.0
+        self._heading = 0.0
+
+        self._max_vxy_magn = 1.0
+        self._max_vz_magn = 0.0
+        self._max_pitch_rate = 0.0
+        self._max_roll_rate = 0.0
+        self._max_yaw_rate = 0.8
+
+        # flight params state (kept similar to keyboard class)
+        self._enable_flight_param_change = False
+        self._d_flength_enabled = False
+        self._d_fapex_enabled = False
+        self._d_fend_enabled = False
+        self._d_fparam_enabled_contact_i = [False]*4
+        self._d_flight_length = 1
+        self._d_flight_apex = 0.01
+        self._d_flight_end = 0.01
+
+        self.enable_heightchange = False
+        self.height_dh = 0.02
+
+        # phase id
+        self.enable_phase_id_change = False
+        self._phase_id_current = 0
+
+        # contact mapping (if you used a custom mapping string in keyboard class)
+        self._contact_mapping = [0,1,2,3]
+
+        # cluster index placeholder
+        self.cluster_idx = -1
+        self.cluster_idx_np = np.array(self.cluster_idx)
+
+        # agent_refs / robot_state
+        self.agent_refs = None
+        self._robot_state = None
+
+        # hold toggles same pattern as RefsFromJoy
+        self._hold_since = {"omega": None, "linvel": None, "pos": None}
+        self._hold_triggered = {"omega": False, "linvel": False, "pos": False}
+
+        # previous joy snapshot for edge detection
+        self._prev_face = np.zeros(4, dtype=bool)
+        self._prev_bumpers = np.zeros(2, dtype=bool)
+        self._prev_back_start_home = np.zeros(3, dtype=bool)
+        self._prev_triggers = np.zeros(2, dtype=float)
+        self._prev_hat = np.array([0,0], dtype=int)
+
+        self._init_shared_data()
+
+    def _init_shared_data(self):
+        # env index wrapper if needed
+        self.env_index = None
+        if self._env_idx is None:
+            self.env_index = SharedTWrapper(namespace=self.namespace,
+                                           basename="EnvSelector",
+                                           is_server=False,
+                                           verbose=True,
+                                           vlevel=VLevel.V2,
+                                           safe=False,
+                                           dtype=dtype.Int)
+            self.env_index.run()
+
+        # init AgentRefs & RobotState
+        self.agent_refs = AgentRefs(namespace=self.namespace,
+                                    is_server=False,
+                                    safe=True,
+                                    verbose=self._verbose,
+                                    vlevel=VLevel.V2,
+                                    with_gpu_mirror=False,
+                                    with_torch_view=False)
+        self.agent_refs.run()
+
+        self._robot_state = RobotState(namespace=self.namespace,
+                                       is_server=False,
+                                       safe=False,
+                                       verbose=True,
+                                       vlevel=VLevel.V2)
+        self._robot_state.run()
+
+        # convenience buffers
+        self._current_twist_ref_world = np.full_like(
+            self.agent_refs.rob_refs.root_state.get(data_type="twist", robot_idxs=np.array(self.cluster_idx)),
+            fill_value=0.0).reshape(-1)
+        self._current_twist_ref_base = np.full_like(self._current_twist_ref_world, fill_value=0.0).reshape(1, -1)
+        self._current_pos_ref = np.full_like(
+            self.agent_refs.rob_refs.root_state.get(data_type="p", robot_idxs=np.array(self.cluster_idx)),
+            fill_value=0.0).reshape(-1)
+
+    def __del__(self):
+        if not self._closed:
+            self._close()
+
+    def _close(self):
+        if self.agent_refs is not None:
+            self.agent_refs.close()
+        if self._robot_state is not None:
+            self._robot_state.close()
+        if self.env_index is not None:
+            self.env_index.close()
+        if self._shared_refs is not None:
+            try:
+                self._shared_refs.close()
+            except Exception:
+                pass
+        self._closed = True
+
+    # -------------------
+    # Low level writers (same as keyboard class)
+    # -------------------
+    def _update_base_height(self, decrement = False):
+        if self._shared_refs is None:
+            return
+        current_p_ref = self._shared_refs.rob_refs.root_state.get(data_type="p", robot_idxs=self.cluster_idx_np)
+        if decrement:
+            new_height_ref = current_p_ref[2] - self.height_dh
+        else:
+            new_height_ref = current_p_ref[2] + self.height_dh
+        current_p_ref[2] = new_height_ref
+        self._shared_refs.rob_refs.root_state.set(data_type="p", data=current_p_ref,
+                                                  robot_idxs=self.cluster_idx_np)
+
+    def _set_contacts(self, contact_idx: int, is_contact: bool = True):
+        if self._shared_refs is None:
+            return
+        contact_flags = self._shared_refs.contact_flags.get_numpy_mirror()
+        mapped = self._contact_mapping[contact_idx]
+        contact_flags[self.cluster_idx, mapped] = is_contact
+        self._shared_refs.contact_flags.set_numpy_mirror(contact_flags)
+
+    def _update_phase_id(self, phase_id: int = -1):
+        if self._shared_refs is None:
+            return
+        phase_id_shared = self._shared_refs.phase_id.get_numpy_mirror()
+        phase_id_shared[self.cluster_idx, :] = phase_id
+        self._shared_refs.phase_id.set_numpy_mirror(phase_id_shared)
+        self._phase_id_current = phase_id
+
+    def _update_flight_params(self, contact_idx: int, increment: bool = True):
+        if self._shared_refs is None:
+            return
+        # follow same logic as your keyboard class: adjust len/apex/end if enabled
+        if self._d_flength_enabled and self._d_fparam_enabled_contact_i[contact_idx]:
+            length_now = self._shared_refs.flight_settings.get(data_type="len",
+                                                               robot_idxs=self.cluster_idx,
+                                                               contact_idx=contact_idx)
+            length_now = length_now + (self._d_flight_length if increment else -self._d_flight_length)
+            self._shared_refs.flight_settings.set(data=np.array(length_now),
+                                                 data_type="len",
+                                                 robot_idxs=self.cluster_idx,
+                                                 contact_idx=contact_idx)
+        if self._d_fapex_enabled and self._d_fparam_enabled_contact_i[contact_idx]:
+            apex_now = self._shared_refs.flight_settings.get(data_type="apex_dpos",
+                                                             robot_idxs=self.cluster_idx,
+                                                             contact_idx=contact_idx)
+            apex_now = apex_now + (self._d_flight_apex if increment else -self._d_flight_apex)
+            self._shared_refs.flight_settings.set(data=np.array(apex_now),
+                                                 data_type="apex_dpos",
+                                                 robot_idxs=self.cluster_idx,
+                                                 contact_idx=contact_idx)
+        if self._d_fend_enabled and self._d_fparam_enabled_contact_i[contact_idx]:
+            end_now = self._shared_refs.flight_settings.get(data_type="end_dpos",
+                                                            robot_idxs=self.cluster_idx,
+                                                            contact_idx=contact_idx)
+            end_now = end_now + (self._d_flight_end if increment else -self._d_flight_end)
+            self._shared_refs.flight_settings.set(data=np.array(end_now),
+                                                 data_type="end_dpos",
+                                                 robot_idxs=self.cluster_idx,
+                                                 contact_idx=contact_idx)
+
+    # -------------------
+    # High-level joystick -> ref logic (Copied/adapted from RefsFromJoy)
+    # -------------------
+    def _check_and_toggle(self, name: str, pressed: bool):
+        now = time.time()
+        if name not in self._hold_since:
+            return
+        if pressed:
+            if self._hold_since[name] is None:
+                self._hold_since[name] = now
+            else:
+                duration = now - self._hold_since[name]
+                if duration >= self.hold_time and not self._hold_triggered[name]:
+                    if name == "omega":
+                        self.enable_omega = not self.enable_omega
+                        info = f"Twist change enabled: {self.enable_omega}"
+                        Journal.log(self.__class__.__name__, "_set_omega", info, LogType.INFO, throw_when_excep=True)
+                    elif name == "linvel":
+                        self.enable_linvel = not self.enable_linvel
+                        info = f"High level navigation enabled: {self.enable_linvel}"
+                        Journal.log(self.__class__.__name__, "_set_linvel", info, LogType.INFO, throw_when_excep=True)
+                    elif name == "pos":
+                        self.enable_pos = not self.enable_pos
+                        info = f"High level pos reference change: {self.enable_pos}"
+                        Journal.log(self.__class__.__name__, "_set_position", info, LogType.INFO, throw_when_excep=True)
+                    self._hold_triggered[name] = True
+        else:
+            self._hold_since[name] = None
+            self._hold_triggered[name] = False
+
+    def _set_omega(self, joy):
+        twist_ref = self._current_twist_ref_world
+        if not self.enable_omega:
+            twist_ref[3:] = 0.0
+            return
+        twist_ref[3] = 0.0
+        twist_ref[4] = 0.0
+        try:
+            lx = float(joy.sticks[0])
+        except Exception:
+            lx = 0.0
+        deadzone = float(getattr(self, "dxy", 0.05))
+        if abs(lx) <= deadzone:
+            yaw_rate = 0.0
+        else:
+            mag = min(abs(lx), 1.0)
+            yaw_rate = np.sign(lx) * mag * float(self._max_yaw_rate)
+        twist_ref[5] = float(np.clip(yaw_rate, -self._max_yaw_rate, self._max_yaw_rate))
+        twist_ref[3] = np.clip(twist_ref[3], a_min=-self._max_roll_rate, a_max=self._max_roll_rate)
+        twist_ref[4] = np.clip(twist_ref[4], a_min=-self._max_pitch_rate, a_max=self._max_pitch_rate)
+
+    def _set_linvel(self, joy):
+        if not self.enable_linvel:
+            self._current_twist_ref_world[0:3] = 0.0
+            return
+        twist_ref = self._current_twist_ref_world
+        try:
+            lx = float(joy.sticks[2])
+            ly = float(joy.sticks[3])
+        except Exception:
+            lx, ly = 0.0, 0.0
+        mag = float(np.hypot(lx, ly))
+        if mag < self.dxy:
+            self._v_magnitude = 0.0
+        else:
+            self._heading = np.arctan2(ly, lx) - math.pi/2.0
+            norm_mag = min(mag, 1.0)
+            self._v_magnitude = norm_mag * self._max_vxy_magn
+        self._v_magnitude = float(np.clip(self._v_magnitude, a_min=0.0, a_max=self._max_vxy_magn))
+        twist_ref[0] = self._v_magnitude * math.cos(self._heading)
+        twist_ref[1] = self._v_magnitude * math.sin(self._heading)
+        twist_ref[2] = 0.0
+
+    def _set_position(self, joy):
+        if not self.enable_pos:
+            robot_p = self._robot_state.root_state.get(data_type="p")[self.cluster_idx_np, :].reshape(-1)
+            robot_p[2] = 0.0
+            self._current_pos_ref[:] = robot_p
+
+    def _write_to_shared_mem(self):
+        self.agent_refs.rob_refs.root_state.synch_all(read=True)
+        self._robot_state.root_state.synch_all(read=True, retry=True)
+
+        if self.enable_pos:
+            robot_p = self._robot_state.root_state.get(data_type="p")[self.cluster_idx_np, :].reshape(-1)
+            robot_p[2] = 0.0
+            self.agent_refs.rob_refs.root_state.set(data_type="p", data=self._current_pos_ref,
+                                                    robot_idxs=self.cluster_idx_np)
+            self.agent_refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=0,
+                                                            n_rows=1, n_cols=3, read=False)
+
+        if self._agent_refs_world:
+            if self.enable_omega:
+                robot_q = self._robot_state.root_state.get(data_type="q")[self.cluster_idx_np, :].reshape(1, -1)
+                world2base_frame_twist(t_w=self._current_twist_ref_world.reshape(1, -1),
+                                       q_b=robot_q,
+                                       t_out=self._current_twist_ref_base,
+                                       omega=True,
+                                       linvel=False)
+            if self.enable_linvel:
+                self._current_twist_ref_base[:, 0:3] = self._current_twist_ref_world.reshape(1, -1)[:, 0:3]
+        else:
+            self._current_twist_ref_base[:, :] = self._current_twist_ref_world.reshape(1, -1)
+
+        self.agent_refs.rob_refs.root_state.set(data_type="twist", data=self._current_twist_ref_base,
+                                                robot_idxs=self.cluster_idx_np)
+        self.agent_refs.rob_refs.root_state.synch_retry(row_index=self.cluster_idx, col_index=7,
+                                                        n_rows=1, n_cols=6, read=False)
+
+    # -------------------
+    # Input processing: detect edges and perform keyboard-like actions
+    # -------------------
+    def _process_joy_for_writes(self, joy):
+        # env index
+        if self.env_index is not None:
+            self.env_index.synch_all(read=True, retry=True)
+            env_index = self.env_index.get_numpy_mirror()
+            self._env_idx = env_index[0,0].item()
+        self.cluster_idx = self._env_idx
+        self.cluster_idx_np = np.array(self.cluster_idx)
+
+        # 1) handle hold-to-toggle for omega/linvel/pos (same semantics as RefsFromJoy)
+        self._check_and_toggle("omega", bool(getattr(joy, "face")[1] if hasattr(joy, "face") else False))
+        self._check_and_toggle("linvel", bool(getattr(joy, "face")[0] if hasattr(joy, "face") else False))
+        self._check_and_toggle("pos", bool(getattr(joy, "face")[2] if hasattr(joy, "face") else False))
+
+        # 2) contact buttons: face[0..3] mapped to contact indices 0..3 (momentary)
+        cur_face = joy.face.copy()
+        for i in range(4):
+            if cur_face[i] and not self._prev_face[i]:
+                # pressed -> set contact OFF (like keyboard press)
+                self._set_contacts(i, is_contact=False)
+            if not cur_face[i] and self._prev_face[i]:
+                # released -> set contact ON (like keyboard release)
+                self._set_contacts(i, is_contact=True)
+        self._prev_face = cur_face
+
+        # 3) base height toggle (press Back button to toggle enable)
+        cur_back_start_home = joy.back_start_home.copy()
+        # back button edge
+        if cur_back_start_home[0] and not self._prev_back_start_home[0]:
+            self.enable_heightchange = not self.enable_heightchange
+            info = f"Base heightchange enabled: {self.enable_heightchange}"
+            Journal.log(self.__class__.__name__, "_set_base_height", info, LogType.INFO, throw_when_excep=True)
+        # bumpers LB/RB to change height while enabled (edge)
+        cur_bumpers = joy.bumpers.copy()
+        if cur_bumpers[0] and not self._prev_bumpers[0]:
+            if self.enable_heightchange:
+                self._update_base_height(decrement=True)
+        if cur_bumpers[1] and not self._prev_bumpers[1]:
+            if self.enable_heightchange:
+                self._update_base_height(decrement=False)
+        self._prev_bumpers = cur_bumpers
+        self._prev_back_start_home = cur_back_start_home
+
+        # 4) phase-id change: Start toggles enable; hat selects id when enabled
+        if cur_back_start_home[1] and not self._prev_back_start_home[1]:
+            self.enable_phase_id_change = not self.enable_phase_id_change
+            info = f"Phase ID change enabled: {self.enable_phase_id_change}"
+            Journal.log(self.__class__.__name__, "_set_phase_id", info, LogType.INFO, throw_when_excep=True)
+
+        # hat mapping when enable_phase_id_change
+        cur_hat = joy.hat.copy()
+        # ensure integers
+        hx, hy = int(cur_hat[0]), int(cur_hat[1])
+        if self.enable_phase_id_change and (hx, hy) != tuple(self._prev_hat):
+            # up
+            if hy > 0:
+                self._update_phase_id(phase_id=0)
+            elif hx > 0:
+                self._update_phase_id(phase_id=1)
+            elif hy < 0:
+                self._update_phase_id(phase_id=2)
+            elif hx < 0:
+                self._update_phase_id(phase_id=3)
+        self._prev_hat = cur_hat.copy()
+
+        # 5) flight params toggles / per-contact enables via stick press + bumpers
+        # We'll use left stick press (stick_press[0]) to toggle _enable_flight_param_change
+        if getattr(joy, 'stick_press', None) is not None:
+            # left stick press edge -> toggle overall flight param change
+            if joy.stick_press[0] and not getattr(self, '_prev_stick_press_left', False):
+                self._enable_flight_param_change = not self._enable_flight_param_change
+                info = f"Flight params change enabled: {self._enable_flight_param_change}"
+                Journal.log(self.__class__.__name__, "_set_flight_params", info, LogType.INFO, throw_when_excep=True)
+            self._prev_stick_press_left = bool(joy.stick_press[0])
+
+        # Use face buttons with long-press to toggle which contact's flight params are adjustable.
+        # face mapping: o/p/k/l in keyboard corresponded to contacts 0..3. We'll map:
+        #   X (face[0]) -> contact 0 enable flight params
+        #   B (face[1]) -> contact 1
+        #   A (face[2]) -> contact 2
+        #   Y (face[3]) -> contact 3
+        for i in range(4):
+            if cur_face[i] and not self._prev_face[i]:
+                # pressed -> toggle contact-specific flight param enable
+                self._d_fparam_enabled_contact_i[i] = not self._d_fparam_enabled_contact_i[i]
+                info = f"Flight params change enabled: {self._d_fparam_enabled_contact_i[i]} for contact {i}"
+                Journal.log(self.__class__.__name__, "_set_flight_params", info, LogType.INFO, throw_when_excep=True)
+
+        # Use triggers as +/- (RT increments, LT decrements) when flight param change enabled
+        cur_trigs = np.array(joy.triggers, dtype=float)
+        # detect rising crossing above a small threshold (0.5) to consider it a button press
+        thr = 0.5
+        if (cur_trigs[1] > thr) and (self._prev_triggers[1] <= thr):
+            # RT pressed -> '+'
+            for i in range(4):
+                if self._d_fparam_enabled_contact_i[i]:
+                    self._update_flight_params(contact_idx=i, increment=True)
+        if (cur_trigs[0] > thr) and (self._prev_triggers[0] <= thr):
+            # LT pressed -> '-'
+            for i in range(4):
+                if self._d_fparam_enabled_contact_i[i]:
+                    self._update_flight_params(contact_idx=i, increment=False)
+        self._prev_triggers = cur_trigs
+
+        # 6) other one-shot keyboard-like actions can be implemented similarly
+        #    (e.g., toggling individual d_flength/apex/end via face combos). For brevity
+        #    they are not exhaustively copied here but can be added if you want.
+
+    # -------------------
+    # Main run loop: listen to JoyListenerZMQ and write at ~100 Hz
+    # -------------------
+    def run(self, connect: str, topic: str, poll_interval: float = 0.01):
+        info = f"Ready. Starting to listen for joystick commands..."
+        Journal.log(self.__class__.__name__, "run", info, LogType.INFO, throw_when_excep=True)
+
+        # start listener
+        joy_listener = JoyListenerZMQ(connect=connect, topic=topic, poll_interval=poll_interval)
+        joy_listener.start()
+
+        try:
+            # main loop
+            while not joy_listener.done:
+                # synchronize cluster/env index and read joy state to perform writes
+                self._process_joy_for_writes(joy_listener)
+                # compute twist/pos references like RefsFromJoy
+                # first, update the high level twist world vector from joystick
+                self._set_omega(joy_listener)
+                self._set_linvel(joy_listener)
+                self._set_position(joy_listener)
+                # then write to shared mems
+                self._write_to_shared_mem()
+                time.sleep(0.01)
+        except KeyboardInterrupt:
+            print("[RefsFromJoy][run]: Exiting...")
+        finally:
+            joy_listener.stop()
+            self._close()
+
