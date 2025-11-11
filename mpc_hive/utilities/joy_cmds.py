@@ -557,32 +557,32 @@ class RefsFromJoy:
     # -------------------
     # Main run loop: listen to JoyListenerZMQ and write at ~100 Hz
     # -------------------
-    def run(self, connect: str, topic: str, poll_interval: float = 0.01):
-        info = f"Ready. Starting to listen for joystick commands..."
-        Journal.log(self.__class__.__name__, "run", info, LogType.INFO, throw_when_excep=True)
+    # def run(self, connect: str, topic: str, poll_interval: float = 0.01):
+    #     info = f"Ready. Starting to listen for joystick commands..."
+    #     Journal.log(self.__class__.__name__, "run", info, LogType.INFO, throw_when_excep=True)
 
-        # start listener
-        joy_listener = JoyListenerZMQ(connect=connect, topic=topic, poll_interval=poll_interval)
-        joy_listener.start()
+    #     # start listener
+    #     joy_listener = JoyListenerZMQ(connect=connect, topic=topic, poll_interval=poll_interval)
+    #     joy_listener.start()
 
-        try:
-            # main loop
-            while not joy_listener.done:
-                # synchronize cluster/env index and read joy state to perform writes
-                self._process_joy_for_writes(joy_listener)
-                # compute twist/pos references like RefsFromJoy
-                # first, update the high level twist world vector from joystick
-                self._set_omega(joy_listener)
-                self._set_linvel(joy_listener)
-                self._set_position(joy_listener)
-                # then write to shared mems
-                self._write_to_shared_mem()
-                time.sleep(0.01)
-        except KeyboardInterrupt:
-            print("[RefsFromJoy][run]: Exiting...")
-        finally:
-            joy_listener.stop()
-            self._close()
+    #     try:
+    #         # main loop
+    #         while not joy_listener.done:
+    #             # synchronize cluster/env index and read joy state to perform writes
+    #             self._process_joy_for_writes(joy_listener)
+    #             # compute twist/pos references like RefsFromJoy
+    #             # first, update the high level twist world vector from joystick
+    #             self._set_omega(joy_listener)
+    #             self._set_linvel(joy_listener)
+    #             self._set_position(joy_listener)
+    #             # then write to shared mems
+    #             self._write_to_shared_mem()
+    #             time.sleep(0.01)
+    #     except KeyboardInterrupt:
+    #         print("[RefsFromJoy][run]: Exiting...")
+    #     finally:
+    #         joy_listener.stop()
+    #         self._close()
 
     def run(self, connect: str, topic: str, poll_interval: float = 0.01,
             callback: Optional[Callable[[Any, Any], None]] = None, callback_arg: Any = None):
@@ -617,8 +617,8 @@ class RefsFromJoy:
             if callback is not None:
                 # give callback access to both the live listener and the extra arg
                 ret=callback(joy_listener, callback_arg)
-                # if not ret: 
-                #     break
+                if not ret: 
+                    break
 
             # synchronize env/cluster index and process joystick-driven writes
             self._process_joy_for_writes(joy_listener)
