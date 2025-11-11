@@ -185,13 +185,9 @@ class RefsFromKeyboard:
                                                 n_rows=1, n_cols=self._shared_refs.rob_refs.contact_pos.n_cols,
                                                 read=False)
             
-            self._shared_refs.contact_flags.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self._shared_refs.contact_flags.n_cols,
-                                                read=False)
             
-            self._shared_refs.phase_id.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self._shared_refs.phase_id.n_cols,
-                                                read=False)
+            
+            
             
             self._shared_refs.flight_settings.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self._shared_refs.flight_settings.n_cols,
