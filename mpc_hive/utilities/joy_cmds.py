@@ -22,52 +22,9 @@ import numpy as np
 # If it's in another module, change the import accordingly.
 from mpc_hive.utilities.joy.joy_zmq_listener import JoyListenerZMQ
 
+from typing import Optional, Callable, Any
 
 class RefsFromJoy:
-    """
-    Joystick-driven refs writer that reproduces RefsFromKeyboard functionality.
-
-    Controller mapping (Xbox-style) used here ("reasonable choices"):
-      - face buttons (JoyListener.face -> [X, B, A, Y]):
-          * X (face[0])    : contact 0 (held -> contact OFF / release -> ON)
-          * B (face[1])    : contact 1
-          * A (face[2])    : contact 2
-          * Y (face[3])    : contact 3
-          (this replicates keyboard's 7/9/1/3 momentary behavior)
-
-      - face toggles (hold-to-toggle; same semantics as original RefsFromJoy):
-          * face[1] (B) -> omega toggle (hold)
-          * face[0] (X) -> linvel toggle (hold)
-          * face[2] (A) -> pos toggle (hold)
-        (These are exactly the same indices used in your RefsFromJoy earlier.)
-
-      - Start button (back_start_home[1]) -> toggle phase-id-change enable (press edge)
-      - Back button (back_start_home[0])  -> toggle base-height-change enable (press edge)
-
-      - Bumpers:
-          * LB (bumpers[0]) : when base-height-change enabled -> decrement height (edge)
-          * RB (bumpers[1]) : when base-height-change enabled -> increment height (edge)
-
-      - Triggers (triggers[0]=LT, triggers[1]=RT):
-          * used for flight params +/- when corresponding contact flight param flag is enabled.
-            RT (rising above threshold) = '+' (increment); LT (rising) = '-' (decrement)
-
-      - Hat (dpad) used to set discrete phase ids when phase-id-change is enabled:
-          * up    -> phase_id = 0
-          * right -> phase_id = 1
-          * down  -> phase_id = 2
-          * left  -> phase_id = 3
-          * pressing Y while phase-id-change enabled -> reset (phase_id = -1)
-
-    Notes:
-      - The class detects edges (press/release and trigger crossings) by keeping previous
-        state snapshots and comparing.
-      - Many behaviors from RefsFromKeyboard (flight param toggles per contact, contact
-        position edits, etc.) are partially implemented. Where your original implementation
-        had many key mappings (o,p,k,l toggles for contacts etc.) we mapped them to
-        combinations of face/bumpers/triggers in a pragmatic way.
-
-    """
 
     def __init__(self,
                  namespace: str,
@@ -418,13 +375,13 @@ class RefsFromJoy:
 
         # 0) Guide/menu toggles a retained "phase id" flag (unused elsewhere but kept as requested)
         # back_start_home[2] is guide/home per JoyListenerZMQ mapping
-        cur_back_start_home = joy.back_start_home.copy()
-        if cur_back_start_home[2] and not self._prev_back_start_home[2]:
-            # toggle enable_phase_id_change but it is otherwise unused
-            self.enable_phase_id_change = not getattr(self, 'enable_phase_id_change', False)
-            info = f"Phase ID change enabled (unused): {self.enable_phase_id_change}"
-            Journal.log(self.__class__.__name__, "_set_phase_id", info, LogType.INFO, throw_when_excep=True)
-        self._prev_back_start_home = cur_back_start_home
+        # cur_back_start_home = joy.back_start_home.copy()
+        # if cur_back_start_home[2] and not self._prev_back_start_home[2]:
+        #     # toggle enable_phase_id_change but it is otherwise unused
+        #     self.enable_phase_id_change = not getattr(self, 'enable_phase_id_change', False)
+        #     info = f"Phase ID change enabled (unused): {self.enable_phase_id_change}"
+        #     Journal.log(self.__class__.__name__, "_set_phase_id", info, LogType.INFO, throw_when_excep=True)
+        # self._prev_back_start_home = cur_back_start_home
 
         # 1) Mode selection (use face buttons for modes). Use hold-to-toggle semantics like RefsFromJoy
         #    X (face[0])  -> linvel toggle (hold)
@@ -439,27 +396,27 @@ class RefsFromJoy:
         # Manage flight-change hold detection similar to _check_and_toggle
         now = time.time()
         # flight-change hold tracking stored in self._flight_hold_since/_triggered
-        if not hasattr(self, '_flight_hold_since'):
-            self._flight_hold_since = None
-            self._flight_hold_triggered = False
-        if cur_face[3]:
-            if self._flight_hold_since is None:
-                self._flight_hold_since = now
-            else:
-                if (now - self._flight_hold_since) >= self.hold_time and not self._flight_hold_triggered:
-                    self._enable_flight_param_change = not getattr(self, '_enable_flight_param_change', False)
-                    info = f"Flight params change enabled: {self._enable_flight_param_change}"
-                    Journal.log(self.__class__.__name__, "_set_flight_params", info, LogType.INFO, throw_when_excep=True)
-                    self._flight_hold_triggered = True
-        else:
-            self._flight_hold_since = None
-            self._flight_hold_triggered = False
+        # if not hasattr(self, '_flight_hold_since'):
+        #     self._flight_hold_since = None
+        #     self._flight_hold_triggered = False
+        # if cur_face[3]:
+        #     if self._flight_hold_since is None:
+        #         self._flight_hold_since = now
+        #     else:
+        #         if (now - self._flight_hold_since) >= self.hold_time and not self._flight_hold_triggered:
+        #             self._enable_flight_param_change = not getattr(self, '_enable_flight_param_change', False)
+        #             info = f"Flight params change enabled: {self._enable_flight_param_change}"
+        #             Journal.log(self.__class__.__name__, "_set_flight_params", info, LogType.INFO, throw_when_excep=True)
+        #             self._flight_hold_triggered = True
+        # else:
+        #     self._flight_hold_since = None
+        #     self._flight_hold_triggered = False
 
         # If flight mode enabled, ensure other modes are off (already enforced above)
-        if getattr(self, '_enable_flight_param_change', False):
-            self.enable_omega = False
-            self.enable_linvel = False
-            self.enable_pos = False
+        # if getattr(self, '_enable_flight_param_change', False):
+        #     self.enable_omega = False
+        #     self.enable_linvel = False
+        #     self.enable_pos = False
 
         # 2) Contacts: use left pad (hat) for contact stepping; mapping kept
         #    hat up    -> contact 0 (left front) press/release
@@ -489,108 +446,108 @@ class RefsFromJoy:
         # 3) Navigation / omega behaviour
         # Left stick sets roll/pitch (omega x/y) while yaw uses triggers (RT/LT)
         # First handle omega/pitch/roll when enabled and not in flight mode
-        if self.enable_omega and not getattr(self, '_enable_flight_param_change', False):
-            # left stick axes: sticks[0]=left_x, sticks[1]=left_y
-            try:
-                lsx = float(joy.sticks[0])
-                lsy = float(joy.sticks[1])
-            except Exception:
-                lsx, lsy = 0.0, 0.0
-            # roll from left_x, pitch from left_y
-            self._current_twist_ref_world[3] = float(np.clip(lsx * self._max_roll_rate, -self._max_roll_rate, self._max_roll_rate))
-            self._current_twist_ref_world[4] = float(np.clip(lsy * self._max_pitch_rate, -self._max_pitch_rate, self._max_pitch_rate))
-            # yaw: map trigger differential to yaw rate (RT positive increases, LT increases in negative)
-            try:
-                lt = float(joy.triggers[0])
-                rt = float(joy.triggers[1])
-            except Exception:
-                lt, rt = 0.0, 0.0
-            # normalize triggers to [-1,1] heuristically already handled by listener
-            yaw_cmd = (rt - lt) * float(self._max_yaw_rate)
-            self._current_twist_ref_world[5] = float(np.clip(yaw_cmd, -self._max_yaw_rate, self._max_yaw_rate))
-        else:
-            # if omega not enabled or flight mode active, zero angular rates unless flight mode uses them
-            if not getattr(self, '_enable_flight_param_change', False):
-                self._current_twist_ref_world[3:] = 0.0
+        # if self.enable_omega and not getattr(self, '_enable_flight_param_change', False):
+        # left stick axes: sticks[0]=left_x, sticks[1]=left_y
+        try:
+            lsx = float(joy.sticks[0])
+            lsy = float(joy.sticks[1])
+        except Exception:
+            lsx, lsy = 0.0, 0.0
+        # roll from left_x, pitch from left_y
+        self._current_twist_ref_world[3] = float(np.clip(lsx * self._max_roll_rate, -self._max_roll_rate, self._max_roll_rate))
+        self._current_twist_ref_world[4] = float(np.clip(lsy * self._max_pitch_rate, -self._max_pitch_rate, self._max_pitch_rate))
+        # yaw: map trigger differential to yaw rate (RT positive increases, LT increases in negative)
+        try:
+            lt = float(joy.triggers[0])
+            rt = float(joy.triggers[1])
+        except Exception:
+            lt, rt = 0.0, 0.0
+        # normalize triggers to [-1,1] heuristically already handled by listener
+        yaw_cmd = (rt - lt) * float(self._max_yaw_rate)
+        self._current_twist_ref_world[5] = float(np.clip(yaw_cmd, -self._max_yaw_rate, self._max_yaw_rate))
+        # else:
+        #     # if omega not enabled or flight mode active, zero angular rates unless flight mode uses them
+        #     if not getattr(self, '_enable_flight_param_change', False):
+        #         self._current_twist_ref_world[3:] = 0.0
 
         # 4) Linear velocity and base-height behaviour
         # If base-height mode is enabled, and linvel is enabled -> control z velocity via triggers
         # otherwise in base-height mode and pos-mode active -> change position z
-        if getattr(self, 'enable_heightchange', False) and not getattr(self, '_enable_flight_param_change', False):
-            # base-height active
-            try:
-                lt = float(joy.triggers[0])
-                rt = float(joy.triggers[1])
-            except Exception:
-                lt, rt = 0.0, 0.0
-            vz_cmd = (rt - lt) * float(getattr(self, '_max_vz_magn', 0.5))
-            if self.enable_linvel:
-                # set z velocity component
-                self._current_twist_ref_world[2] = float(np.clip(vz_cmd, -self._max_vz_magn, self._max_vz_magn))
-            else:
-                # adjust position target incrementally based on triggers
-                # when RT pressed, increase z; when LT pressed, decrease z
-                # we treat crossing of threshold as one-step change to avoid rapid drift
-                thr = 0.5
-                if (rt > thr) and (self._prev_triggers[1] <= thr):
-                    # increase position
-                    self._current_pos_ref[2] += self.height_dh
-                if (lt > thr) and (self._prev_triggers[0] <= thr):
-                    self._current_pos_ref[2] -= self.height_dh
+        # if getattr(self, 'enable_heightchange', False) and not getattr(self, '_enable_flight_param_change', False):
+        # base-height active
+        try:
+            lt = float(joy.triggers[0])
+            rt = float(joy.triggers[1])
+        except Exception:
+            lt, rt = 0.0, 0.0
+        vz_cmd = (rt - lt) * float(getattr(self, '_max_vz_magn', 0.5))
+        if self.enable_linvel:
+            # set z velocity component
+            self._current_twist_ref_world[2] = float(np.clip(vz_cmd, -self._max_vz_magn, self._max_vz_magn))
         else:
-            # not in base-height mode: if linvel disabled, zero vertical velocity
-            if not self.enable_linvel and not getattr(self, '_enable_flight_param_change', False):
-                self._current_twist_ref_world[2] = 0.0
+            # adjust position target incrementally based on triggers
+            # when RT pressed, increase z; when LT pressed, decrease z
+            # we treat crossing of threshold as one-step change to avoid rapid drift
+            thr = 0.5
+            if (rt > thr) and (self._prev_triggers[1] <= thr):
+                # increase position
+                self._current_pos_ref[2] += self.height_dh
+            if (lt > thr) and (self._prev_triggers[0] <= thr):
+                self._current_pos_ref[2] -= self.height_dh
+        # else:
+        #     # not in base-height mode: if linvel disabled, zero vertical velocity
+        #     if not self.enable_linvel and not getattr(self, '_enable_flight_param_change', False):
+        #         self._current_twist_ref_world[2] = 0.0
 
         # 5) Flight-change mode handling (exclusive)
         # In flight mode: face buttons short-press toggle per-contact enable for the currently
         # selected parameter. Long-press on X/A/Y selects parameter: X=length, A=apex, Y=end.
-        if getattr(self, '_enable_flight_param_change', False):
-            # initialize selected param storage
-            if not hasattr(self, '_flight_param_selected'):
-                self._flight_param_selected = 'length'  # default
-            if not hasattr(self, '_flight_face_since'):
-                self._flight_face_since = [None]*4
-                self._flight_face_triggered = [False]*4
+        # if getattr(self, '_enable_flight_param_change', False):
+        #     # initialize selected param storage
+        #     if not hasattr(self, '_flight_param_selected'):
+        #         self._flight_param_selected = 'length'  # default
+        #     if not hasattr(self, '_flight_face_since'):
+        #         self._flight_face_since = [None]*4
+        #         self._flight_face_triggered = [False]*4
 
-            # detect face button presses and durations
-            for fi in range(4):
-                if cur_face[fi] and self._flight_face_since[fi] is None:
-                    self._flight_face_since[fi] = time.time()
-                if not cur_face[fi] and self._flight_face_since[fi] is not None:
-                    # button was released -> compute duration
-                    dur = time.time() - self._flight_face_since[fi]
-                    self._flight_face_since[fi] = None
-                    if dur >= self.hold_time:
-                        # long press -> param select mapping for X(0)/A(2)/Y(3)
-                        if fi == 0:
-                            self._flight_param_selected = 'length'
-                        elif fi == 2:
-                            self._flight_param_selected = 'apex'
-                        elif fi == 3:
-                            self._flight_param_selected = 'end'
-                        # B (fi==1) reserved / no long-press action
-                        info = f"Flight param selected: {self._flight_param_selected}"
-                        Journal.log(self.__class__.__name__, "_flight_param_select", info, LogType.INFO, throw_when_excep=True)
-                    else:
-                        # short press -> toggle per-contact enable for this face index (map 0..3 -> contact 0..3)
-                        contact_idx = fi
-                        self._d_fparam_enabled_contact_i[contact_idx] = not self._d_fparam_enabled_contact_i[contact_idx]
-                        info = f"Flight param enable for contact {contact_idx}: {self._d_fparam_enabled_contact_i[contact_idx]}"
-                        Journal.log(self.__class__.__name__, "_set_flight_params", info, LogType.INFO, throw_when_excep=True)
+        #     # detect face button presses and durations
+        #     for fi in range(4):
+        #         if cur_face[fi] and self._flight_face_since[fi] is None:
+        #             self._flight_face_since[fi] = time.time()
+        #         if not cur_face[fi] and self._flight_face_since[fi] is not None:
+        #             # button was released -> compute duration
+        #             dur = time.time() - self._flight_face_since[fi]
+        #             self._flight_face_since[fi] = None
+        #             if dur >= self.hold_time:
+        #                 # long press -> param select mapping for X(0)/A(2)/Y(3)
+        #                 if fi == 0:
+        #                     self._flight_param_selected = 'length'
+        #                 elif fi == 2:
+        #                     self._flight_param_selected = 'apex'
+        #                 elif fi == 3:
+        #                     self._flight_param_selected = 'end'
+        #                 # B (fi==1) reserved / no long-press action
+        #                 info = f"Flight param selected: {self._flight_param_selected}"
+        #                 Journal.log(self.__class__.__name__, "_flight_param_select", info, LogType.INFO, throw_when_excep=True)
+        #             else:
+        #                 # short press -> toggle per-contact enable for this face index (map 0..3 -> contact 0..3)
+        #                 contact_idx = fi
+        #                 self._d_fparam_enabled_contact_i[contact_idx] = not self._d_fparam_enabled_contact_i[contact_idx]
+        #                 info = f"Flight param enable for contact {contact_idx}: {self._d_fparam_enabled_contact_i[contact_idx]}"
+        #                 Journal.log(self.__class__.__name__, "_set_flight_params", info, LogType.INFO, throw_when_excep=True)
 
-            # triggers act as +/- for the selected param across enabled contacts
-            thr = 0.1
-            # RT increments proportional to its value when above threshold
-            if cur_trigs[1] > thr and self._prev_triggers[1] <= thr:
-                # RT just crossed -> perform increment for all enabled contacts
-                for ci in range(4):
-                    if self._d_fparam_enabled_contact_i[ci]:
-                        self._update_flight_params(contact_idx=ci, increment=True)
-            if cur_trigs[0] > thr and self._prev_triggers[0] <= thr:
-                for ci in range(4):
-                    if self._d_fparam_enabled_contact_i[ci]:
-                        self._update_flight_params(contact_idx=ci, increment=False)
+        #     # triggers act as +/- for the selected param across enabled contacts
+        #     thr = 0.1
+        #     # RT increments proportional to its value when above threshold
+        #     if cur_trigs[1] > thr and self._prev_triggers[1] <= thr:
+        #         # RT just crossed -> perform increment for all enabled contacts
+        #         for ci in range(4):
+        #             if self._d_fparam_enabled_contact_i[ci]:
+        #                 self._update_flight_params(contact_idx=ci, increment=True)
+        #     if cur_trigs[0] > thr and self._prev_triggers[0] <= thr:
+        #         for ci in range(4):
+        #             if self._d_fparam_enabled_contact_i[ci]:
+        #                 self._update_flight_params(contact_idx=ci, increment=False)
 
         # 6) update prev triggers snapshot for edge detection used above
         self._prev_triggers = cur_trigs
@@ -627,6 +584,56 @@ class RefsFromJoy:
             joy_listener.stop()
             self._close()
 
+    def run(self, connect: str, topic: str, poll_interval: float = 0.01,
+            callback: Optional[Callable[[Any, Any], None]] = None, callback_arg: Any = None):
+        """
+        Main run loop for RefsFromJoy.
 
-# End of file
+        Parameters
+        ----------
+        connect : str
+            ZeroMQ connect address (host:port) for JoyListenerZMQ.
+        topic : str
+            ZMQ topic to subscribe to.
+        poll_interval : float
+            Poll interval for the JoyListenerZMQ.
+        callback : Optional[Callable[[joy_listener, callback_arg], None]]
+            Optional callback invoked every loop with the running joy_listener and the provided callback_arg.
+            The callback is NOT expected to return anything; if it wants to request shutdown it should
+            set external flags (e.g. via callback_arg shared wrapper).
+        callback_arg : Any
+            Arbitrary object passed through to the callback (e.g. safety_flag wrapper).
+        """
+        info = f"Ready. Starting to listen for joystick commands..."
+        Journal.log(self.__class__.__name__, "run", info, LogType.INFO, throw_when_excep=True)
 
+        # start listener
+        joy_listener = JoyListenerZMQ(connect=connect, topic=topic, poll_interval=poll_interval)
+        joy_listener.start()
+
+        # main loop
+        while not joy_listener.done:
+            # optional external callback (e.g. remote-exit check) - DO NOT expect return value
+            if callback is not None:
+                # give callback access to both the live listener and the extra arg
+                ret=callback(joy_listener, callback_arg)
+                # if not ret: 
+                #     break
+
+            # synchronize env/cluster index and process joystick-driven writes
+            self._process_joy_for_writes(joy_listener)
+
+            # compute twist/pos references like RefsFromJoy
+            self._set_omega(joy_listener)
+            self._set_linvel(joy_listener)
+            self._set_position(joy_listener)
+
+            # then write to shared memory
+            self._write_to_shared_mem()
+
+            # poll interval
+            time.sleep(poll_interval)
+        
+        print("[RefsFromJoy][run]: Exiting...")
+        joy_listener.stop()
+        self._close()
