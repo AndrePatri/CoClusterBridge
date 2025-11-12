@@ -30,7 +30,7 @@ class RefsFromJoy:
                  namespace: str,
                  shared_refs,
                  verbose: bool = False,
-                 agent_refs_world: bool = True,
+                 agent_refs_world: bool = False,
                  env_idx: int = None,
                  hold_time: float = 0.15):
         self.namespace = namespace
@@ -57,8 +57,8 @@ class RefsFromJoy:
 
         self._max_vxy_magn = 1.0
         self._max_vz_magn = 0.0
-        self._max_pitch_rate = 0.0
-        self._max_roll_rate = 0.0
+        self._max_pitch_rate = 0.8
+        self._max_roll_rate = 0.8
         self._max_yaw_rate = 0.8
 
         # flight params state (kept similar to keyboard class)
@@ -247,26 +247,51 @@ class RefsFromJoy:
             self._hold_since[name] = None
             self._hold_triggered[name] = False
 
+    def _norm_trigger(self, val: float) -> float:
+            # Heuristic normalization to [0,1]
+            if val < -0.1:
+                # assume in [-1,1] -> map rest=-1 -> 0, pressed=+1 -> 1
+                return float(np.clip((val + 1.0) / 2.0, 0.0, 1.0))
+            else:
+                # assume already in [0,1]
+                return float(np.clip(val, 0.0, 1.0))
+
     def _set_omega(self, joy):
         twist_ref = self._current_twist_ref_world
         if not self.enable_omega:
             twist_ref[3:] = 0.0
             return
-        twist_ref[3] = 0.0
-        twist_ref[4] = 0.0
-        try:
-            lx = float(joy.sticks[0])
-        except Exception:
-            lx = 0.0
+        # twist_ref[3] = 0.0
+        # twist_ref[4] = 0.0
+        lsx = float(joy.sticks[0])
+        lsy = float(joy.sticks[1])
+        lt = float(joy.triggers[0])
+        rt = float(joy.triggers[1])
+        lt_n = self._norm_trigger(lt)
+        rt_n = self._norm_trigger(rt)
+
+        # Map left stick directly to roll/pitch rates (omega x/y)
+        # Optionally add a small deadzone to avoid jitter
         deadzone = float(getattr(self, "dxy", 0.05))
-        if abs(lx) <= deadzone:
-            yaw_rate = 0.0
+        if abs(lsx) <= deadzone:
+            roll_cmd = 0.0
         else:
-            mag = min(abs(lx), 1.0)
-            yaw_rate = np.sign(lx) * mag * float(self._max_yaw_rate)
-        twist_ref[5] = float(np.clip(yaw_rate, -self._max_yaw_rate, self._max_yaw_rate))
-        twist_ref[3] = np.clip(twist_ref[3], a_min=-self._max_roll_rate, a_max=self._max_roll_rate)
-        twist_ref[4] = np.clip(twist_ref[4], a_min=-self._max_pitch_rate, a_max=self._max_pitch_rate)
+            roll_cmd = np.clip(lsx, -1.0, 1.0) * float(self._max_roll_rate)
+        
+        if abs(lsy) <= deadzone:
+            pitch_cmd = 0.0
+        else:
+            pitch_cmd = np.clip(lsy, -1.0, 1.0) * float(self._max_pitch_rate)
+
+        # yaw = RT_positive minus LT_negative
+        yaw_cmd = -(rt_n - lt_n) * float(self._max_yaw_rate)
+        # small deadzone so tiny trigger jitter doesn't move yaw
+        if abs(yaw_cmd) < 1e-4:
+            yaw_cmd = 0.0
+
+        twist_ref[3] = float(np.clip(roll_cmd, -self._max_roll_rate, self._max_roll_rate))
+        twist_ref[4] = float(np.clip(pitch_cmd, -self._max_pitch_rate, self._max_pitch_rate))
+        twist_ref[5] = float(np.clip(yaw_cmd, -self._max_yaw_rate, self._max_yaw_rate))
 
     def _set_linvel(self, joy):
         if not self.enable_linvel:
@@ -444,56 +469,38 @@ class RefsFromJoy:
         self._prev_hat_buttons = hat_buttons.copy()
 
         # 3) Navigation / omega behaviour
-        # Left stick sets roll/pitch (omega x/y) while yaw uses triggers (RT/LT)
-        # First handle omega/pitch/roll when enabled and not in flight mode
-        # if self.enable_omega and not getattr(self, '_enable_flight_param_change', False):
-        # left stick axes: sticks[0]=left_x, sticks[1]=left_y
-        try:
-            lsx = float(joy.sticks[0])
-            lsy = float(joy.sticks[1])
-        except Exception:
-            lsx, lsy = 0.0, 0.0
-        # roll from left_x, pitch from left_y
-        self._current_twist_ref_world[3] = float(np.clip(lsx * self._max_roll_rate, -self._max_roll_rate, self._max_roll_rate))
-        self._current_twist_ref_world[4] = float(np.clip(lsy * self._max_pitch_rate, -self._max_pitch_rate, self._max_pitch_rate))
-        # yaw: map trigger differential to yaw rate (RT positive increases, LT increases in negative)
-        try:
-            lt = float(joy.triggers[0])
-            rt = float(joy.triggers[1])
-        except Exception:
-            lt, rt = 0.0, 0.0
-        # normalize triggers to [-1,1] heuristically already handled by listener
-        yaw_cmd = (rt - lt) * float(self._max_yaw_rate)
-        self._current_twist_ref_world[5] = float(np.clip(yaw_cmd, -self._max_yaw_rate, self._max_yaw_rate))
-        # else:
-        #     # if omega not enabled or flight mode active, zero angular rates unless flight mode uses them
-        #     if not getattr(self, '_enable_flight_param_change', False):
-        #         self._current_twist_ref_world[3:] = 0.0
+        # Left stick sets roll (x) and pitch (y) of angular velocity (omega)
+        # Triggers control yaw (z): RT positive, LT negative; yaw = (rt - lt) * max_yaw_rate
+        # lsx = float(joy.sticks[0])
+        # lsy = float(joy.sticks[1])
+
+        # Read triggers (LT, RT). Some platforms give triggers in [-1,1] (rest -1, pressed +1),
+        # others give [0,1] (rest 0, pressed 1). Normalize each to [0,1] then compute differential.
 
         # 4) Linear velocity and base-height behaviour
         # If base-height mode is enabled, and linvel is enabled -> control z velocity via triggers
         # otherwise in base-height mode and pos-mode active -> change position z
         # if getattr(self, 'enable_heightchange', False) and not getattr(self, '_enable_flight_param_change', False):
         # base-height active
-        try:
-            lt = float(joy.triggers[0])
-            rt = float(joy.triggers[1])
-        except Exception:
-            lt, rt = 0.0, 0.0
-        vz_cmd = (rt - lt) * float(getattr(self, '_max_vz_magn', 0.5))
-        if self.enable_linvel:
-            # set z velocity component
-            self._current_twist_ref_world[2] = float(np.clip(vz_cmd, -self._max_vz_magn, self._max_vz_magn))
-        else:
-            # adjust position target incrementally based on triggers
-            # when RT pressed, increase z; when LT pressed, decrease z
-            # we treat crossing of threshold as one-step change to avoid rapid drift
-            thr = 0.5
-            if (rt > thr) and (self._prev_triggers[1] <= thr):
-                # increase position
-                self._current_pos_ref[2] += self.height_dh
-            if (lt > thr) and (self._prev_triggers[0] <= thr):
-                self._current_pos_ref[2] -= self.height_dh
+        # try:
+        #     lt = float(joy.triggers[0])
+        #     rt = float(joy.triggers[1])
+        # except Exception:
+        #     lt, rt = 0.0, 0.0
+        # vz_cmd = (rt - lt) * float(getattr(self, '_max_vz_magn', 0.5))
+        # if self.enable_linvel:
+        #     # set z velocity component
+        #     self._current_twist_ref_world[2] = float(np.clip(vz_cmd, -self._max_vz_magn, self._max_vz_magn))
+        # else:
+        #     # adjust position target incrementally based on triggers
+        #     # when RT pressed, increase z; when LT pressed, decrease z
+        #     # we treat crossing of threshold as one-step change to avoid rapid drift
+        #     thr = 0.5
+        #     if (rt > thr) and (self._prev_triggers[1] <= thr):
+        #         # increase position
+        #         self._current_pos_ref[2] += self.height_dh
+        #     if (lt > thr) and (self._prev_triggers[0] <= thr):
+        #         self._current_pos_ref[2] -= self.height_dh
         # else:
         #     # not in base-height mode: if linvel disabled, zero vertical velocity
         #     if not self.enable_linvel and not getattr(self, '_enable_flight_param_change', False):
