@@ -47,6 +47,7 @@ class RefsFromJoy:
         self.enable_linvel = False
         self.enable_omega = False
         self.enable_pos = False
+        self.enable_linvelz = False
 
         self.dpos = 0.1
         self.dxy = 0.05
@@ -54,9 +55,9 @@ class RefsFromJoy:
 
         self._v_magnitude = 0.0
         self._heading = 0.0
-
+        
         self._max_vxy_magn = 1.0
-        self._max_vz_magn = 0.0
+        self._max_vz_magn = 1.0
         self._max_pitch_rate = 0.8
         self._max_roll_rate = 0.8
         self._max_yaw_rate = 0.8
@@ -89,8 +90,8 @@ class RefsFromJoy:
         self._robot_state = None
 
         # hold toggles same pattern as RefsFromJoy
-        self._hold_since = {"omega": None, "linvel": None, "pos": None}
-        self._hold_triggered = {"omega": False, "linvel": False, "pos": False}
+        self._hold_since = {"omega": None, "linvel": None, "pos": None, "linvelz": None}
+        self._hold_triggered = {"omega": False, "linvel": False, "pos": False, "linvelz": False}
 
         # previous joy snapshot for edge detection
         self._prev_face = np.zeros(4, dtype=bool)
@@ -232,16 +233,20 @@ class RefsFromJoy:
                 if duration >= self.hold_time and not self._hold_triggered[name]:
                     if name == "omega":
                         self.enable_omega = not self.enable_omega
-                        info = f"Twist change enabled: {self.enable_omega}"
+                        info = f"Omega change enabled: {self.enable_omega}"
                         Journal.log(self.__class__.__name__, "_set_omega", info, LogType.INFO, throw_when_excep=True)
                     elif name == "linvel":
                         self.enable_linvel = not self.enable_linvel
-                        info = f"High level navigation enabled: {self.enable_linvel}"
+                        info = f"Linvel xy enabled: {self.enable_linvel}"
                         Journal.log(self.__class__.__name__, "_set_linvel", info, LogType.INFO, throw_when_excep=True)
                     elif name == "pos":
                         self.enable_pos = not self.enable_pos
-                        info = f"High level pos reference change: {self.enable_pos}"
+                        info = f"pos reference change: {self.enable_pos}"
                         Journal.log(self.__class__.__name__, "_set_position", info, LogType.INFO, throw_when_excep=True)
+                    elif name == "linvelz":
+                        self.enable_linvelz = not self.enable_linvelz
+                        info = f"linvel z enabled: {self.enable_linvelz}"
+                        Journal.log(self.__class__.__name__, "_set_linvel", info, LogType.INFO, throw_when_excep=True)
                     self._hold_triggered[name] = True
         else:
             self._hold_since[name] = None
@@ -313,7 +318,34 @@ class RefsFromJoy:
         self._v_magnitude = float(np.clip(self._v_magnitude, a_min=0.0, a_max=self._max_vxy_magn))
         twist_ref[0] = self._v_magnitude * math.cos(self._heading)
         twist_ref[1] = self._v_magnitude * math.sin(self._heading)
-        twist_ref[2] = 0.0
+
+    def _set_linvelz(self, joy):
+        """
+        If enable_linvelz is True, set vertical velocity (twist[2]) from triggers:
+          twist[2] = -(rt_n - lt_n) * self._max_vz_magn
+        where lt_n and rt_n are normalized triggers in [0,1] (same normalization used for yaw).
+        If not enabled, this method does nothing (existing stepping/old logic remains elsewhere).
+        """
+
+        # defensive reads
+        lt = float(joy.triggers[0])
+        rt = float(joy.triggers[1])
+
+        lt_n = self._norm_trigger(lt)
+        rt_n = self._norm_trigger(rt)
+
+        # same sign convention used for yaw earlier in this class: negative of (rt - lt)
+        vz_cmd = (rt_n - lt_n) * float(self._max_vz_magn)
+
+        print(vz_cmd)
+        # small deadzone
+        if abs(vz_cmd) < 1e-6:
+            vz_cmd = 0.0
+
+        # only apply if linear velocity control is active (to avoid conflicts with pos mode)
+        if self.enable_linvelz:
+            # set z velocity directly (clipped)
+            self._current_twist_ref_world[2] = float(np.clip(vz_cmd, -self._max_vz_magn, self._max_vz_magn))
 
     def _set_position(self, joy):
         if not self.enable_pos:
@@ -414,6 +446,7 @@ class RefsFromJoy:
         #    A (face[2])  -> base-height toggle (hold)
         #    Y (face[3])  -> flight-change toggle (hold)
         self._check_and_toggle("linvel", bool(cur_face[0]))
+        self._check_and_toggle("linvelz", bool(cur_face[3]))
         self._check_and_toggle("omega", bool(cur_face[1]))
         self._check_and_toggle("pos", bool(cur_face[2]))
         # flight-change uses its own boolean to avoid confusion with _check_and_toggle map
@@ -633,6 +666,7 @@ class RefsFromJoy:
             # compute twist/pos references like RefsFromJoy
             self._set_omega(joy_listener)
             self._set_linvel(joy_listener)
+            self._set_linvelz(joy_listener)
             self._set_position(joy_listener)
 
             # then write to shared memory
