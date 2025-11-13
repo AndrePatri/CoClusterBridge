@@ -337,7 +337,6 @@ class RefsFromJoy:
         # same sign convention used for yaw earlier in this class: negative of (rt - lt)
         vz_cmd = (rt_n - lt_n) * float(self._max_vz_magn)
 
-        print(vz_cmd)
         # small deadzone
         if abs(vz_cmd) < 1e-6:
             vz_cmd = 0.0
