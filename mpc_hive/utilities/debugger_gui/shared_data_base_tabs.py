@@ -34,7 +34,7 @@ class FullRobStateWindow(SharedDataWindow):
         super().__init__(update_data_dt = update_data_dt,
             update_plot_dt = update_plot_dt,
             window_duration = window_duration,
-            grid_n_rows = 7,
+            grid_n_rows = 8,
             grid_n_cols = 2,
             window_buffer_factor = window_buffer_factor,
             namespace = namespace,
@@ -233,6 +233,32 @@ class FullRobStateWindow(SharedDataWindow):
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=contact_vel_legend, 
                     ylabel="[m]"))
+                
+        root_contact_legend = [""] * self.shared_data_clients[0].contact_wrenches_root.n_cols
+        root_contact_names = [f"root_w" ]
+        
+        for i in range(len(root_contact_names)):
+
+            root_contact_legend[i * 3] = "f_x - " + root_contact_names[i]
+            root_contact_legend[i * 3 + 1] = "f_y - " + root_contact_names[i]
+            root_contact_legend[i * 3 + 2] = "f_z - " + root_contact_names[i]
+
+        for i in range(len(root_contact_names)):
+
+            root_contact_legend[i * 3 + 3 * len(root_contact_names)] = "t_x - " + root_contact_names[i]
+            root_contact_legend[i * 3 + 1 + 3 * len(root_contact_names)] = "t_y - " + root_contact_names[i]
+            root_contact_legend[i * 3 + 2 + 3 * len(root_contact_names)] = "t_z - " + root_contact_names[i]
+
+        self.rt_plotters.append(RtPlotWindow(data_dim=len(root_contact_legend),
+                    n_data = 1, 
+                    update_data_dt=self.update_data_dt, 
+                    update_plot_dt=self.update_plot_dt,
+                    window_duration=self.window_duration, 
+                    parent=None, 
+                    base_name="Contact wrenches - root",
+                    window_buffer_factor=self.window_buffer_factor, 
+                    legend_list=root_contact_legend, 
+                    ylabel="[N] - [Nm]"))
         
         # root state
         self.grid.addFrame(self.rt_plotters[0].base_frame, 0, 0)
@@ -257,6 +283,9 @@ class FullRobStateWindow(SharedDataWindow):
         # contact pos e vel
         self.grid.addFrame(self.rt_plotters[12].base_frame, 6, 0)
         self.grid.addFrame(self.rt_plotters[13].base_frame, 6, 1)
+
+        # contact state root
+        self.grid.addFrame(self.rt_plotters[14].base_frame, 7, 0)
 
     def _init_shared_data(self):
         
@@ -300,6 +329,9 @@ class FullRobStateWindow(SharedDataWindow):
             self.rt_plotters[12].rt_plot_widget.update(self.shared_data_clients[0].contact_pos.get(data_type="p", robot_idxs=np_idx).flatten())
             self.rt_plotters[13].rt_plot_widget.update(self.shared_data_clients[0].contact_vel.get(data_type="v", robot_idxs=np_idx).flatten())
 
+            # root contact state
+            self.rt_plotters[14].rt_plot_widget.update(self.shared_data_clients[0].contact_wrenches_root.get(data_type="w", robot_idxs=np_idx).flatten())
+
 class RobotStates(FullRobStateWindow):
 
     def __init__(self,
@@ -318,7 +350,8 @@ class RobotStates(FullRobStateWindow):
                                     with_gpu_mirror=False, 
                                     safe=False,
                                     verbose=verbose,
-                                    vlevel=VLevel.V2)
+                                    vlevel=VLevel.V2,
+                                    add_root_wrench=True)
         
         super().__init__(shared_mem_client=robot_state,
             update_data_dt=update_data_dt,

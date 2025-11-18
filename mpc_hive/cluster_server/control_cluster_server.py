@@ -169,7 +169,8 @@ class ControlClusterServer(ABC):
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
-                                safe=False)
+                                safe=False,
+                                add_root_wrench=True)
         self._rhc_cmds = RhcCmds(namespace=self._namespace,
                                 is_server=True,
                                 n_robots=self.cluster_size,

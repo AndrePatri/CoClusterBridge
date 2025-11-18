@@ -32,7 +32,8 @@ class RobotState(FullRobState):
             verbose: bool = False,
             vlevel: VLevel = VLevel.V1,
             fill_value = 0,
-            optimize_mem: bool = False):
+            optimize_mem: bool = False,
+            add_root_wrench: bool = False):
 
         basename = "RobotState"
 
@@ -52,7 +53,8 @@ class RobotState(FullRobState):
             verbose=verbose,
             vlevel=vlevel,
             fill_value=fill_value,
-            optimize_mem=optimize_mem)
+            optimize_mem=optimize_mem,
+            add_root_wrench=add_root_wrench)
 
 class RhcCmds(FullRobState):
 

@@ -1199,7 +1199,8 @@ class FullRobState(SharedDataBase):
             verbose: bool = False,
             vlevel: VLevel = VLevel.V1,
             fill_value = 0,
-            optimize_mem: bool = False):
+            optimize_mem: bool = False,
+            add_root_wrench: bool = True):
 
         self._namespace = namespace
         self._basename = basename
@@ -1215,6 +1216,8 @@ class FullRobState(SharedDataBase):
         self._jnt_names = jnt_names
         self._contact_names = contact_names
         
+        self._add_root_wrench=add_root_wrench
+
         self._jnts_remapping = None
         self._q_remapping = q_remapping
 
@@ -1265,6 +1268,21 @@ class FullRobState(SharedDataBase):
                             fill_value=fill_value,
                             optimize_mem=optimize_mem)
         
+        if self._add_root_wrench:
+            self.contact_wrenches_root = ContactWrenches(namespace=self._namespace + self._basename + "Root", 
+                            is_server=self._is_server,
+                            n_robots=self._n_robots,
+                            n_contacts=1, # total wrench on root
+                            contact_names=["root"],
+                            verbose=self._verbose,
+                            vlevel=self._vlevel,
+                            safe=self._safe,
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror,
+                            with_torch_view=with_torch_view,
+                            fill_value=fill_value,
+                            optimize_mem=optimize_mem)
+            
         self.contact_pos = ContactPos(namespace=self._namespace + self._basename, 
                             is_server=self._is_server,
                             n_robots=self._n_robots,
@@ -1300,11 +1318,14 @@ class FullRobState(SharedDataBase):
         self.close()
     
     def get_shared_mem(self):
-        return [self.root_state.get_shared_mem(),
+        shared_mems=[self.root_state.get_shared_mem(),
             self.jnts_state.get_shared_mem(),
             self.contact_wrenches.get_shared_mem(),
             self.contact_pos.get_shared_mem(),
             self.contact_vel.get_shared_mem()]
+        if self._add_root_wrench:
+            shared_mems.append(self.contact_wrenches_root.get_shared_mem())
+        return 
     
     def n_robots(self):
         return self.root_state.getNRows()
@@ -1347,6 +1368,8 @@ class FullRobState(SharedDataBase):
         self.jnts_state.run()
 
         self.contact_wrenches.run()
+        if self._add_root_wrench:
+            self.contact_wrenches_root.run()
         self.contact_pos.run()
         self.contact_vel.run()
 
@@ -1378,6 +1401,8 @@ class FullRobState(SharedDataBase):
                 self.root_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.jnts_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_wrenches.synch_mirror(from_gpu=True,non_blocking=non_blocking)
+                if self._add_root_wrench:
+                    self.contact_wrenches_root.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_pos.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_vel.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.synch_to_shared_mem()
@@ -1387,6 +1412,9 @@ class FullRobState(SharedDataBase):
                 self.root_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.jnts_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.contact_wrenches.synch_mirror(from_gpu=False,non_blocking=non_blocking)
+                if self._add_root_wrench:
+                    self.contact_wrenches_root.synch_mirror(from_gpu=False,non_blocking=non_blocking)
+
                 self.contact_pos.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.contact_vel.synch_mirror(from_gpu=True,non_blocking=non_blocking)
             #torch.cuda.synchronize() # this way we ensure that after this the state on GPU
@@ -1398,6 +1426,8 @@ class FullRobState(SharedDataBase):
         self.root_state.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.jnts_state.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_wrenches.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
+        if self._add_root_wrench:
+            self.contact_wrenches_root.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_pos.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_vel.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
 
@@ -1407,6 +1437,8 @@ class FullRobState(SharedDataBase):
         self.root_state.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.jnts_state.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_wrenches.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
+        if self._add_root_wrench:
+            self.contact_wrenches_root.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_pos.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_vel.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         
@@ -1415,5 +1447,7 @@ class FullRobState(SharedDataBase):
         self.root_state.close()
         self.jnts_state.close()
         self.contact_wrenches.close()
+        if self._add_root_wrench:
+            self.contact_wrenches_root.close()
         self.contact_pos.close()
         self.contact_vel.close()
