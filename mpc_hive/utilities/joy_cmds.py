@@ -439,15 +439,18 @@ class RefsFromJoy:
         #     Journal.log(self.__class__.__name__, "_set_phase_id", info, LogType.INFO, throw_when_excep=True)
         # self._prev_back_start_home = cur_back_start_home
 
-        # 1) Mode selection (use face buttons for modes). Use hold-to-toggle semantics like RefsFromJoy
-        #    X (face[0])  -> linvel toggle (hold)
-        #    B (face[1])  -> omega toggle (hold)
-        #    A (face[2])  -> base-height toggle (hold)
-        #    Y (face[3])  -> flight-change toggle (hold)
-        self._check_and_toggle("linvel", bool(cur_face[0]))
-        self._check_and_toggle("linvelz", bool(cur_face[3]))
-        self._check_and_toggle("omega", bool(cur_face[1]))
-        self._check_and_toggle("pos", bool(cur_face[2]))
+        hx, hy = int(cur_hat[0]), int(cur_hat[1])
+        # Build boolean per-direction
+        hat_buttons = np.array([False, False, False, False], dtype=bool)  # up, right, down, left
+        hat_buttons[0] = (hy > 0)
+        hat_buttons[1] = (hx > 0)
+        hat_buttons[2] = (hy < 0)
+        hat_buttons[3] = (hx < 0)
+        self._check_and_toggle("linvel", bool(hat_buttons[3]))
+        self._check_and_toggle("linvelz", bool(hat_buttons[0]))
+        self._check_and_toggle("omega", bool(hat_buttons[1]))
+        self._check_and_toggle("pos", bool(hat_buttons[2]))
+
         # flight-change uses its own boolean to avoid confusion with _check_and_toggle map
         # We'll interpret a long press on Y to toggle flight-change mode
         # Manage flight-change hold detection similar to _check_and_toggle
@@ -481,13 +484,12 @@ class RefsFromJoy:
         #    hat down  -> contact 2 (left back)
         #    hat left  -> contact 3 (right back)
         # We detect edges on hat changes to simulate press/release behavior.
-        hx, hy = int(cur_hat[0]), int(cur_hat[1])
         # Build boolean per-direction
         hat_buttons = np.array([False, False, False, False], dtype=bool)  # up, right, down, left
-        hat_buttons[0] = (hy > 0)
-        hat_buttons[1] = (hx > 0)
-        hat_buttons[2] = (hy < 0)
-        hat_buttons[3] = (hx < 0)
+        hat_buttons[0] = cur_face[3]
+        hat_buttons[1] = cur_face[0]
+        hat_buttons[2] = cur_face[2]
+        hat_buttons[3] = cur_face[1]
 
         # map hat index order to contact indices preserving original ordering
         hat_to_contact = {0: 0, 1: 1, 2: 2, 3: 3}
