@@ -295,13 +295,13 @@ class ControlClusterClient(ABC):
         self.cluster_data.run()
 
         while not self._terminated:
-            nsecs =  1000000000 # 1 sec
+            nsecs =  5000000000 # 1 sec
             PerfSleep.thread_sleep(nsecs) # we just keep it alive
             shared_rhc_files_val=[""]*shared_rhc_files.length()
             shared_rhc_files.read_vec(shared_rhc_files_val, 0)
             if self._debug:
                 self._system_run, self._system_avail=get_system_memory(label="run()", prev=self._system_start, db_print=False)
-                meminfo=f"System Memory: Used = {self._system_run} GB, Available = {self._system_avail} GB,differece {self._system_run-self._system_start}"
+                meminfo=f"System Memory: Used = {self._system_run} GB, Available = {self._system_avail} GB, occupied by cluster {self._system_run-self._system_start}"
                 Journal.log(self.__class__.__name__,
                             "run",
                             meminfo,
