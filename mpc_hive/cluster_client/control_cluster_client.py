@@ -160,7 +160,8 @@ class ControlClusterClient(ABC):
         #                 controller_idx=idx)
 
         from EigenIPC.PyEigenIPC import StringTensorClient
-        from perf_sleep.pyperfsleep import PerfSleep
+        import time
+
         shared_rhc_files = StringTensorClient(
             basename="SharedRhcFilesDropDir", 
             name_space=self._namespace,
@@ -174,8 +175,7 @@ class ControlClusterClient(ABC):
         combined_paths = ", ".join(this_controller_paths) # we want a string for each controller
         while True: # no failure in writing allowed
             if not shared_rhc_files.write_vec([combined_paths], idx):
-                ns=1000000000
-                PerfSleep.thread_sleep(ns)
+                time.sleep(1.0)
                 continue
             else:
                 break
@@ -239,7 +239,6 @@ class ControlClusterClient(ABC):
         
         # let's make the paths to the controllers files available on shared memory for db
         from EigenIPC.PyEigenIPC import StringTensorServer
-        from perf_sleep.pyperfsleep import PerfSleep
 
         shared_rhc_files = StringTensorServer(length=self.cluster_size, 
             basename="SharedRhcFilesDropDir", 
@@ -256,6 +255,8 @@ class ControlClusterClient(ABC):
 
         from EigenIPC.PyEigenIPCExt.wrappers.shared_data_view import SharedTWrapper
         from EigenIPC.PyEigenIPC import dtype
+
+        import time
 
         self._remote_term = SharedTWrapper(namespace=self._namespace,
             basename="RemoteTermination",
@@ -294,18 +295,20 @@ class ControlClusterClient(ABC):
             force_reconnection=True)
         self.cluster_data.run()
 
+        if self._debug:
+            db_print_rate=60
+            db_counter=0
         while not self._terminated:
-            nsecs =  5000000000 # 1 sec
-            PerfSleep.thread_sleep(nsecs) # we just keep it alive
             shared_rhc_files_val=[""]*shared_rhc_files.length()
             shared_rhc_files.read_vec(shared_rhc_files_val, 0)
-            if self._debug:
+            if self._debug and (db_counter%db_print_rate==0):
                 self._system_run, self._system_avail=get_system_memory(label="run()", prev=self._system_start, db_print=False)
                 meminfo=f"System Memory: Used = {self._system_run} GB, Available = {self._system_avail} GB, occupied by cluster {self._system_run-self._system_start}"
                 Journal.log(self.__class__.__name__,
                             "run",
                             meminfo,
                             LogType.INFO)
+                
             if self._childs_all_dead():
                 Journal.log(self.__class__.__name__,
                             "run",
@@ -313,6 +316,9 @@ class ControlClusterClient(ABC):
                             LogType.WARN)
                 break
             else:
+                time.sleep(1.0) # we just keep it alive
+                if self._debug:
+                    db_counter+=1
                 continue
 
         self._close_process() 
