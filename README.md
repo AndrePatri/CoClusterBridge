@@ -3,7 +3,9 @@
 ![icon.svg](docs/images/logo_new.svg)
 
 </h2>
-If you have already developed a beautiful MPC controller on CPU and want to embed it within a RL pipeline while keeping the MPCs on CPU, then this might be the right tool for you. 
+If you have developed a MPC controller on CPU and want to do some learning on top of it, while keeping the controllers on CPU, then this might be the right tool for you. 
 
-MPCHive is a tool for bridging parallel simulations (typically GPU-based), with a cluster (or "hive") of CPU-based MPCs, while properly handling controllers' synchronization and triggering (full CPU operation is also supported).
-One direct application for MPCHive is for developing RL-augmented MPC policies as done in [IBRIDO](https://github.com/AndrePatri/AugMPC), but it can also be used in a standalone fashion for swarm robotics (e.g. when having a fleet of MPC-controlled robots) or for massive MPC benchmarking.
+MPCHive was born as a tool to aid data-hungry RL-augmented MPC policies (e.g. [AugMPC](https://github.com/AndrePatri/AugMPC)), where efficient parallelization is crucial for better and faster learning.
+It can also be used in a standalone fashion for tuning/designing MPCs, swarm robotics (e.g. fleets of MPC-controlled robots), massive MPC benchmarking, sampling-based control and more. Basically, any application which requires many MPCs running in parallel and reliable synchronization between them, is a fit for MPCHive.
+
+All the shared memory and synchronization implementations are based on [EigenIPC](https://github.com/AndrePatri/EigenIPC) and python's [multiprocess](https://pypi.org/project/multiprocess/) libraries.
