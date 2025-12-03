@@ -49,13 +49,17 @@ class ControlClusterServer(ABC):
             vlevel: VLevel = VLevel.V1,
             debug = False, 
             force_reconnection: bool = False,
-            timeout_ms: int = 60000):
+            timeout_ms: int = 60000,
+            enable_height_sensor: bool = False,
+            height_grid_size: int = None):
         
         self._verbose = verbose
         self._vlevel = vlevel
 
         self._closed = False
         self._debug = debug
+        self._enable_height_sensor = enable_height_sensor
+        self._height_grid_size = height_grid_size
 
         self.jnt_names = jnt_names
         self.n_dofs = len(self.jnt_names)
@@ -164,6 +168,8 @@ class ControlClusterServer(ABC):
                                 n_contacts=self._n_contacts,
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
+                                enable_height_sensor=self._enable_height_sensor,
+                                height_grid_size=self._height_grid_size,
                                 with_gpu_mirror=self._using_gpu,
                                 with_torch_view=True,
                                 force_reconnection=self._force_reconnection,
