@@ -743,6 +743,7 @@ class HeightSensor(SharedTWrapper):
             is_server = False, 
             n_robots: int = None, 
             grid_size: int = None,
+            resolution: float = None,
             verbose: bool = False, 
             vlevel: VLevel = VLevel.V0,
             fill_value: float = 0.0,
@@ -760,14 +761,16 @@ class HeightSensor(SharedTWrapper):
 
         self.grid_size = grid_size
         self.n_robots = n_robots
+        self.resolution = resolution
 
         # shared shape (grid size)
+        # store [grid_size, resolution] as floats to avoid dtype juggling
         self._shape_shared = SharedTWrapper(namespace=namespace,
                         basename=basename + "Shape",
                         is_server=is_server,
                         n_rows=1,
-                        n_cols=1,
-                        dtype=eigenipc_dtype.Int,
+                        n_cols=2,
+                        dtype=eigenipc_dtype.Float,
                         verbose=verbose,
                         vlevel=vlevel,
                         fill_value=0,
@@ -800,17 +803,24 @@ class HeightSensor(SharedTWrapper):
         self._shape_shared.run()
 
         if self.is_server:
-            if self.grid_size is None:
-                raise Exception("HeightSensor grid_size must be provided on server.")
+            if self.grid_size is None or self.resolution is None:
+                raise Exception("HeightSensor grid_size and resolution must be provided on server.")
             shape_view = self._shape_shared.get_numpy_mirror()
-            shape_view[0, 0] = self.grid_size
+            shape_view[0, 0] = float(self.grid_size)
+            shape_view[0, 1] = float(self.resolution)
             self._shape_shared.synch_all(read=False, retry=True)
         else:
             self._shape_shared.synch_all(read=True, retry=True)
-            self.grid_size = int(self._shape_shared.get_numpy_mirror()[0, 0])
+            shape_view = self._shape_shared.get_numpy_mirror()
+            self.grid_size = int(shape_view[0, 0])
+            # resolution can be None on client init; fill from shared
+            if getattr(self, "resolution", None) is None:
+                self.resolution = float(shape_view[0, 1])
             self.n_cols = self.grid_size * self.grid_size
             if self.n_robots is not None:
                 self.n_rows = self.n_robots
+            else:
+                self.n_robots = self.n_rows
 
         self._init_views()
     
@@ -1322,6 +1332,7 @@ class FullRobState(SharedDataBase):
             q_remapping: List[int] = None,
             enable_height_sensor: bool = False,
             height_grid_size: int = None,
+            height_grid_resolution: float = None,
             with_gpu_mirror: bool = False,
             with_torch_view: bool = False,
             force_reconnection: bool = False,
@@ -1352,6 +1363,7 @@ class FullRobState(SharedDataBase):
         self._q_remapping = q_remapping
         self._enable_height_sensor = enable_height_sensor
         self._height_grid_size = height_grid_size
+        self._height_grid_resolution = height_grid_resolution
         self.height_sensor = None
 
         self._safe = safe
@@ -1428,6 +1440,7 @@ class FullRobState(SharedDataBase):
                                 is_server=self._is_server,
                                 n_robots=self._n_robots,
                                 grid_size=grid_size,
+                                resolution=self._height_grid_resolution,
                                 verbose=self._verbose,
                                 vlevel=self._vlevel,
                                 safe=self._safe,
@@ -1541,6 +1554,7 @@ class FullRobState(SharedDataBase):
             self._contact_names = self.contact_wrenches.contact_names
             if self.height_sensor is not None:
                 self._height_grid_size = self.height_sensor.grid_size
+                self._height_grid_resolution = getattr(self.height_sensor, "resolution", self._height_grid_resolution)
 
         self.set_jnts_remapping(jnts_remapping)
 
