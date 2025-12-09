@@ -11,6 +11,7 @@ Ships with many useful tools for MPC development, including an extensible GUI fo
 <p align="center">
   <img src="mpc_hive/docs/GUI_example.gif" alt="MPCHive GUI example" width="640">
 </p>
+<p align="center"><sub>(robot visualization on the left comes from <a href="https://github.com/AndrePatri/MPCViz">MPCViz</a>)</sub></p>
 
 ## Why MPCHive
 - **Throughput**: from hundreds up to thousands of parallel MPC controllers (on CPU) for RL data collection, batch benchmarking, MPC design and more.
