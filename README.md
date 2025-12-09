@@ -8,6 +8,10 @@ Parallel MPC cluster manager, based on a client-server architecture, for use wit
 
 Ships with many useful tools for MPC development, including an extensible GUI for real-time debug.
 
+<p align="center">
+  <img src="mpc_hive/docs/GUI_example.gif" alt="MPCHive GUI example" width="640">
+</p>
+
 ## Why MPCHive
 - **Throughput**: from hundreds up to thousands of parallel MPC controllers (on CPU) for RL data collection, batch benchmarking, MPC design and more.
 - **Determinism**: careful shared-memory implementation and MPC synchronization ensure reliable data (see [EigenIPC](https://github.com/AndrePatri/EigenIPC)).
@@ -31,4 +35,3 @@ The preferred way to install MPCHive is through [IBRIDO](https://github.com/Andr
 ## Quick start
 
 The easiest way to get started is to run one of the examples provided by the [AugMPC](https://github.com/AndrePatri/AugMPC) project, following the instructions available at [ibrido-containers](https://github.com/AndrePatri/ibrido-containers), which already demonstrate the integration with vectorized simulators and implementations of specific MPC controllers.
-
