@@ -174,7 +174,7 @@ class RefsFromKeyboard:
             self._shared_refs.rob_refs.synch_from_shared_mem()
             self._shared_refs.contact_flags.synch_all(read=True, retry=True)
             self._shared_refs.phase_id.synch_all(read=True, retry=True)
-            self._shared_refs.flight_settings.synch_all(read=True, retry=True)
+            self._shared_refs.flight_settings_req.synch_all(read=True, retry=True)
         
         else:
             
@@ -189,8 +189,8 @@ class RefsFromKeyboard:
             
             
             
-            self._shared_refs.flight_settings.synch_retry(row_index=self.cluster_idx, col_index=0, 
-                                                n_rows=1, n_cols=self._shared_refs.flight_settings.n_cols,
+            self._shared_refs.flight_settings_req.synch_retry(row_index=self.cluster_idx, col_index=0, 
+                                                n_rows=1, n_cols=self._shared_refs.flight_settings_req.n_cols,
                                                 read=False)
                                                 
     def _update_base_height(self, 
@@ -269,40 +269,40 @@ class RefsFromKeyboard:
     def _update_flight_params(self, contact_idx: int, increment: bool = True):
         
         if self._d_flength_enabled:
-            len_now=self._shared_refs.flight_settings.get(data_type="len",
+            len_now=self._shared_refs.flight_settings_req.get(data_type="len_remain",
                     robot_idxs=self.cluster_idx,
                     contact_idx=contact_idx)
             if increment:
                 len_now=len_now+self._d_flight_length
             else:
                 len_now=len_now-self._d_flight_length
-            self._shared_refs.flight_settings.set(data=np.array(len_now),
-                    data_type="len",
+            self._shared_refs.flight_settings_req.set(data=np.array(len_now),
+                    data_type="len_remain",
                     robot_idxs=self.cluster_idx,
                     contact_idx=contact_idx)
         
         if self._d_fapex_enabled:
-            apex_now=self._shared_refs.flight_settings.get(data_type="apex_dpos",
+            apex_now=self._shared_refs.flight_settings_req.get(data_type="apex_dpos",
                     robot_idxs=self.cluster_idx,
                     contact_idx=contact_idx)
             if increment:
                 apex_now=apex_now+self._d_flight_apex
             else:
                 apex_now=apex_now-self._d_flight_apex
-            self._shared_refs.flight_settings.set(data=np.array(apex_now),
+            self._shared_refs.flight_settings_req.set(data=np.array(apex_now),
                 data_type="apex_dpos",
                 robot_idxs=self.cluster_idx,
                 contact_idx=contact_idx)
         
         if self._d_fend_enabled:
-            end_now=self._shared_refs.flight_settings.get(data_type="end_dpos",
+            end_now=self._shared_refs.flight_settings_req.get(data_type="end_dpos",
                     robot_idxs=self.cluster_idx,
                     contact_idx=contact_idx)
             if increment:
                 end_now=end_now+self._d_flight_end
             else:
                 end_now=end_now-self._d_flight_end
-            self._shared_refs.flight_settings.set(data=np.array(end_now),
+            self._shared_refs.flight_settings_req.set(data=np.array(end_now),
                 data_type="end_dpos",
                 robot_idxs=self.cluster_idx,
                 contact_idx=contact_idx)

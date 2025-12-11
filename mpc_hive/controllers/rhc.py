@@ -453,7 +453,7 @@ class RHController(ABC):
         self._reset() # custom reset (e.g. it should set the current solution to some
         # default solution, like a bootstrap)
 
-        self.rhc_refs.reset() # reset rhc refs to default
+        self.rhc_refs.reset() # reset rhc refs to default (has to be called after _reset)
 
         self._write_cmds_from_sol() # use latest solution (e.g. from bootstrap if called before running
         # the first solve) as default state

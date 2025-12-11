@@ -598,7 +598,11 @@ class RHCRefs(SharedDataWindow):
         flight_info_leg=[""]*self.shared_data_clients[0].flight_info.n_cols
         for i in range(self.shared_data_clients[0].n_contacts()):
             flight_info_leg[i]=f"pos-contact{i}"
-            flight_info_leg[i+self.shared_data_clients[0].n_contacts()]=f"len-contact{i}"
+            flight_info_leg[i+self.shared_data_clients[0].n_contacts()]=f"len-remain-contact{i}"
+            flight_info_leg[i+2*self.shared_data_clients[0].n_contacts()]=f"len-contact{i}"
+            flight_info_leg[i+3*self.shared_data_clients[0].n_contacts()]=f"dapex-contact{i}"
+            flight_info_leg[i+4*self.shared_data_clients[0].n_contacts()]=f"dend-contact{i}"
+
         self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].flight_info.n_cols,
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
@@ -632,19 +636,19 @@ class RHCRefs(SharedDataWindow):
                     legend_list=[""], 
                     ylabel="[float]"))
         
-        flight_sets_leg=[""]*self.shared_data_clients[0].flight_settings.n_cols
+        flight_sets_leg=[""]*self.shared_data_clients[0].flight_settings_req.n_cols
         for i in range(self.shared_data_clients[0].n_contacts()):
             flight_sets_leg[i]=f"flight_len-contact{i}"
             flight_sets_leg[i+self.shared_data_clients[0].n_contacts()]=f"flight_dapex-contact{i}"
             flight_sets_leg[i+2*self.shared_data_clients[0].n_contacts()]=f"flight_dend-contact{i}"
 
-        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].flight_settings.n_cols,
+        self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].flight_settings_req.n_cols,
                     n_data = 1, 
                     update_data_dt=self.update_data_dt, 
                     update_plot_dt=self.update_plot_dt,
                     window_duration=self.window_duration, 
                     parent=None, 
-                    base_name="Flight settings",
+                    base_name="Flight settings request",
                     window_buffer_factor=self.window_buffer_factor, 
                     legend_list=flight_sets_leg, 
                     ylabel="[]"))
@@ -696,7 +700,7 @@ class RHCRefs(SharedDataWindow):
             self.shared_data_clients[0].contact_flags.synch_all(read=True, retry=True)
             self.shared_data_clients[0].phase_id.synch_all(read=True, retry=True)
             self.shared_data_clients[0].flight_info.synch_all(read=True, retry=True)
-            self.shared_data_clients[0].flight_settings.synch_all(read=True, retry=True)
+            self.shared_data_clients[0].flight_settings_req.synch_all(read=True, retry=True)
             self.shared_data_clients[0].alpha.synch_all(read=True, retry=True)
             self.shared_data_clients[0].bound_rel.synch_all(read=True, retry=True)
 
@@ -748,7 +752,7 @@ class RHCRefs(SharedDataWindow):
             self.rt_plotters[10].rt_plot_widget.update(bound_relax[index, :])
 
             # flight settings
-            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].flight_settings.get(data_type="all", robot_idxs=np_idx).flatten())
+            self.rt_plotters[11].rt_plot_widget.update(self.shared_data_clients[0].flight_settings_req.get(data_type="all", robot_idxs=np_idx).flatten())
 
             
 class RHCInternal(SharedDataWindow):

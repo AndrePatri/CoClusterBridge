@@ -191,29 +191,29 @@ class RefsFromJoy:
             return
         # follow same logic as your keyboard class: adjust len/apex/end if enabled
         if self._d_flength_enabled and self._d_fparam_enabled_contact_i[contact_idx]:
-            length_now = self._shared_refs.flight_settings.get(data_type="len",
+            length_now = self._shared_refs.flight_settings_req.get(data_type="len_remain",
                                                                robot_idxs=self.cluster_idx,
                                                                contact_idx=contact_idx)
             length_now = length_now + (self._d_flight_length if increment else -self._d_flight_length)
-            self._shared_refs.flight_settings.set(data=np.array(length_now),
-                                                 data_type="len",
+            self._shared_refs.flight_settings_req.set(data=np.array(length_now),
+                                                 data_type="len_remain",
                                                  robot_idxs=self.cluster_idx,
                                                  contact_idx=contact_idx)
         if self._d_fapex_enabled and self._d_fparam_enabled_contact_i[contact_idx]:
-            apex_now = self._shared_refs.flight_settings.get(data_type="apex_dpos",
+            apex_now = self._shared_refs.flight_settings_req.get(data_type="apex_dpos",
                                                              robot_idxs=self.cluster_idx,
                                                              contact_idx=contact_idx)
             apex_now = apex_now + (self._d_flight_apex if increment else -self._d_flight_apex)
-            self._shared_refs.flight_settings.set(data=np.array(apex_now),
+            self._shared_refs.flight_settings_req.set(data=np.array(apex_now),
                                                  data_type="apex_dpos",
                                                  robot_idxs=self.cluster_idx,
                                                  contact_idx=contact_idx)
         if self._d_fend_enabled and self._d_fparam_enabled_contact_i[contact_idx]:
-            end_now = self._shared_refs.flight_settings.get(data_type="end_dpos",
+            end_now = self._shared_refs.flight_settings_req.get(data_type="end_dpos",
                                                             robot_idxs=self.cluster_idx,
                                                             contact_idx=contact_idx)
             end_now = end_now + (self._d_flight_end if increment else -self._d_flight_end)
-            self._shared_refs.flight_settings.set(data=np.array(end_now),
+            self._shared_refs.flight_settings_req.set(data=np.array(end_now),
                                                  data_type="end_dpos",
                                                  robot_idxs=self.cluster_idx,
                                                  contact_idx=contact_idx)

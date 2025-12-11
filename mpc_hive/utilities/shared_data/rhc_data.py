@@ -309,7 +309,7 @@ class RhcRefs(SharedDataBase):
             
             basename = "FlightInfo" 
             
-            self._n_data = 2 # flight pos, flight length
+            self._n_data = 5 # flight pos, flight length remaining, flight length nominal, apex dpos, end dpos 
 
             self.n_robots = n_robots
             self.n_contacts=n_contacts
@@ -331,11 +331,19 @@ class RhcRefs(SharedDataBase):
 
             # root
             self._pos = None
+            self._len_remaining = None
             self._len = None
+            self._apex = None
+            self._end = None
+
             self._all = None
 
             self._pos_gpu = None
+            self._len_remaining_gpu = None
             self._len_gpu = None
+            self._apex_gpu = None
+            self._end_gpu = None
+            
             self._all_gpu = None
             
         def run(self):
@@ -351,18 +359,30 @@ class RhcRefs(SharedDataBase):
             # root
             if self._with_torch_view:
                 self._pos = self.get_torch_mirror()[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
-                self._len = self.get_torch_mirror()[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._len_remaining = self.get_torch_mirror()[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._len = self.get_torch_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._apex = self.get_torch_mirror()[:, 3*self.n_contacts:4*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._end = self.get_torch_mirror()[:, 4*self.n_contacts:5*self.n_contacts].view(self.n_robots, self.n_contacts)
+
                 self._all = self.get_torch_mirror()[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
             else:
                 self._pos = self.get_numpy_mirror()[:, 0:self.n_contacts].view()
-                self._len = self.get_numpy_mirror()[:, self.n_contacts:2*self.n_contacts].view()
+                self._len_remaining = self.get_numpy_mirror()[:, self.n_contacts:2*self.n_contacts].view()
+                self._len = self.get_numpy_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view()
+                self._apex = self.get_numpy_mirror()[:, 3*self.n_contacts:4*self.n_contacts].view()
+                self._end = self.get_numpy_mirror()[:, 4*self.n_contacts:5*self.n_contacts].view()
+
                 self._all = self.get_numpy_mirror()[:, 0:self._n_data*self.n_contacts].view()
 
             if self.gpu_mirror_exists():
 
                 # gpu views
                 self._pos_gpu = self._gpu_mirror[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
-                self._len_gpu = self._gpu_mirror[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._len_remaining_gpu = self._gpu_mirror[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._len_gpu = self._gpu_mirror[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._apex_gpu = self._gpu_mirror[:, 3*self.n_contacts:4*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._end_gpu = self._gpu_mirror[:, 4*self.n_contacts:5*self.n_contacts].view(self.n_robots, self.n_contacts)
+                
                 self._all_gpu = self._gpu_mirror[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
         
         def _retrieve_data(self,
@@ -372,8 +392,14 @@ class RhcRefs(SharedDataBase):
             if not gpu:
                 if name == "pos":
                     return self._pos
+                elif name == "len_remain":
+                    return self._len_remaining
                 elif name == "len":
-                    return self._len
+                    return self._len    
+                elif name == "apex":
+                    return self._apex
+                elif name == "end":
+                    return self._end
                 elif name == "all":
                     return self._all
                 else:
@@ -381,8 +407,14 @@ class RhcRefs(SharedDataBase):
             else:
                 if name == "pos":
                     return self._pos_gpu
+                elif name == "len_remain":
+                    return self._len_remaining_gpu
                 elif name == "len":
                     return self._len_gpu
+                elif name == "apex":
+                    return self._apex_gpu
+                elif name == "end":
+                    return self._end_gpu
                 elif name == "all":
                     return self._all_gpu
                 else:
@@ -429,7 +461,7 @@ class RhcRefs(SharedDataBase):
                 else:
                     return internal_data[robot_idxs, contact_idx]
 
-    class FlightSettings(SharedTWrapper):
+    class FlightSettingsReq(SharedTWrapper):
 
         def __init__(self,
                 namespace = "",
@@ -445,7 +477,7 @@ class RhcRefs(SharedDataBase):
                 fill_value = 0,
                 optimize_mem: bool = False):
             
-            basename = "FlightSettings" 
+            basename = "FlightSettingsReq" 
             
             self._n_data = 3 # flight length, apex dpos, end dpos (w.r.t initial pos)
 
@@ -468,12 +500,12 @@ class RhcRefs(SharedDataBase):
                 optimize_mem=optimize_mem)
 
             # root
-            self._len = None
+            self._len_remaining = None
             self._apex_dpos = None
             self._end_dpos = None
             self._all = None
 
-            self._len_gpu = None
+            self._len_remaining_gpu = None
             self._apex_dpos_gpu = None
             self._end_dpos_gpu = None
             self._all_gpu = None
@@ -490,19 +522,19 @@ class RhcRefs(SharedDataBase):
 
             # root
             if self._with_torch_view:
-                self._len = self.get_torch_mirror()[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._len_remaining = self.get_torch_mirror()[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._apex_dpos = self.get_torch_mirror()[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._end_dpos = self.get_torch_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._all = self.get_torch_mirror()[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
             else:
-                self._len = self.get_numpy_mirror()[:, 0:self.n_contacts].view()
+                self._len_remaining = self.get_numpy_mirror()[:, 0:self.n_contacts].view()
                 self._apex_dpos = self.get_numpy_mirror()[:, self.n_contacts:2*self.n_contacts].view()
                 self._end_dpos = self.get_numpy_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view()
                 self._all = self.get_numpy_mirror()[:, 0:self._n_data*self.n_contacts].view()
 
             if self.gpu_mirror_exists():
                 # gpu views
-                self._len_gpu = self._gpu_mirror[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._len_remaining_gpu = self._gpu_mirror[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._apex_dpos_gpu = self._gpu_mirror[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._end_dpos_gpu = self._gpu_mirror[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._all_gpu = self._gpu_mirror[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
@@ -512,8 +544,8 @@ class RhcRefs(SharedDataBase):
             gpu: bool = False):
             
             if not gpu:
-                if name == "len":
-                    return self._len
+                if name == "len_remain":
+                    return self._len_remaining
                 if name == "apex_dpos":
                     return self._apex_dpos
                 if name == "end_dpos":
@@ -523,8 +555,8 @@ class RhcRefs(SharedDataBase):
                 else:
                     return None
             else:
-                if name == "len":
-                    return self._len_gpu
+                if name == "len_remain":
+                    return self._len_remaining_gpu
                 if name == "apex_dpos":
                     return self._apex_dpos_gpu
                 if name == "end_dpos":
@@ -709,7 +741,7 @@ class RhcRefs(SharedDataBase):
             self.phase_id.get_shared_mem(),
             self.contact_flags.get_shared_mem(),
             self.flight_info.get_shared_mem(),
-            self.flight_settings.get_shared_mem(),
+            self.flight_settings_req.get_shared_mem(),
             self.alpha.get_shared_mem(),
             self.bound_rel.get_shared_mem()]
     
@@ -746,7 +778,7 @@ class RhcRefs(SharedDataBase):
                             optimize_mem=self._optimize_mem)
         self.flight_info.run()
 
-        self.flight_settings = self.FlightSettings(namespace=self.namespace,
+        self.flight_settings_req = self.FlightSettingsReq(namespace=self.namespace,
                             is_server=self.is_server,
                             n_robots=self.rob_refs.root_state.n_rows,
                             n_contacts=self._n_contacts,
@@ -757,7 +789,7 @@ class RhcRefs(SharedDataBase):
                             with_torch_view=self._with_torch_view,
                             safe=self.safe,
                             optimize_mem=self._optimize_mem)
-        self.flight_settings.run()
+        self.flight_settings_req.run()
         
         self.phase_id = self.Phase(namespace=self.namespace,
                             basename=self.basename,
@@ -804,7 +836,7 @@ class RhcRefs(SharedDataBase):
             self.rob_refs.close()
             self.phase_id.close()
             self.flight_info.close()
-            self.flight_settings.close()
+            self.flight_settings_req.close()
 
             self.contact_flags.close()
             self.alpha.close()
