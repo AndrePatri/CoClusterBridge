@@ -602,6 +602,8 @@ class RHCRefs(SharedDataWindow):
             flight_info_leg[i+2*self.shared_data_clients[0].n_contacts()]=f"len-contact{i}"
             flight_info_leg[i+3*self.shared_data_clients[0].n_contacts()]=f"dapex-contact{i}"
             flight_info_leg[i+4*self.shared_data_clients[0].n_contacts()]=f"dend-contact{i}"
+            flight_info_leg[i+5*self.shared_data_clients[0].n_contacts()]=f"land_dx-contact{i}"
+            flight_info_leg[i+6*self.shared_data_clients[0].n_contacts()]=f"land_dy-contact{i}"
 
         self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].flight_info.n_cols,
                     n_data = 1, 
@@ -641,6 +643,8 @@ class RHCRefs(SharedDataWindow):
             flight_sets_leg[i]=f"flight_len-contact{i}"
             flight_sets_leg[i+self.shared_data_clients[0].n_contacts()]=f"flight_dapex-contact{i}"
             flight_sets_leg[i+2*self.shared_data_clients[0].n_contacts()]=f"flight_dend-contact{i}"
+            flight_sets_leg[i+3*self.shared_data_clients[0].n_contacts()]=f"flight_land_dx-contact{i}"
+            flight_sets_leg[i+4*self.shared_data_clients[0].n_contacts()]=f"flight_land_dy-contact{i}"
 
         self.rt_plotters.append(RtPlotWindow(data_dim=self.shared_data_clients[0].flight_settings_req.n_cols,
                     n_data = 1, 

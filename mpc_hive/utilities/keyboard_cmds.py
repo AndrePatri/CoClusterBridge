@@ -95,9 +95,13 @@ class RefsFromKeyboard:
         self._d_flight_length=1
         self._d_flight_apex=0.01
         self._d_flight_end=0.01
+        self._d_flight_dx=0.02
+        self._d_flight_dy=0.02
         self._d_flength_enabled=False
         self._d_fapex_enabled=False
         self._d_fend_enabled=False
+        self._d_fdx_enabled=False
+        self._d_fdy_enabled=False
         self._d_fparam_enabled_contact_i = [False]*n_contacts
 
         self.enable_contact_pos_change= False
@@ -306,6 +310,32 @@ class RefsFromKeyboard:
                 data_type="end_dpos",
                 robot_idxs=self.cluster_idx,
                 contact_idx=contact_idx)
+
+        if self._d_fdx_enabled:
+            dx_now=self._shared_refs.flight_settings_req.get(data_type="land_dx",
+                    robot_idxs=self.cluster_idx,
+                    contact_idx=contact_idx)
+            if increment:
+                dx_now=dx_now+self._d_flight_dx
+            else:
+                dx_now=dx_now-self._d_flight_dx
+            self._shared_refs.flight_settings_req.set(data=np.array(dx_now),
+                data_type="land_dx",
+                robot_idxs=self.cluster_idx,
+                contact_idx=contact_idx)
+
+        if self._d_fdy_enabled:
+            dy_now=self._shared_refs.flight_settings_req.get(data_type="land_dy",
+                    robot_idxs=self.cluster_idx,
+                    contact_idx=contact_idx)
+            if increment:
+                dy_now=dy_now+self._d_flight_dy
+            else:
+                dy_now=dy_now-self._d_flight_dy
+            self._shared_refs.flight_settings_req.set(data=np.array(dy_now),
+                data_type="land_dy",
+                robot_idxs=self.cluster_idx,
+                contact_idx=contact_idx)
        
     def _set_contacts(self,
                 key,
@@ -351,6 +381,22 @@ class RefsFromKeyboard:
         if key=="E":
             self._d_fend_enabled=not self._d_fend_enabled
             info = f"Flight end change enabled: {self._d_fend_enabled}"
+            Journal.log(self.__class__.__name__,
+                "_set_flight_params",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+        if key=="Q":
+            self._d_fdx_enabled=not self._d_fdx_enabled
+            info = f"Flight land dx change enabled: {self._d_fdx_enabled}"
+            Journal.log(self.__class__.__name__,
+                "_set_flight_params",
+                info,
+                LogType.INFO,
+                throw_when_excep = True)
+        if key=="Y":
+            self._d_fdy_enabled=not self._d_fdy_enabled
+            info = f"Flight land dy change enabled: {self._d_fdy_enabled}"
             Journal.log(self.__class__.__name__,
                 "_set_flight_params",
                 info,

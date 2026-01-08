@@ -309,7 +309,7 @@ class RhcRefs(SharedDataBase):
             
             basename = "FlightInfo" 
             
-            self._n_data = 5 # flight pos, flight length remaining, flight length nominal, apex dpos, end dpos 
+            self._n_data = 7 # flight pos, flight length remaining, flight length nominal, apex dpos, end dpos, land dx, land dy
 
             self.n_robots = n_robots
             self.n_contacts=n_contacts
@@ -335,7 +335,8 @@ class RhcRefs(SharedDataBase):
             self._len = None
             self._apex = None
             self._end = None
-
+            self._land_dx = None
+            self._land_dy = None
             self._all = None
 
             self._pos_gpu = None
@@ -343,7 +344,8 @@ class RhcRefs(SharedDataBase):
             self._len_gpu = None
             self._apex_gpu = None
             self._end_gpu = None
-            
+            self._land_dx_gpu = None
+            self._land_dy_gpu = None
             self._all_gpu = None
             
         def run(self):
@@ -363,6 +365,8 @@ class RhcRefs(SharedDataBase):
                 self._len = self.get_torch_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._apex = self.get_torch_mirror()[:, 3*self.n_contacts:4*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._end = self.get_torch_mirror()[:, 4*self.n_contacts:5*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._land_dx = self.get_torch_mirror()[:, 5*self.n_contacts:6*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._land_dy = self.get_torch_mirror()[:, 6*self.n_contacts:7*self.n_contacts].view(self.n_robots, self.n_contacts)
 
                 self._all = self.get_torch_mirror()[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
             else:
@@ -371,6 +375,8 @@ class RhcRefs(SharedDataBase):
                 self._len = self.get_numpy_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view()
                 self._apex = self.get_numpy_mirror()[:, 3*self.n_contacts:4*self.n_contacts].view()
                 self._end = self.get_numpy_mirror()[:, 4*self.n_contacts:5*self.n_contacts].view()
+                self._land_dx = self.get_numpy_mirror()[:, 5*self.n_contacts:6*self.n_contacts].view()
+                self._land_dy = self.get_numpy_mirror()[:, 6*self.n_contacts:7*self.n_contacts].view()
 
                 self._all = self.get_numpy_mirror()[:, 0:self._n_data*self.n_contacts].view()
 
@@ -382,7 +388,9 @@ class RhcRefs(SharedDataBase):
                 self._len_gpu = self._gpu_mirror[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._apex_gpu = self._gpu_mirror[:, 3*self.n_contacts:4*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._end_gpu = self._gpu_mirror[:, 4*self.n_contacts:5*self.n_contacts].view(self.n_robots, self.n_contacts)
-                
+                self._land_dx_gpu = self._gpu_mirror[:, 5*self.n_contacts:6*self.n_contacts].view(self.n_robots, self.n_contacts)   
+                self._land_dy_gpu = self._gpu_mirror[:, 6*self.n_contacts:7*self.n_contacts].view(self.n_robots, self.n_contacts)
+
                 self._all_gpu = self._gpu_mirror[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
         
         def _retrieve_data(self,
@@ -400,6 +408,10 @@ class RhcRefs(SharedDataBase):
                     return self._apex
                 elif name == "end":
                     return self._end
+                elif name == "land_dx":
+                    return self._land_dx
+                elif name == "land_dy":
+                    return self._land_dy
                 elif name == "all":
                     return self._all
                 else:
@@ -415,6 +427,10 @@ class RhcRefs(SharedDataBase):
                     return self._apex_gpu
                 elif name == "end":
                     return self._end_gpu
+                elif name == "land_dx":
+                    return self._land_dx_gpu
+                elif name == "land_dy":
+                    return self._land_dy_gpu
                 elif name == "all":
                     return self._all_gpu
                 else:
@@ -479,7 +495,8 @@ class RhcRefs(SharedDataBase):
             
             basename = "FlightSettingsReq" 
             
-            self._n_data = 3 # flight length, apex dpos, end dpos (w.r.t initial pos)
+            self._n_data = 5 # flight length, apex dpos, end dpos (w.r.t initial pos),
+            # flight land dx, flight land dy (base local at the moment of request)
 
             self.n_robots = n_robots
             self.n_contacts=n_contacts
@@ -503,11 +520,15 @@ class RhcRefs(SharedDataBase):
             self._len_remaining = None
             self._apex_dpos = None
             self._end_dpos = None
+            self._land_dx = None    
+            self._land_dy = None
             self._all = None
 
             self._len_remaining_gpu = None
             self._apex_dpos_gpu = None
             self._end_dpos_gpu = None
+            self._land_dx_gpu = None
+            self._land_dy_gpu = None
             self._all_gpu = None
             
         def run(self):
@@ -525,11 +546,17 @@ class RhcRefs(SharedDataBase):
                 self._len_remaining = self.get_torch_mirror()[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._apex_dpos = self.get_torch_mirror()[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._end_dpos = self.get_torch_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._land_dx = self.get_torch_mirror()[:, 3*self.n_contacts:4*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._land_dy = self.get_torch_mirror()[:, 4*self.n_contacts:5*self.n_contacts].view(self.n_robots, self.n_contacts)
+                
                 self._all = self.get_torch_mirror()[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
             else:
                 self._len_remaining = self.get_numpy_mirror()[:, 0:self.n_contacts].view()
                 self._apex_dpos = self.get_numpy_mirror()[:, self.n_contacts:2*self.n_contacts].view()
                 self._end_dpos = self.get_numpy_mirror()[:, 2*self.n_contacts:3*self.n_contacts].view()
+                self._land_dx = self.get_numpy_mirror()[:, 3*self.n_contacts:4*self.n_contacts].view()
+                self._land_dy = self.get_numpy_mirror()[:, 4*self.n_contacts:5*self.n_contacts].view()
+
                 self._all = self.get_numpy_mirror()[:, 0:self._n_data*self.n_contacts].view()
 
             if self.gpu_mirror_exists():
@@ -537,6 +564,9 @@ class RhcRefs(SharedDataBase):
                 self._len_remaining_gpu = self._gpu_mirror[:, 0:self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._apex_dpos_gpu = self._gpu_mirror[:, self.n_contacts:2*self.n_contacts].view(self.n_robots, self.n_contacts)
                 self._end_dpos_gpu = self._gpu_mirror[:, 2*self.n_contacts:3*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._land_dx_gpu = self._gpu_mirror[:, 3*self.n_contacts:4*self.n_contacts].view(self.n_robots, self.n_contacts)
+                self._land_dy_gpu = self._gpu_mirror[:, 4*self.n_contacts:5*self.n_contacts].view(self.n_robots, self.n_contacts)
+
                 self._all_gpu = self._gpu_mirror[:, 0:self._n_data*self.n_contacts].view(self.n_robots, self._n_data*self.n_contacts)
         
         def _retrieve_data(self,
@@ -550,6 +580,10 @@ class RhcRefs(SharedDataBase):
                     return self._apex_dpos
                 if name == "end_dpos":
                     return self._end_dpos
+                if name == "land_dx":
+                    return self._land_dx
+                if name == "land_dy":
+                    return self._land_dy
                 elif name == "all":
                     return self._all
                 else:
@@ -561,6 +595,10 @@ class RhcRefs(SharedDataBase):
                     return self._apex_dpos_gpu
                 if name == "end_dpos":
                     return self._end_dpos_gpu
+                if name == "land_dx":
+                    return self._land_dx_gpu
+                if name == "land_dy":
+                    return self._land_dy_gpu
                 elif name == "all":
                     return self._all_gpu
                 else:

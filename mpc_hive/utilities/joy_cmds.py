@@ -56,7 +56,7 @@ class RefsFromJoy:
         self._v_magnitude = 0.0
         self._heading = 0.0
         
-        self._max_vxy_magn = 1.0
+        self._max_vxy_magn = 1.5
         self._max_vz_magn = 1.0
         self._max_pitch_rate = 0.8
         self._max_roll_rate = 0.8
