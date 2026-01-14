@@ -14,6 +14,8 @@ import numpy as np
 
 from typing import List
         
+from abc import ABC, abstractmethod
+
 class RobotState(FullRobState):
 
     def __init__(self,
@@ -881,6 +883,9 @@ class RhcRefs(SharedDataBase):
             self.bound_rel.close()
 
             self._is_runnning = False
+
+    def reset(self):
+        pass
 
 class RhcStatus(SharedDataBase):
     

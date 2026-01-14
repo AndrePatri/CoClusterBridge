@@ -240,13 +240,13 @@ class ControlClusterClient(ABC):
         # let's make the paths to the controllers files available on shared memory for db
         from EigenIPC.PyEigenIPC import StringTensorServer
 
-        shared_rhc_files = StringTensorServer(length=self.cluster_size, 
+        self.shared_rhc_files = StringTensorServer(length=self.cluster_size, 
             basename="SharedRhcFilesDropDir", 
             name_space=self._namespace,
             verbose=self._verbose, 
             vlevel=VLevel.V2, 
             force_reconnection=True)
-        shared_rhc_files.run()
+        self.shared_rhc_files.run()
 
         self._spawn_processes()
 
@@ -299,8 +299,8 @@ class ControlClusterClient(ABC):
             db_print_rate=60
             db_counter=0
         while not self._terminated:
-            shared_rhc_files_val=[""]*shared_rhc_files.length()
-            shared_rhc_files.read_vec(shared_rhc_files_val, 0)
+            shared_rhc_files_val=[""]*self.shared_rhc_files.length()
+            self.shared_rhc_files.read_vec(shared_rhc_files_val, 0)
             if self._debug and (db_counter%db_print_rate==0):
                 self._system_run, self._system_avail=get_system_memory(label="run()", prev=self._system_start, db_print=False)
                 meminfo=f"System Memory: Used = {self._system_run} GB, Available = {self._system_avail} GB, occupied by cluster {self._system_run-self._system_start}"
@@ -322,7 +322,7 @@ class ControlClusterClient(ABC):
                 continue
 
         self._close_process() 
-        shared_rhc_files.close()
+        self.shared_rhc_files.close()
         
     def terminate(self):
         
@@ -388,6 +388,9 @@ class ControlClusterClient(ABC):
             self.cluster_data.close()
         if self._remote_term is not None:
             self._remote_term.close()
+        if self.shared_rhc_files is not None:   
+            self.shared_rhc_files.close()
+
 
     def _get_cores(self):
 
