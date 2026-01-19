@@ -97,11 +97,16 @@ class ControlClusterServer(ABC):
         self._is_running = False
         
         # no need for this flags to be on GPU (if necessary copies are made on demand)
-        self._now_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
-        self._registered = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
-        self._prev_active_controllers = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
-        self._failed = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
-
+        if self._using_torch:
+            self._now_active = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
+            self._registered = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
+            self._prev_active_controllers = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
+            self._failed = torch.full(fill_value=False, size=(self.cluster_size, 1), dtype=torch.bool, device="cpu")
+        else:           
+            self._now_active = np.full((self.cluster_size, 1), False, dtype=bool)
+            self._registered = np.full((self.cluster_size, 1), False, dtype=bool)
+            self._prev_active_controllers = np.full((self.cluster_size, 1), False, dtype=bool)
+            self._failed = np.full((self.cluster_size, 1), False, dtype=bool)
         # other data
         self._n_contacts = n_contacts
         self._contact_linknames = contact_linknames
@@ -321,11 +326,18 @@ class ControlClusterServer(ABC):
         self._rhc_status.activation_state.synch_all(read=True, 
                                         retry=True)
         # all active controllers will be triggered
-        self._registered[:, :] = self._rhc_status.registration.get_torch_mirror(gpu=False)
-        self._prev_active_controllers[:, :] = self._now_active
-        self._now_active[:, :] = self._rhc_status.activation_state.get_torch_mirror(gpu=False) & \
-                            self._rhc_status.registration.get_torch_mirror(gpu=False) # controllers have to be registered
-                            # to be considered active
+        if self._using_torch:
+            self._registered[:, :] = self._rhc_status.registration.get_torch_mirror(gpu=False)
+            self._prev_active_controllers[:, :] = self._now_active
+            self._now_active[:, :] = self._rhc_status.activation_state.get_torch_mirror(gpu=False) & \
+                                self._rhc_status.registration.get_torch_mirror(gpu=False) # controllers have to be registered
+                                # to be considered active
+        else:
+            self._registered[:, :] = self._rhc_status.registration.get_numpy_mirror()
+            self._prev_active_controllers[:, :] = self._now_active
+            self._now_active[:, :] = self._rhc_status.activation_state.get_numpy_mirror() & \
+                                self._rhc_status.registration.get_numpy_mirror() # controllers have to be registered
+                                # to be considered active
         self._pre_triggered=True
 
     def trigger_solution(self):
@@ -349,7 +361,10 @@ class ControlClusterServer(ABC):
     
     def _trigger_solution(self):
         # trigger all
-        trigger = self._rhc_status.trigger.get_torch_mirror()
+        if self._using_torch:
+            trigger = self._rhc_status.trigger.get_torch_mirror()
+        else:
+            trigger = self._rhc_status.trigger.get_numpy_mirror()
         trigger[:, :] = True
         self._rhc_status.trigger.synch_all(read=False, retry=True)
         self._remote_triggerer.trigger() # signal to listening controllers to process
@@ -391,13 +406,19 @@ class ControlClusterServer(ABC):
         # update flags (written by controllers upon solution request)
         self._rhc_status.fails.synch_all(read=True,
                                     retry=True)
-        self._failed[:,:] = self._rhc_status.fails.get_torch_mirror(gpu=False)
+        if self._using_torch:
+            self._failed[:, :] = self._rhc_status.fails.get_torch_mirror(gpu=False)
+        else:   
+            self._failed[:,:] = self._rhc_status.fails.get_numpy_mirror()
 
     def reset_controllers(self,
                     idxs: torch.Tensor = None):
         
         # set reset request
-        resets = self._rhc_status.resets.get_torch_mirror()
+        if self._using_torch:
+            resets = self._rhc_status.resets.get_torch_mirror()
+        else:
+            resets = self._rhc_status.resets.get_numpy_mirror()
         if idxs is not None:
             # write a reset request
             resets[idxs, :] = True
@@ -425,7 +446,10 @@ class ControlClusterServer(ABC):
     def activate_controllers(self,
                     idxs: torch.Tensor = None):
         if idxs is not None:
-            activations = self._rhc_status.activation_state.get_torch_mirror()
+            if self._using_torch:
+                activations = self._rhc_status.activation_state.get_torch_mirror()
+            else:
+                activations = self._rhc_status.activation_state.get_numpy_mirror()
             activations[idxs, :] = True
             self._rhc_status.activation_state.synch_all(read=False, retry=True)
       
@@ -618,8 +642,12 @@ class ControlClusterServer(ABC):
         
         self._rhc_status.controllers_counter.synch_all(retry = True,
                                                         read = True)
-        n_controller = self._rhc_status.controllers_counter.get_torch_mirror()
-        self._n_controllers_connected = n_controller[0, 0].item()
+        if self._using_torch:
+            n_controller = self._rhc_status.controllers_counter.get_torch_mirror()
+            self._n_controllers_connected = n_controller[0, 0].item()
+        else:
+            n_controller = self._rhc_status.controllers_counter.get_numpy_mirror()
+            self._n_controllers_connected = n_controller[0, 0]
 
         if self._n_controllers_connected == 0:
             self._sporadic_log(calling_methd="trigger_solution",
@@ -643,10 +671,15 @@ class ControlClusterServer(ABC):
 
     def _post_trigger_logs(self):
         
-        active = self._rhc_status.activation_state.get_torch_mirror()
+        if self._using_torch:
+            active = self._rhc_status.activation_state.get_torch_mirror(gpu=False)
+        else:       
+            active = self._rhc_status.activation_state.get_numpy_mirror()
+
         if not active.all():
+            n_active= active.sum().item() if self._using_torch else np.sum(active)
             msg = f"Controllers waiting to be activated... (" + \
-                f"{self._rhc_status.activation_state.get_torch_mirror().sum().item()}/{self.cluster_size} active)"
+                f"{n_active}/{self.cluster_size} active)"
             self._sporadic_log(calling_methd="trigger_solution",
                         msg = msg,
                         logtype=LogType.INFO)
