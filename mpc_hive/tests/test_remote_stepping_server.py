@@ -7,12 +7,11 @@ from mpc_hive.tests.remote_stepping_fakes import (
 )
 import numpy as np
 
-CLUSTER_SIZE = 1
+CLUSTER_SIZE = 50
 N_STEPS = 1000
-JOINT_NAMES = ["joint_1", "joint_2"]
+N_JNTS=42
+JOINT_NAMES = ["joint_{}".format(i) for i in range(N_JNTS)]
 CONTACT_NAMES = ["contact_1"]
-JOIN_TIMEOUT_S = 5.0
-
 
 class RemoteSteppingServerTests(unittest.TestCase):
     def setUp(self):
@@ -101,12 +100,16 @@ class RemoteSteppingServerTests(unittest.TestCase):
 
         # example loop for server-client stepping
         physics_steps = 0
-        for _ in range(N_PHYSICS_STEPS*N_STEPS):
+        for i in range(N_PHYSICS_STEPS*N_STEPS):
             if self.server.is_cluster_instant(physics_steps):
                 self.server.wait_for_solution() # blocking, wait for last solution
 
                 failed = self.server.get_failed_controllers()
                 self._set_cluster_actions() # write MPC cmds to low-level controllers
+                
+                if self.server.solution_counter() >= N_STEPS:
+                    break
+
                 self._read_state_from_robot() # read updated state from robot and write to cluster
                 if failed is not None:
                     self._reset()

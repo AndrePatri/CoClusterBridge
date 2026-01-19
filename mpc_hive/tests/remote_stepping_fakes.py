@@ -17,7 +17,7 @@ CLUSTER_DT = 0.03 # dt at which the cluster server steps (MPC dt)
 N_PHYSICS_STEPS=int(CLUSTER_DT / CONTROL_DT)
 ACK_TIMEOUT_MS = 8000
 N_NODES=30
-NAMESPACE = os.environ.get("MPCHIVE_REMOTE_STEP_NS", "mpc_hive_test_ns5")
+NAMESPACE = "mpc_hive_test_ns_"
 
 def write_dummy_srdf(path, joint_names: List[str]) -> str:
     lines = ["<?xml version=\"1.0\"?>", "<robot name=\"dummy\">", "  <group_state name=\"home\" group=\"dummy_group\">"]
@@ -60,6 +60,7 @@ class DummyController(RHController):
         joint_names: List[str],
         contact_names: List[str],
         cluster_size: int,
+        closed_loop: bool = True,
     ):
         self._joint_names = list(joint_names)
         self._contact_names = list(contact_names)
@@ -71,6 +72,8 @@ class DummyController(RHController):
         self._full_q = None
         self._steps = 0
 
+        self._closed_loop=closed_loop
+
         super().__init__(
             srdf_path=srdf_path,
             n_nodes=N_NODES,
@@ -78,7 +81,7 @@ class DummyController(RHController):
             namespace=namespace,
             dtype=np.float32,
             verbose=True,
-            debug=False,
+            debug=True,
             timeout_ms=ACK_TIMEOUT_MS,
         )
 
@@ -87,6 +90,7 @@ class DummyController(RHController):
             super()._close()
 
     def _reset(self):
+        # custom reset logic for controller
         return None
 
     def _init_rhc_task_cmds(self):
@@ -115,6 +119,12 @@ class DummyController(RHController):
     def _get_contact_names(self):
         return self._contact_names
 
+    def _get_ndofs(self):
+        return self.n_dofs
+
+    def _get_robot_mass(self):
+        return 60.0
+    
     def _get_jnt_q_from_sol(self, node_idx=1) -> np.ndarray:
         # In a real controller these values are read from the solver solution.
         return self._zero_jnts[:, node_idx:node_idx + 1].T
@@ -147,25 +157,75 @@ class DummyController(RHController):
         # In a real controller these values are read from the solver solution.
         return self._zero_root_a[:, node_idx:node_idx + 1].T
 
+    def _get_cost_info(self):
+        
+        # dummy cost
+        cost_dict = self.cost_dict_dummy.copy()
+        cost_names = list(cost_dict.keys())
+        cost_dims = [1] * len(cost_names) # costs are always scalar
+        return cost_names, cost_dims
+    
+    def _get_constr_info(self):
+        
+        constr_dict = self.constr_dict_dummy.copy()
+        
+        constr_names = list(constr_dict.keys())
+        constr_dims = [-1] * len(constr_names)
+        i = 0
+        for constr in constr_dict:
+            constr_val = constr_dict[constr]
+            constr_shape = constr_val.shape
+            constr_dims[i] = constr_shape[0]
+            i+=1
+        return constr_names, constr_dims
+    
+    def _get_cost_from_sol(self,
+                    cost_name: str):
+        return self.rhc_costs[cost_name]
+    
+    def _get_constr_from_sol(self,
+                    constr_name: str):
+        return self.rhc_constr[constr_name]
+    
     def _update_open_loop(self):
+        # set initial guess and initial states for controller
+        # by just using the last solution, no feedback from real world
         return None
 
     def _update_closed_loop(self):
+        # set initial guess and initial states for controller
+        # by reading measured robot data
         return None
 
-    def _solve(self) -> bool:
-        print(f"Controller n. {self.controller_index} solved.")
+    def _update_db_data(self):
+        
+        # add profiling data to profiling dict
+        self._profiling_data_dict["some_metric"] = 1.2345
+
+        self.rhc_costs.update(self.cost_dict_dummy)
+        self.rhc_constr.update(self.constr_dict_dummy)
+
+    def _rti(self):
+        # solve controller problem with in real-time iteration 
         time.sleep(0.003)  # simulate some solving time
+
+    def _solve(self) -> bool:
+        if self._closed_loop:
+            self._update_closed_loop()
+            print(f"Controller n. {self.controller_index}: problem solved (closed loop).")
+        else:
+            self._update_open_loop()
+            print(f"Controller n. {self.controller_index}: problem solved (open loop).")
+        
+        self._rti()
+
+        self._update_db_data()
+
         self._steps += 1
         return True
 
-    def _get_ndofs(self):
-        return self.n_dofs
-
-    def _get_robot_mass(self):
-        return 1.0
-
     def _init_problem(self):
+        # initialize problem-> solver-depedent stuff here
         self.n_dofs = len(self._joint_names)
         self.n_contacts = len(self._contact_names)
         self._assign_controller_side_jnt_names(self._joint_names)
@@ -176,12 +236,27 @@ class DummyController(RHController):
             (1, self._n_nodes),
         ) # assuming x, y, z, w quaternion order for solver here
         self._zero_root_twist = np.zeros((6, self._n_nodes), dtype=self._dtype)
-        self._zero_root_a = np.zeros((6, self._n_nodes), dtype=self._dtype)
+        self._zero_root_a = np.zeros((6, self._n_nodes-1), dtype=self._dtype)
         self._full_q = np.concatenate([self._zero_root_q, self._zero_jnts], axis=0)
 
-    def _post_problem_init(self):
-        return None
+        # e.g. floating base + joints
+        self.nq=7+self.n_dofs
+        self.nv=6+self.n_dofs
 
+        self.constr_dict_dummy = {"floating_base_inverse_dyn": np.zeros((6, N_NODES)), 
+                "integrator": np.zeros((self.nq+self.nv, N_NODES)),
+                "init_state": np.zeros((self.nq+self.nv, 1)),
+                "other_constr": np.zeros((8, 7))}
+        
+        self.cost_dict_dummy = {"postural_cost": np.zeros((1, N_NODES-1)), 
+                "other_cost": np.zeros((1, N_NODES-1))}
+        
+    def _post_problem_init(self):
+
+        self.rhc_costs={}
+        self.rhc_constr={}        
+
+        return None
 
 class DummyClusterClient(ControlClusterClient):
     def __init__(
@@ -203,8 +278,8 @@ class DummyClusterClient(ControlClusterClient):
             use_mp_fork=True,
             isolated_cores_only=False,
             verbose=True,
-            debug=False,
-            custom_opts={},
+            debug=True,
+            custom_opts={"n_nodes": N_NODES, "cluster_dt": CLUSTER_DT, "some_other_mpc_opts": 12345},
         )
 
     def _generate_controller(self, idx: int):

@@ -189,7 +189,7 @@ class ControlClusterClient(ABC):
 
         # before exiting read some memory db info
         end_mem_usage=get_memory_usage(db_print=False)
-        meminfo = f"Memory usage for controller n.{idx}-> start {start_mem_usage} GB, end {end_mem_usage} GB, diff {end_mem_usage-start_mem_usage} GB"
+        meminfo = f"Memory usage for controller n.{controller.controller_index}-> before controller creation {start_mem_usage} GB, after {end_mem_usage} GB, diff {end_mem_usage-start_mem_usage} GB"
         Journal.log(self.__class__.__name__,
                 "_spawn_processes",
                 meminfo,
@@ -300,7 +300,6 @@ class ControlClusterClient(ABC):
         self.cluster_stats.write_info(dyn_info_name="cluster_ready",
                                     val=self._is_cluster_ready)
 
-
         self.cluster_data = SharedClusterInfo(namespace=self._namespace,
             is_server=True, 
             params_dict=self._custom_opts,
@@ -312,6 +311,7 @@ class ControlClusterClient(ABC):
         if self._debug:
             db_print_rate=60
             db_counter=0
+        
         while not self._terminated:
             shared_rhc_files_val=[""]*self.shared_rhc_files.length()
             self.shared_rhc_files.read_vec(shared_rhc_files_val, 0)
@@ -346,7 +346,7 @@ class ControlClusterClient(ABC):
         if not self._terminated:
 
             Journal.log(self.__class__.__name__,
-                            "terminate",
+                            "_terminate",
                             "terminating cluster...",
                             LogType.STAT,
                             throw_when_excep = True)

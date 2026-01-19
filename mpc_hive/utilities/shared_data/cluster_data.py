@@ -79,6 +79,9 @@ class SharedClusterInfo(SharedDataBase):
         self.init = None                                                  
 
         import copy
+        if len(params_dict)==0:
+            params_dict["dummpy_opt"]=1234 # SharedClusterInfo need at least one param
+
         self.cluster_params_dict = copy.deepcopy(params_dict)
         self._parse_sim_dict() # applies changes if needed
 
