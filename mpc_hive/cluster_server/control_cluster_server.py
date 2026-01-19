@@ -484,88 +484,83 @@ class ControlClusterServer(ABC):
         
         # gets indexes of controllers which are triggered for the first time
         # after being activated
-        now_active = self._now_active.squeeze(dim=1)
-        not_active_before = ~self._prev_active_controllers.squeeze(dim=1)
-        just_activated = torch.nonzero(now_active & not_active_before).squeeze(dim=1)
-        
-        if not just_activated.shape[0] == 0:
-            if gpu:
-                return just_activated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
-            else:
-                return just_activated
-        else:
-            # no controller just activated
+        if self._using_torch:
+            now_active = self._now_active.squeeze(dim=1)
+            not_active_before = ~self._prev_active_controllers.squeeze(dim=1)
+            just_activated = torch.nonzero(now_active & not_active_before).squeeze(dim=1)
+            if just_activated.shape[0] != 0:
+                return just_activated.cuda() if gpu else just_activated
             return None
+        else:
+            now_active = self._now_active.squeeze(axis=1)
+            not_active_before = np.logical_not(self._prev_active_controllers.squeeze(axis=1))
+            just_activated = np.nonzero(now_active & not_active_before)[0]
+            return just_activated if just_activated.size > 0 else None
         
     def get_just_deactivated(self,
                     gpu=False):
         
         # gets indexes of controllers which are triggered for the first time
         # after being activated
-        now_not_active = ~self._now_active.squeeze(dim=1)
-        active_before = self._prev_active_controllers.squeeze(dim=1)
-        just_deactivated = torch.nonzero(now_not_active & active_before).squeeze(dim=1)
-        
-        if not just_deactivated.shape[0] == 0:
-            if gpu:
-                return just_deactivated.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
-            else:
-                return just_deactivated        
-        else:
-            # no controller just deactivated
+        if self._using_torch:
+            now_not_active = ~self._now_active.squeeze(dim=1)
+            active_before = self._prev_active_controllers.squeeze(dim=1)
+            just_deactivated = torch.nonzero(now_not_active & active_before).squeeze(dim=1)
+            if just_deactivated.shape[0] != 0:
+                return just_deactivated.cuda() if gpu else just_deactivated
             return None
+        else:
+            now_not_active = np.logical_not(self._now_active.squeeze(axis=1))
+            active_before = self._prev_active_controllers.squeeze(axis=1)
+            just_deactivated = np.nonzero(now_not_active & active_before)[0]
+            return just_deactivated if just_deactivated.size > 0 else None
     
     def get_active_controllers(self,
                     gpu=False):
         
-        now_active = torch.nonzero(self._now_active.squeeze(dim=1)).squeeze(dim=1)
-        if not now_active.shape[0] == 0:
-            if gpu:
-                return now_active.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
-            else:
-                return now_active    
-        else:
-            # no controller active
+        if self._using_torch:
+            now_active = torch.nonzero(self._now_active.squeeze(dim=1)).squeeze(dim=1)
+            if now_active.shape[0] != 0:
+                return now_active.cuda() if gpu else now_active
             return None
+        else:
+            now_active = np.nonzero(self._now_active.squeeze(axis=1))[0]
+            return now_active if now_active.size > 0 else None
     
     def get_inactive_controllers(self,
                     gpu=False):
         
-        not_active = torch.nonzero((~self._now_active).squeeze(dim=1)).squeeze(dim=1)
-        if not not_active.shape[0] == 0:
-            if gpu:
-                return not_active.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
-            else:
-                return not_active
-        else:
-            # no controller active
+        if self._using_torch:
+            not_active = torch.nonzero((~self._now_active).squeeze(dim=1)).squeeze(dim=1)
+            if not_active.shape[0] != 0:
+                return not_active.cuda() if gpu else not_active
             return None
+        else:
+            not_active = np.nonzero(np.logical_not(self._now_active.squeeze(axis=1)))[0]
+            return not_active if not_active.size > 0 else None
 
     def get_failed_controllers(self,
                     gpu=False):
-        
-        failed = torch.nonzero(self._failed.squeeze(dim=1)).squeeze(dim=1)
-        if not failed.shape[0] == 0:
-            if gpu:
-                return failed.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
-            else:
-                return failed
-        else:
-            # no controller active
+        if self._using_torch:
+            failed = torch.nonzero(self._failed.squeeze(dim=1)).squeeze(dim=1)
+            if failed.shape[0] != 0:
+                return failed.cuda() if gpu else failed
             return None
+        else:
+            failed = np.nonzero(self._failed.squeeze(axis=1))[0]
+            return failed if failed.size > 0 else None
     
     def get_registered_controllers(self,
                     gpu=False):
 
-        registered = torch.nonzero(self._registered.squeeze(dim=1)).squeeze(dim=1)
-        if not registered.shape[0] == 0:
-            if gpu:
-                return registered.cuda() # n_envs x 8 bits of CPU -> GPU (RX)
-            else:
-                return registered
-        else:
-            # no controller registered
+        if self._using_torch:
+            registered = torch.nonzero(self._registered.squeeze(dim=1)).squeeze(dim=1)
+            if registered.shape[0] != 0:
+                return registered.cuda() if gpu else registered
             return None
+        else:
+            registered = np.nonzero(self._registered.squeeze(axis=1))[0]
+            return registered if registered.size > 0 else None
         
     def just_started_running(self):
 

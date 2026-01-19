@@ -95,6 +95,9 @@ class ControlClusterClient(ABC):
 
         self._child_ps_were_alive = False
         self._child_ps_spawn_timeout = 180.0 # [s]
+
+        self._term_request = False
+
         self._terminated = False
 
         self._proc_closed=False
@@ -104,14 +107,14 @@ class ControlClusterClient(ABC):
             self._system_run=self._system_start
     
     def __del__(self):
-        self.terminate()
+        self._terminate()
     
     def _handle_sigint(self, signum, frame):
         Journal.log(f"{self.__class__.__name__}",
                 "_handle_sigint",
-                "SIGINT received -> Cleaning up...",
+                "SIGINT received -> Triggering termination...",
                 LogType.WARN)
-        self.terminate()
+        self._term_request=True
 
     def _set_affinity(self, 
                 core_idxs: List[int], 
@@ -215,16 +218,21 @@ class ControlClusterClient(ABC):
         timeout=0.0
         update_dt=1
         
-        while True:
+        while not self._term_request:
             if self._childs_all_alive():
                 Journal.log(self.__class__.__name__,
                         "_wait_for_child_ps",
                         f"all childs are alive",
                         LogType.STAT)
-                self._child_ps_were_alive=True
+                self._child_ps_were_alive=True 
                 break
             else:
                 self._child_ps_were_alive=False
+                Journal.log(self.__class__.__name__,
+                        "_wait_for_child_ps",
+                        f"not all child ps alive. Retrying...",
+                        LogType.WARN,
+                        throw_when_excep=False)
             time.sleep(update_dt)
             timeout+=update_dt
             if timeout>self._child_ps_spawn_timeout:
@@ -234,7 +242,9 @@ class ControlClusterClient(ABC):
                         LogType.EXCEP,
                         throw_when_excep=False)
                 break
-
+        
+        return self._child_ps_were_alive
+    
     def run(self):
         
         # let's make the paths to the controllers files available on shared memory for db
@@ -250,6 +260,10 @@ class ControlClusterClient(ABC):
 
         self._spawn_processes()
 
+        if not self._is_cluster_ready:
+            self._terminate()
+            return 
+        
         from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
         from mpc_hive.utilities.shared_data.cluster_data import SharedClusterInfo
 
@@ -317,16 +331,20 @@ class ControlClusterClient(ABC):
                 break
             else:
                 time.sleep(1.0) # we just keep it alive
+                if self._term_request:
+                    break
                 if self._debug:
                     db_counter+=1
                 continue
+        
+        self._terminate()
 
-        self._close_process() 
         self.shared_rhc_files.close()
-        
-    def terminate(self):
-        
+    
+    def _terminate(self):
+
         if not self._terminated:
+
             Journal.log(self.__class__.__name__,
                             "terminate",
                             "terminating cluster...",
@@ -335,7 +353,7 @@ class ControlClusterClient(ABC):
             self._close_all() # we terminate all the child processes
             self._close_shared_mem() # and close the used shared memory
             self._terminated = True
-    
+
     def _close_process(self):
         if not self._proc_closed:
             for process in self._processes:
@@ -376,9 +394,10 @@ class ControlClusterClient(ABC):
 
     def _close_all(self):
         # Wait for each process to exit gracefully or terminate forcefully
-        self._remote_term.write_retry(True, 
-                                        row_index=0,
-                                        col_index=0) # send termination to controllers
+        if self._remote_term is not None:
+            self._remote_term.write_retry(True, 
+                                    row_index=0,
+                                    col_index=0) # send termination to controllers
         self._close_process()
     
     def _close_shared_mem(self):
@@ -510,9 +529,7 @@ class ControlClusterClient(ABC):
             self._child_alive.append(True)
             self._processes[i].start()
         
-        self._wait_for_child_ps() # blocking: waits that all child ps are alive
-
-        self._is_cluster_ready = True
+        self._is_cluster_ready = self._wait_for_child_ps() # blocking: waits that all child ps are alive
 
         Journal.log(self.__class__.__name__,
                     "_spawn_processes",
