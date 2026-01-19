@@ -6,11 +6,9 @@ from mpc_hive.tests.remote_stepping_fakes import (
     DummyClusterClient,
     write_dummy_srdf,
     NAMESPACE,
-    wait_for_cluster_server,
-    REGISTER_TIMEOUT_S,
 )
 
-CLUSTER_SIZE = 10
+CLUSTER_SIZE = 1
 JOINT_NAMES = ["joint_1", "joint_2"]
 CONTACT_NAMES = ["contact_1"]
 
@@ -27,10 +25,9 @@ class RemoteSteppingClientTests(unittest.TestCase):
 
         self.tmp_dir.cleanup()
 
-    def test_client_runs_until_terminated(self):
+    def test_client(self):
         # Blocking run; external orchestration should terminate the client when done.
         self.client.run()
-
 
 if __name__ == "__main__":
     unittest.main()

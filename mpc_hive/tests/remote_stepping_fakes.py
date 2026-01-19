@@ -12,12 +12,12 @@ from mpc_hive.controllers.rhc import RHController
 from mpc_hive.utilities.shared_data.rhc_data import RhcStatus
 from mpc_hive.utilities.shared_data.rhc_data import RhcRefs
 
-CONTROL_DT = 0.01
-CLUSTER_DT = 0.01
-ACK_TIMEOUT_MS = 30000
-REGISTER_TIMEOUT_S = 30.0
-NAMESPACE = os.environ.get("MPCHIVE_REMOTE_STEP_NS", "mpc_hive_remote_step346")
-
+CONTROL_DT = 0.0001 # dt at which lower lever controllers runs (e.g. joint impedance controllers)
+CLUSTER_DT = 0.03 # dt at which the cluster server steps (MPC dt)
+N_PHYSICS_STEPS=int(CLUSTER_DT / CONTROL_DT)
+ACK_TIMEOUT_MS = 8000
+N_NODES=30
+NAMESPACE = os.environ.get("MPCHIVE_REMOTE_STEP_NS", "mpc_hive_test_ns5")
 
 def write_dummy_srdf(path, joint_names: List[str]) -> str:
     lines = ["<?xml version=\"1.0\"?>", "<robot name=\"dummy\">", "  <group_state name=\"home\" group=\"dummy_group\">"]
@@ -26,30 +26,6 @@ def write_dummy_srdf(path, joint_names: List[str]) -> str:
     lines.extend(["  </group_state>", "</robot>"])
     path.write_text("\n".join(lines))
     return str(path)
-
-
-def wait_for_cluster_server(namespace: str, cluster_size: int, timeout_s: float) -> bool:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        try:
-            status = RhcStatus(
-                is_server=False,
-                namespace=namespace,
-                cluster_size=cluster_size,
-                n_contacts=None,
-                n_nodes=None,
-                optimize_mem=True,
-                with_torch_view=False,
-                with_gpu_mirror=False,
-                force_reconnection=True,
-            )
-            status.run()
-            status.close()
-            return True
-        except Exception:
-            time.sleep(0.1)
-    return False
-
 
 class DummyClusterServer(ControlClusterServer):
     def __init__(self, namespace: str, cluster_size: int, joint_names: List[str], contact_names: List[str]):
@@ -62,6 +38,7 @@ class DummyClusterServer(ControlClusterServer):
             n_contacts=len(contact_names),
             contact_linknames=contact_names,
             use_gpu=False,
+            use_torch=False,
             verbose=True,
             vlevel=VLevel.V0,
             debug=False,
@@ -70,10 +47,10 @@ class DummyClusterServer(ControlClusterServer):
         )
 
     def step_once(self):
-        self.pre_trigger()
-        self.trigger_solution()
-        self.wait_for_solution()
-
+        self.pre_trigger()  # retrieves current controllers status 
+        # (here custom logic depending on controllers status could be added)
+        self.trigger_solution() # sends trigger to controllers
+        self.wait_for_solution() # waits for ALL controllers to solve
 
 class DummyController(RHController):
     def __init__(
@@ -96,8 +73,8 @@ class DummyController(RHController):
 
         super().__init__(
             srdf_path=srdf_path,
-            n_nodes=3,
-            dt=CONTROL_DT,
+            n_nodes=N_NODES,
+            dt=CLUSTER_DT,
             namespace=namespace,
             dtype=np.float32,
             verbose=True,
@@ -139,28 +116,36 @@ class DummyController(RHController):
         return self._contact_names
 
     def _get_jnt_q_from_sol(self, node_idx=1) -> np.ndarray:
-        return self._zero_jnts
+        # In a real controller these values are read from the solver solution.
+        return self._zero_jnts[:, node_idx:node_idx + 1].T
 
     def _get_jnt_v_from_sol(self, node_idx=1) -> np.ndarray:
-        return self._zero_jnts
+        # In a real controller these values are read from the solver solution.
+        return self._zero_jnts[:, node_idx:node_idx + 1].T
 
     def _get_jnt_a_from_sol(self, node_idx=0) -> np.ndarray:
-        return self._zero_jnts
+        # In a real controller these values are read from the solver solution.
+        return self._zero_jnts[:, node_idx:node_idx + 1].T
 
     def _get_jnt_eff_from_sol(self, node_idx=0) -> np.ndarray:
-        return self._zero_jnts
+        # In a real controller these values are read from the solver solution.
+        return self._zero_jnts[:, node_idx:node_idx + 1].T
 
     def _get_root_full_q_from_sol(self, node_idx=1) -> np.ndarray:
-        return self._zero_root_q
+        # In a real controller these values are read from the solver solution.
+        return self._zero_root_q[:, node_idx:node_idx + 1].T
 
     def _get_full_q_from_sol(self, node_idx=1) -> np.ndarray:
-        return self._full_q
+        # In a real controller these values are read from the solver solution.
+        return self._full_q[:, node_idx:node_idx + 1].T
 
     def _get_root_twist_from_sol(self, node_idx=1) -> np.ndarray:
-        return self._zero_root_twist
+        # In a real controller these values are read from the solver solution.
+        return self._zero_root_twist[:, node_idx:node_idx + 1].T
 
     def _get_root_a_from_sol(self, node_idx=0) -> np.ndarray:
-        return self._zero_root_a
+        # In a real controller these values are read from the solver solution.
+        return self._zero_root_a[:, node_idx:node_idx + 1].T
 
     def _update_open_loop(self):
         return None
@@ -169,6 +154,8 @@ class DummyController(RHController):
         return None
 
     def _solve(self) -> bool:
+        print(f"Controller n. {self.controller_index} solved.")
+        time.sleep(0.003)  # simulate some solving time
         self._steps += 1
         return True
 
@@ -182,11 +169,15 @@ class DummyController(RHController):
         self.n_dofs = len(self._joint_names)
         self.n_contacts = len(self._contact_names)
         self._assign_controller_side_jnt_names(self._joint_names)
-        self._zero_jnts = np.zeros((1, self.n_dofs), dtype=self._dtype)
-        self._zero_root_q = np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]], dtype=self._dtype)
-        self._zero_root_twist = np.zeros((1, 6), dtype=self._dtype)
-        self._zero_root_a = np.zeros((1, 6), dtype=self._dtype)
-        self._full_q = np.concatenate([self._zero_root_q, self._zero_jnts], axis=1)
+        # In a real controller these arrays come from the MPC solver state (one column per node).
+        self._zero_jnts = np.zeros((self.n_dofs, self._n_nodes), dtype=self._dtype)
+        self._zero_root_q = np.tile(
+            np.array([[0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0]], dtype=self._dtype),
+            (1, self._n_nodes),
+        ) # assuming x, y, z, w quaternion order for solver here
+        self._zero_root_twist = np.zeros((6, self._n_nodes), dtype=self._dtype)
+        self._zero_root_a = np.zeros((6, self._n_nodes), dtype=self._dtype)
+        self._full_q = np.concatenate([self._zero_root_q, self._zero_jnts], axis=0)
 
     def _post_problem_init(self):
         return None
@@ -225,13 +216,12 @@ class DummyClusterClient(ControlClusterClient):
             cluster_size=self.cluster_size,
         )
 
-
 def wait_for_controllers(server: ControlClusterServer, expected: int, timeout_s: float) -> bool:
     status = server.get_status()
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         status.controllers_counter.synch_all(read=True, retry=True)
-        if int(status.controllers_counter.get_numpy_mirror()[0, 0]) >= expected:
+        if int(status.controllers_counter.get_numpy_mirror()[0, 0]) == expected:
             return True
         time.sleep(0.1)
     return False
