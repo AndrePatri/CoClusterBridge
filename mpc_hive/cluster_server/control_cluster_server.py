@@ -45,6 +45,7 @@ class ControlClusterServer(ABC):
             n_contacts: int,
             contact_linknames: List[str] = None,
             use_gpu: bool = False, 
+            use_torch: bool = True,
             verbose = False, 
             vlevel: VLevel = VLevel.V1,
             debug = False, 
@@ -71,6 +72,7 @@ class ControlClusterServer(ABC):
         self._low_level_control_dt = control_dt # dt at which the low level controller or the simulator runs
      
         self._using_gpu = use_gpu
+        self._using_torch = use_torch
         if self._using_gpu:
             self._torch_device = torch.device("cuda")
         else:
@@ -174,7 +176,7 @@ class ControlClusterServer(ABC):
                                 height_grid_size=self._height_grid_size,
                                 height_grid_resolution=self._height_grid_resolution,
                                 with_gpu_mirror=self._using_gpu,
-                                with_torch_view=True,
+                                with_torch_view=self._using_torch,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
@@ -188,7 +190,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
                                 with_gpu_mirror=self._using_gpu,
-                                with_torch_view=True,
+                                with_torch_view=self._using_torch,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
@@ -201,7 +203,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
                                 with_gpu_mirror=self._using_gpu,
-                                with_torch_view=True,
+                                with_torch_view=self._using_torch,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
@@ -214,7 +216,7 @@ class ControlClusterServer(ABC):
                                 jnt_names=self.jnt_names,
                                 contact_names=self._contact_linknames,
                                 with_gpu_mirror=self._using_gpu,
-                                with_torch_view=True,
+                                with_torch_view=self._using_torch,
                                 force_reconnection=self._force_reconnection,
                                 verbose=True,
                                 vlevel=self._vlevel,
@@ -243,7 +245,7 @@ class ControlClusterServer(ABC):
             vlevel=self._vlevel,
             force_reconnection=self._force_reconnection,
             with_gpu_mirror=False,
-            with_torch_view=True)
+            with_torch_view=self._using_torch)
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
         cluster_info_dict["cluster_dt"] = self._cluster_dt
