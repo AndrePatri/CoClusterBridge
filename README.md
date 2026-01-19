@@ -28,7 +28,6 @@ Ships with many useful tools for MPC development, including an extensible GUI fo
 - **Utilities**: debugger GUI, keyboard/joy teleop, etc..
 
 
-
 ## Installation
 
 The preferred way to install MPCHive is through [IBRIDO](https://github.com/AndrePatri/IBRIDO)'s container, which ships with all necessary dependencies. To setup the container, follow the instructions at [ibrido-containers](https://github.com/AndrePatri/ibrido-containers).
@@ -36,3 +35,5 @@ The preferred way to install MPCHive is through [IBRIDO](https://github.com/Andr
 ## Quick start
 
 The easiest way to get started is to run one of the examples provided by the [AugMPC](https://github.com/AndrePatri/AugMPC) project, following the instructions available at [ibrido-containers](https://github.com/AndrePatri/ibrido-containers), which already demonstrate the integration with vectorized simulators and implementations of specific MPC controllers.
+
+Alternatively, run both `python mpc_hive/tests/test_remote_stepping_server.py` and `python mpc_hive/tests/test_remote_stepping_client.py` which demonstrate a minimal dummy cluster server, client and MPC controller run. Inspecting the dummy implementations is a good starting point if you need to write your own.
