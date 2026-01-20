@@ -277,6 +277,7 @@ class DummyClusterClient(ControlClusterClient):
             set_affinity=False,
             use_mp_fork=True,
             isolated_cores_only=False,
+            use_core_pool=False,
             verbose=True,
             debug=True,
             custom_opts={"n_nodes": N_NODES, "cluster_dt": CLUSTER_DT, "some_other_mpc_opts": 12345},

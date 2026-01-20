@@ -41,6 +41,7 @@ class ControlClusterClient(ABC):
             processes_basename: str = "Controller", 
             set_affinity: bool = False,
             use_mp_fork: bool = True,
+            use_core_pool: bool = True,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False,
@@ -60,6 +61,7 @@ class ControlClusterClient(ABC):
         self.set_affinity = set_affinity
 
         self.use_mp_fork = use_mp_fork
+        self.use_core_pool = use_core_pool
         
         self.isolated_cores_only = isolated_cores_only # will spawn each controller
         # in a isolated core, if they fit
@@ -196,8 +198,65 @@ class ControlClusterClient(ABC):
                 LogType.STAT,
                 throw_when_excep = True)
 
+    def _spawn_controller_pool(self,
+                    pool_idx: int,
+                    controller_idxs: List[int],
+                    available_cores: List[int]):
+        
+        start_mem_usage=get_memory_usage(db_print=False)
+
+        if self.set_affinity:
+            self._set_affinity(core_idxs=[self._compute_process_affinity(pool_idx, core_ids=available_cores)],
+                        controller_idx=pool_idx)
+
+        from EigenIPC.PyEigenIPC import StringTensorClient
+        import time
+
+        shared_rhc_files = StringTensorClient(
+            basename="SharedRhcFilesDropDir", 
+            name_space=self._namespace,
+            verbose=self._verbose, 
+            vlevel=VLevel.V2)
+        shared_rhc_files.run()
+        
+        controllers = []
+        for idx in controller_idxs:
+            controller = self._generate_controller(idx=idx)
+            this_controller_paths=controller.this_paths()
+            combined_paths = ", ".join(this_controller_paths)
+            while True:
+                if not shared_rhc_files.write_vec([combined_paths], idx):
+                    time.sleep(1.0)
+                    continue
+                else:
+                    break
+            controllers.append(controller)
+
+        shared_rhc_files.close()
+
+        keep_running = True
+        while keep_running:
+            keep_running = False
+            for controller in controllers:
+                if controller.solve_once():
+                    keep_running = True
+                else:
+                    keep_running = False
+                    break
+
+        for controller in controllers:
+            controller.close()
+
+        end_mem_usage=get_memory_usage(db_print=False)
+        meminfo = f"Memory usage for controller pool n.{pool_idx}-> before controller creation {start_mem_usage} GB, after {end_mem_usage} GB, diff {end_mem_usage-start_mem_usage} GB"
+        Journal.log(self.__class__.__name__,
+                "_spawn_processes",
+                meminfo,
+                LogType.STAT,
+                throw_when_excep = True)
+
     def _check_child_ps_status(self):
-        for i in range(0, self.cluster_size):
+        for i in range(0, len(self._processes)):
             child_p = self._processes[i]
             if not child_p.is_alive():
                 self._child_alive[i] = False
@@ -471,6 +530,20 @@ class ControlClusterClient(ABC):
         # in the core ids list
         num_cores = len(core_ids)
         return core_ids[process_index % num_cores]
+
+    def _compute_pool_size(self, core_ids: List[int]):
+        if not self.use_core_pool:
+            return self.cluster_size
+        available_cores = len(core_ids) if core_ids is not None else 0
+        if available_cores <= 0:
+            available_cores = self.cluster_size
+        return max(1, min(available_cores, self.cluster_size))
+
+    def _distribute_controller_idxs(self, pool_size: int):
+        pools = [[] for _ in range(pool_size)]
+        for idx in range(self.cluster_size):
+            pools[idx % pool_size].append(idx)
+        return pools
     
     def _import_aux_libs(self):
         # to be overriden by child (to reduce mem. footprint)
@@ -515,19 +588,37 @@ class ControlClusterClient(ABC):
             # ini case user wants to set core ids manually
             core_ids = self.core_ids_override_list
 
-        for i in range(0, self.cluster_size):
-            info = f"Spawning process for controller n.{i}."
-            Journal.log(self.__class__.__name__,
-                    "_spawn_processes",
-                    info,
-                    LogType.STAT,
-                    throw_when_excep = True)
-            process = ctx.Process(target=self._spawn_controller, 
-                            name=self.processes_basename + str(i),
-                            args=(i, core_ids))
-            self._processes.append(process)
-            self._child_alive.append(True)
-            self._processes[i].start()
+        pool_size = self._compute_pool_size(core_ids)
+        controller_pools = self._distribute_controller_idxs(pool_size)
+
+        if self.use_core_pool:
+            for pool_idx, controller_idxs in enumerate(controller_pools):
+                info = f"Spawning process for controller pool n.{pool_idx} with controllers {controller_idxs}."
+                Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
+                process = ctx.Process(target=self._spawn_controller_pool, 
+                                name=self.processes_basename + "Pool" + str(pool_idx),
+                                args=(pool_idx, controller_idxs, core_ids))
+                self._processes.append(process)
+                self._child_alive.append(True)
+                process.start()
+        else:
+            for i in range(0, self.cluster_size):
+                info = f"Spawning process for controller n.{i}."
+                Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
+                process = ctx.Process(target=self._spawn_controller, 
+                                name=self.processes_basename + str(i),
+                                args=(i, core_ids))
+                self._processes.append(process)
+                self._child_alive.append(True)
+                process.start()
         
         self._is_cluster_ready = self._wait_for_child_ps() # blocking: waits that all child ps are alive
 

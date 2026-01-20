@@ -370,50 +370,57 @@ class RHController(ABC):
         self._write_cmds_from_sol() # we update the views of the cmds
         # from the latest solution even if failed
         
+    def solve_once(self):
+        # run a single iteration of the solve loop (used for pooling)
+        if self._term_req_received:
+            return False
+
+        if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
+            Journal.log(self._class_name,
+                f"solve",
+                "Didn't receive any remote trigger req within timeout!",
+                LogType.EXCEP,
+                throw_when_excep = False)
+            return False
+
+        self._received_trigger = True
+
+        if self.rhc_status.resets.read_retry(row_index=self.controller_index,
+                                col_index=0,
+                                row_index_view=0)[0]:
+            self.reset() # rhc is reset
+
+        if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
+                    col_index=0,
+                    row_index_view=0)[0]:
+            self._rhc() # run solution
+            self.rhc_status.trigger.write_retry(False, 
+                row_index=self.controller_index,
+                col_index=0,
+                row_index_view=0) # allow next solution trigger 
+        
+        self._remote_triggerer.ack() # send ack signal to server
+        self._received_trigger = False
+        
+        self._term_req_received = self._term_req_received or self._remote_term.read_retry(row_index=0,
+                                                        col_index=0,
+                                                        row_index_view=0)[0]
+        
+        if self._term_req_received:
+            self.close()
+            return False
+
+        return True
+
     def solve(self):
         
         # run the solution loop and wait for trigger signals
         # using cond. variables (efficient)
-        while not self._term_req_received:
-            # we are always listening for a trigger signal 
-            if not self._remote_triggerer.wait(self._remote_triggerer_timeout):
-                Journal.log(self._class_name,
-                    f"solve",
-                    "Didn't receive any remote trigger req within timeout!",
-                    LogType.EXCEP,
-                    throw_when_excep = False)
+        while True:
+            if not self.solve_once():
                 break
-            self._received_trigger = True
-            # signal received -> we process incoming requests
-            # perform reset, if required
-            if self.rhc_status.resets.read_retry(row_index=self.controller_index,
-                                    col_index=0,
-                                    row_index_view=0)[0]:
-                self.reset() # rhc is reset
-            # check if a trigger request was received
-            if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
-                        col_index=0,
-                        row_index_view=0)[0]:
-                self._rhc() # run solution
-                self.rhc_status.trigger.write_retry(False, 
-                    row_index=self.controller_index,
-                    col_index=0,
-                    row_index_view=0) # allow next solution trigger 
-            
-            self._remote_triggerer.ack() # send ack signal to server
-            self._received_trigger = False
-            
-            self._term_req_received = self._term_req_received or self._remote_term.read_retry(row_index=0,
-                                                            col_index=0,
-                                                            row_index_view=0)[0]
         
         self.close() # is not stricly necessary
-
-        Journal.log(self._class_name,
-            "solve",
-            f"RHC full solve loop execution time  -> " + str(self._profiling_data_dict["full_solve_dt"]),
-            LogType.INFO,
-            throw_when_excep = True) 
 
     def reset(self):
         
