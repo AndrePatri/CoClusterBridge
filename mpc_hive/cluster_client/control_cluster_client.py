@@ -41,7 +41,7 @@ class ControlClusterClient(ABC):
             processes_basename: str = "Controller", 
             set_affinity: bool = False,
             use_mp_fork: bool = True,
-            use_core_pool: bool = True,
+            use_core_pool: bool = False,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False,
@@ -592,7 +592,9 @@ class ControlClusterClient(ABC):
         controller_pools = self._distribute_controller_idxs(pool_size)
 
         if self.use_core_pool:
-            for pool_idx, controller_idxs in enumerate(controller_pools):
+            for i in range(pool_size):
+                pool_idx=i
+                controller_idxs=controller_pools[i]
                 info = f"Spawning process for controller pool n.{pool_idx} with controllers {controller_idxs}."
                 Journal.log(self.__class__.__name__,
                         "_spawn_processes",

@@ -64,7 +64,7 @@ class SharedClusterInfo(SharedDataBase):
     def __init__(self, 
                 namespace: str,
                 is_server = False, 
-                params_dict: Dict = None,
+                params_dict: Dict = {},
                 safe: bool = True,
                 verbose = True, 
                 vlevel = VLevel.V2,
