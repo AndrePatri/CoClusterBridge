@@ -18,6 +18,7 @@
 from abc import ABC, abstractmethod
 
 from typing import List, Dict
+import math
 
 import multiprocess as mp
 
@@ -42,6 +43,7 @@ class ControlClusterClient(ABC):
             set_affinity: bool = False,
             use_mp_fork: bool = True,
             use_core_pool: bool = True,
+            max_controllers_per_pool: int = 3,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False,
@@ -62,6 +64,7 @@ class ControlClusterClient(ABC):
 
         self.use_mp_fork = use_mp_fork
         self.use_core_pool = use_core_pool
+        self.max_controllers_per_pool = max_controllers_per_pool
         
         self.isolated_cores_only = isolated_cores_only # will spawn each controller
         # in a isolated core, if they fit
@@ -537,7 +540,8 @@ class ControlClusterClient(ABC):
         available_cores = len(core_ids) if core_ids is not None else 0
         if available_cores <= 0:
             available_cores = self.cluster_size
-        return max(1, min(available_cores, self.cluster_size))
+        pools_by_limit = math.ceil(self.cluster_size / self.max_controllers_per_pool)
+        return max(1, min(self.cluster_size, max(pools_by_limit, available_cores)))
 
     def _distribute_controller_idxs(self, pool_size: int):
         pools = [[] for _ in range(pool_size)]
@@ -593,33 +597,35 @@ class ControlClusterClient(ABC):
 
         if self.use_core_pool:
             for pool_idx, controller_idxs in enumerate(controller_pools):
-                info = f"Spawning process for controller pool n.{pool_idx} with controllers {controller_idxs}."
-                Journal.log(self.__class__.__name__,
-                        "_spawn_processes",
-                        info,
-                        LogType.STAT,
-                        throw_when_excep = True)
+                
                 process = ctx.Process(target=self._spawn_controller_pool, 
                                 name=self.processes_basename + "Pool" + str(pool_idx),
                                 args=(pool_idx, controller_idxs, core_ids))
                 self._processes.append(process)
                 self._child_alive.append(True)
                 process.start()
-        else:
-            for i in range(0, self.cluster_size):
-                info = f"Spawning process for controller n.{i}."
+                info = f"Spawned process with PID {process.pid} for controller pool n.{pool_idx} with controllers {controller_idxs} (max_per_pool={self.max_controllers_per_pool})."
                 Journal.log(self.__class__.__name__,
                         "_spawn_processes",
                         info,
                         LogType.STAT,
                         throw_when_excep = True)
+        else:
+            for i in range(0, self.cluster_size):
+                
                 process = ctx.Process(target=self._spawn_controller, 
                                 name=self.processes_basename + str(i),
                                 args=(i, core_ids))
                 self._processes.append(process)
                 self._child_alive.append(True)
                 process.start()
-        
+                info = f"Spawned process with PID {process.pid} for controller n.{i}."
+                Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
+
         self._is_cluster_ready = self._wait_for_child_ps() # blocking: waits that all child ps are alive
 
         Journal.log(self.__class__.__name__,
