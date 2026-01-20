@@ -17,7 +17,7 @@ CLUSTER_DT = 0.03 # dt at which the cluster server steps (MPC dt)
 N_PHYSICS_STEPS=int(CLUSTER_DT / CONTROL_DT)
 ACK_TIMEOUT_MS = 8000
 N_NODES=30
-NAMESPACE = "mpc_hive_test_ns_"
+NAMESPACE = "mpc_hive_test_ns"
 
 def write_dummy_srdf(path, joint_names: List[str]) -> str:
     lines = ["<?xml version=\"1.0\"?>", "<robot name=\"dummy\">", "  <group_state name=\"home\" group=\"dummy_group\">"]
