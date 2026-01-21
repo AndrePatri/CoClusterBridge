@@ -596,8 +596,15 @@ class ControlClusterClient(ABC):
         controller_pools = self._distribute_controller_idxs(pool_size)
 
         if self.use_core_pool:
-            for pool_idx, controller_idxs in enumerate(controller_pools):
-                
+            for i in range(pool_size):
+                pool_idx=i
+                controller_idxs=controller_pools[i]
+                info = f"Spawning process for controller pool n.{pool_idx} with controllers {controller_idxs}."
+                Journal.log(self.__class__.__name__,
+                        "_spawn_processes",
+                        info,
+                        LogType.STAT,
+                        throw_when_excep = True)
                 process = ctx.Process(target=self._spawn_controller_pool, 
                                 name=self.processes_basename + "Pool" + str(pool_idx),
                                 args=(pool_idx, controller_idxs, core_ids))
