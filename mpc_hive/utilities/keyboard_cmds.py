@@ -188,10 +188,8 @@ class RefsFromKeyboard:
             self._shared_refs.rob_refs.contact_pos.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self._shared_refs.rob_refs.contact_pos.n_cols,
                                                 read=False)
-            
-            
-            
-            
+        
+            self._shared_refs.contact_flags.synch_all(read=False, retry=True)
             
             self._shared_refs.flight_settings_req.synch_retry(row_index=self.cluster_idx, col_index=0, 
                                                 n_rows=1, n_cols=self._shared_refs.flight_settings_req.n_cols,
@@ -694,7 +692,7 @@ class RefsFromKeyboard:
         
             self._synch(read=True) # updates  data like
             # current cluster index
-
+            
             if not self._read_from_stdin:
                 if hasattr(key, 'char'):
                     key=key.char
