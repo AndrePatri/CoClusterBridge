@@ -371,11 +371,16 @@ class ControlClusterServer(ABC):
         # request
 
     def wait_for_solution(self):
+
         if self._debug:
             self._check_running()
             self._require_trigger() # we force sequentiality between triggering and
             # solution retrieval
-        self._wait_for_solution() # we wait for controllers to finish processing the trigger request
+
+        wait_ok=self._wait_for_solution() # we wait for controllers to finish processing the trigger request
+        if not wait_ok:
+            return False
+        
         self._get_rhc_sol() # not super efficient, but safe: in theory we should read solution only from 
         # controllers which where triggered (i.e. ACTIVE ones)
         if self._debug:
@@ -392,6 +397,8 @@ class ControlClusterServer(ABC):
         self._solution_counter += 1
         self._triggered=False
         self._got_fresh_sol=True
+
+        return True
     
     def _wait_for_solution(self):
 
@@ -401,7 +408,8 @@ class ControlClusterServer(ABC):
                 "_wait_for_solution",
                 f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
                 LogType.EXCEP,
-                throw_when_excep = True)
+                throw_when_excep = False)
+            return False
         
         # update flags (written by controllers upon solution request)
         self._rhc_status.fails.synch_all(read=True,
@@ -410,6 +418,8 @@ class ControlClusterServer(ABC):
             self._failed[:, :] = self._rhc_status.fails.get_torch_mirror(gpu=False)
         else:   
             self._failed[:,:] = self._rhc_status.fails.get_numpy_mirror()
+        
+        return True
 
     def reset_controllers(self,
                     idxs: torch.Tensor = None):
@@ -435,13 +445,17 @@ class ControlClusterServer(ABC):
                 "reset_controllers",
                 f"Didn't receive any or all acks from controllers (expected {self.cluster_size})!",
                 LogType.EXCEP,
-                throw_when_excep = True)
+                throw_when_excep = False)
+            
+            return False
         
         self._get_rhc_sol() # not super efficient, but safe: in theory we should only update the 
         # sol of the controllers which where reset 
 
         self._rhc_status.resets.synch_all(read=True, retry=True) # update reset flags (controllers
         # reset flags upon successful reset)
+
+        return True
 
     def activate_controllers(self,
                     idxs: torch.Tensor = None):
