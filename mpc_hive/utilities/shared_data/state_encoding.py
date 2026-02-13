@@ -1491,7 +1491,7 @@ class FullRobState(SharedDataBase):
             self.contact_vel.get_shared_mem()]
         if self._add_root_wrench:
             shared_mems.append(self.contact_wrenches_root.get_shared_mem())
-        return 
+        return shared_mems
     
     def n_robots(self):
         return self.root_state.getNRows()
