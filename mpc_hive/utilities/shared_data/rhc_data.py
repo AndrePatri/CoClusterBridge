@@ -314,13 +314,16 @@ class RhcRefs(SharedDataBase):
             self._n_data = 7 # flight pos, flight length remaining, flight length nominal, apex dpos, end dpos, land dx, land dy
 
             self.n_robots = n_robots
+
             self.n_contacts=n_contacts
+
+            n_cols= None if not is_server else self._n_data*n_contacts
 
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
                 n_rows = n_robots, 
-                n_cols = self._n_data*n_contacts, 
+                n_cols = n_cols, 
                 dtype = dtype.Float,
                 verbose = verbose, 
                 vlevel = vlevel,
@@ -501,13 +504,16 @@ class RhcRefs(SharedDataBase):
             # flight land dx, flight land dy (base local at the moment of request)
 
             self.n_robots = n_robots
+
+            n_cols= None if not is_server else self._n_data*n_contacts
+
             self.n_contacts=n_contacts
 
             super().__init__(namespace = namespace,
                 basename = basename,
                 is_server = is_server, 
                 n_rows = n_robots, 
-                n_cols = self._n_data*n_contacts, 
+                n_cols = n_cols, 
                 dtype = dtype.Float,
                 verbose = verbose, 
                 vlevel = vlevel,
@@ -746,6 +752,8 @@ class RhcRefs(SharedDataBase):
 
         self.safe = safe
 
+        self._is_runnning = False
+
         self.rob_refs = self.RobotFullConfigRef(namespace=namespace,
                                     basename=self.basename,
                                     is_server=is_server,
@@ -764,9 +772,76 @@ class RhcRefs(SharedDataBase):
                                     fill_value=fill_value,
                                     optimize_mem=optimize_mem)
         
-        self.contact_flags = None
+        self.contact_flags = self.ContactFlag(namespace=self.namespace,
+                            basename=self.basename,
+                            is_server=self.is_server,
+                            n_robots=n_robots,
+                            n_contacts=n_contacts,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
+                            safe=self.safe,
+                            optimize_mem=self._optimize_mem)
+        
+        self.flight_info = self.FlightInfo(namespace=self.namespace,
+                            is_server=self.is_server,
+                            n_robots=n_robots,
+                            n_contacts=n_contacts,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
+                            safe=self.safe,
+                            optimize_mem=self._optimize_mem)
 
-        self._is_runnning = False
+        self.flight_settings_req = self.FlightSettingsReq(namespace=self.namespace,
+                            is_server=self.is_server,
+                            n_robots=n_robots,
+                            n_contacts=n_contacts,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
+                            safe=self.safe,
+                            optimize_mem=self._optimize_mem)
+        
+        self.phase_id = self.Phase(namespace=self.namespace,
+                            basename=self.basename,
+                            is_server=self.is_server,
+                            n_robots=n_robots,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
+                            safe=self.safe,
+                            optimize_mem=self._optimize_mem)
+        
+        self.alpha = self.AlphaView(namespace=self.namespace,
+                            is_server=self.is_server,
+                            cluster_size=n_robots,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
+                            optimize_mem=self._optimize_mem)
+        
+        self.bound_rel = self.BoundRelaxView(namespace=self.namespace,
+                            is_server=self.is_server,
+                            cluster_size=n_robots,
+                            verbose=self.verbose,
+                            vlevel=self.vlevel,
+                            force_reconnection=self.force_reconnection,
+                            with_gpu_mirror=self._with_gpu_mirror,
+                            with_torch_view=self._with_torch_view,
+                            optimize_mem=self._optimize_mem)
+
+        self._n_contacts = None
 
     def __del__(self):
 
@@ -788,81 +863,20 @@ class RhcRefs(SharedDataBase):
     def run(self):
 
         self.rob_refs.run()
+        self._n_contacts = self.rob_refs.n_contacts() # read again contacts
 
-        self._n_contacts = self.rob_refs.n_contacts()
-        
-        self.contact_flags = self.ContactFlag(namespace=self.namespace,
-                            basename=self.basename,
-                            is_server=self.is_server,
-                            n_robots=self.rob_refs.root_state.n_rows,
-                            n_contacts=self._n_contacts,
-                            verbose=self.verbose,
-                            vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection,
-                            with_gpu_mirror=self._with_gpu_mirror,
-                            with_torch_view=self._with_torch_view,
-                            safe=self.safe,
-                            optimize_mem=self._optimize_mem)
         self.contact_flags.run()
 
-        self.flight_info = self.FlightInfo(namespace=self.namespace,
-                            is_server=self.is_server,
-                            n_robots=self.rob_refs.root_state.n_rows,
-                            n_contacts=self._n_contacts,
-                            verbose=self.verbose,
-                            vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection,
-                            with_gpu_mirror=self._with_gpu_mirror,
-                            with_torch_view=self._with_torch_view,
-                            safe=self.safe,
-                            optimize_mem=self._optimize_mem)
         self.flight_info.run()
 
-        self.flight_settings_req = self.FlightSettingsReq(namespace=self.namespace,
-                            is_server=self.is_server,
-                            n_robots=self.rob_refs.root_state.n_rows,
-                            n_contacts=self._n_contacts,
-                            verbose=self.verbose,
-                            vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection,
-                            with_gpu_mirror=self._with_gpu_mirror,
-                            with_torch_view=self._with_torch_view,
-                            safe=self.safe,
-                            optimize_mem=self._optimize_mem)
         self.flight_settings_req.run()
-        
-        self.phase_id = self.Phase(namespace=self.namespace,
-                            basename=self.basename,
-                            is_server=self.is_server,
-                            n_robots=self.rob_refs.root_state.n_rows,
-                            verbose=self.verbose,
-                            vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection,
-                            with_gpu_mirror=self._with_gpu_mirror,
-                            with_torch_view=self._with_torch_view,
-                            safe=self.safe,
-                            optimize_mem=self._optimize_mem)
+
         self.phase_id.run()
-        self.alpha = self.AlphaView(namespace=self.namespace,
-                            is_server=self.is_server,
-                            cluster_size=self.rob_refs.root_state.n_rows,
-                            verbose=self.verbose,
-                            vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection,
-                            with_gpu_mirror=self._with_gpu_mirror,
-                            with_torch_view=self._with_torch_view,
-                            optimize_mem=self._optimize_mem)
+
         self.alpha.run()
-        self.bound_rel = self.BoundRelaxView(namespace=self.namespace,
-                            is_server=self.is_server,
-                            cluster_size=self.rob_refs.root_state.n_rows,
-                            verbose=self.verbose,
-                            vlevel=self.vlevel,
-                            force_reconnection=self.force_reconnection,
-                            with_gpu_mirror=self._with_gpu_mirror,
-                            with_torch_view=self._with_torch_view,
-                            optimize_mem=self._optimize_mem)
+
         self.bound_rel.run()
+
 
         self._is_runnning = True
     
