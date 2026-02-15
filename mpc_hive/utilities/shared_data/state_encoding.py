@@ -263,7 +263,13 @@ class JntsState(SharedTWrapper):
                 return internal_data[:, self._jnts_remapping]
             else:
                 return internal_data[robot_idxs, self._jnts_remapping]
-         
+    
+    def get_shared_mem(self):
+        
+        shm_base=super().get_shared_mem()
+        shm_jnt_names=self.shared_jnt_names.get_shared_mem()
+
+        return [shm_base, shm_jnt_names]
 class RootState(SharedTWrapper):
 
     def __init__(self,
@@ -736,6 +742,13 @@ class ContactWrenches(SharedTWrapper):
             else:
                 return internal_data[robot_idxs, :]
 
+    def get_shared_mem(self):
+        
+        shm_base=super().get_shared_mem()
+        shm_contact_names=self.shared_jnt_names.get_shared_mem()
+
+        return [shm_base, shm_contact_names]
+    
 class HeightSensor(SharedTWrapper):
 
     def __init__(self,
@@ -874,6 +887,13 @@ class HeightSensor(SharedTWrapper):
         if self._shape_shared is not None:
             self._shape_shared.close()
 
+    def get_shared_mem(self):
+        
+        shm_base=super().get_shared_mem()
+        shm_shape=self._shape_shared.get_shared_mem()
+
+        return [shm_base, shm_shape]
+    
 class ContactPos(SharedTWrapper):
 
     def __init__(self,
@@ -1096,6 +1116,13 @@ class ContactPos(SharedTWrapper):
             else:
                 return internal_data[robot_idxs, :]
 
+    def get_shared_mem(self):
+        
+        shm_base=super().get_shared_mem()
+        shm_contact_names=self.shared_contact_names.get_shared_mem()
+
+        return [shm_base, shm_contact_names]
+
 class ContactVel(SharedTWrapper):
 
     def __init__(self,
@@ -1317,7 +1344,14 @@ class ContactVel(SharedTWrapper):
                 return internal_data[:, :]
             else:
                 return internal_data[robot_idxs, :]
-                        
+    
+    def get_shared_mem(self):
+        
+        shm_base=super().get_shared_mem()
+        shm_contact_names=self.shared_contact_names.get_shared_mem()
+
+        return [shm_base, shm_contact_names]
+    
 class FullRobState(SharedDataBase):
 
     def __init__(self,
