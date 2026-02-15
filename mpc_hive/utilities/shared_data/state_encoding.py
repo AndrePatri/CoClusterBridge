@@ -10,6 +10,20 @@ import numpy as np
 
 from typing import List
 
+
+def _flatten_shared_mem(shared_mem):
+
+    if shared_mem is None:
+        return []
+
+    if isinstance(shared_mem, (list, tuple)):
+        flattened = []
+        for item in shared_mem:
+            flattened.extend(_flatten_shared_mem(item))
+        return flattened
+
+    return [shared_mem]
+
 # robot data abstractions describing a robot state
 # (for both robot state and rhc cmds)
 
@@ -265,11 +279,18 @@ class JntsState(SharedTWrapper):
                 return internal_data[robot_idxs, self._jnts_remapping]
     
     def get_shared_mem(self):
-        
-        shm_base=super().get_shared_mem()
-        shm_jnt_names=self.shared_jnt_names.get_shared_mem()
 
-        return [shm_base, shm_jnt_names]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(super().get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.shared_jnt_names.get_shared_mem()))
+
+        return shared_mems
+
+    def close(self):
+        super().close()
+        if self.shared_jnt_names is not None:
+            self.shared_jnt_names.close()
+
 class RootState(SharedTWrapper):
 
     def __init__(self,
@@ -524,7 +545,7 @@ class RootState(SharedTWrapper):
                 return internal_data[:, remapping]
             else:
                 return internal_data[robot_idxs, remapping]
-            
+    
 class ContactWrenches(SharedTWrapper):
 
     def __init__(self,
@@ -743,12 +764,17 @@ class ContactWrenches(SharedTWrapper):
                 return internal_data[robot_idxs, :]
 
     def get_shared_mem(self):
-        
-        shm_base=super().get_shared_mem()
-        shm_contact_names=self.shared_contact_names.get_shared_mem()
 
-        return [shm_base, shm_contact_names]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(super().get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.shared_contact_names.get_shared_mem()))
+
+        return shared_mems
     
+    def close(self):
+        super().close()
+        if self.shared_contact_names is not None:
+            self.shared_contact_names.close()
 class HeightSensor(SharedTWrapper):
 
     def __init__(self,
@@ -888,11 +914,12 @@ class HeightSensor(SharedTWrapper):
             self._shape_shared.close()
 
     def get_shared_mem(self):
-        
-        shm_base=super().get_shared_mem()
-        shm_shape=self._shape_shared.get_shared_mem()
 
-        return [shm_base, shm_shape]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(super().get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self._shape_shared.get_shared_mem()))
+
+        return shared_mems
     
 class ContactPos(SharedTWrapper):
 
@@ -1117,11 +1144,12 @@ class ContactPos(SharedTWrapper):
                 return internal_data[robot_idxs, :]
 
     def get_shared_mem(self):
-        
-        shm_base=super().get_shared_mem()
-        shm_contact_names=self.shared_contact_names.get_shared_mem()
 
-        return [shm_base, shm_contact_names]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(super().get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.shared_contact_names.get_shared_mem()))
+
+        return shared_mems
 
 class ContactVel(SharedTWrapper):
 
@@ -1346,11 +1374,12 @@ class ContactVel(SharedTWrapper):
                 return internal_data[robot_idxs, :]
     
     def get_shared_mem(self):
-        
-        shm_base=super().get_shared_mem()
-        shm_contact_names=self.shared_contact_names.get_shared_mem()
 
-        return [shm_base, shm_contact_names]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(super().get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.shared_contact_names.get_shared_mem()))
+
+        return shared_mems
     
 class FullRobState(SharedDataBase):
 
@@ -1518,13 +1547,14 @@ class FullRobState(SharedDataBase):
         self.close()
     
     def get_shared_mem(self):
-        shared_mems=[self.root_state.get_shared_mem(),
-            self.jnts_state.get_shared_mem(),
-            self.contact_wrenches.get_shared_mem(),
-            self.contact_pos.get_shared_mem(),
-            self.contact_vel.get_shared_mem()]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(self.root_state.get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.jnts_state.get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.contact_wrenches.get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.contact_pos.get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(self.contact_vel.get_shared_mem()))
         if self._add_root_wrench:
-            shared_mems.append(self.contact_wrenches_root.get_shared_mem())
+            shared_mems.extend(_flatten_shared_mem(self.contact_wrenches_root.get_shared_mem()))
         return shared_mems
     
     def n_robots(self):
