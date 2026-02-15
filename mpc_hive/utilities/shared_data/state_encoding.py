@@ -745,7 +745,7 @@ class ContactWrenches(SharedTWrapper):
     def get_shared_mem(self):
         
         shm_base=super().get_shared_mem()
-        shm_contact_names=self.shared_jnt_names.get_shared_mem()
+        shm_contact_names=self.shared_contact_names.get_shared_mem()
 
         return [shm_base, shm_contact_names]
     
