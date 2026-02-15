@@ -1383,6 +1383,11 @@ class ContactVel(SharedTWrapper):
     
 class FullRobState(SharedDataBase):
 
+    _OPT_ADD_ROOT_WRENCH = 0
+    _OPT_ENABLE_HEIGHT_SENSOR = 1
+    _OPT_HEIGHT_GRID_SIZE = 2
+    _OPT_HEIGHT_GRID_RESOLUTION = 3
+
     def __init__(self,
             namespace: str,
             basename: str,
@@ -1410,7 +1415,7 @@ class FullRobState(SharedDataBase):
         self._basename = basename
 
         self._is_server = is_server
-        
+
         self._verbose = verbose
         self._vlevel = vlevel
 
@@ -1419,23 +1424,39 @@ class FullRobState(SharedDataBase):
         self._n_contacts = n_contacts
         self._jnt_names = jnt_names
         self._contact_names = contact_names
-        
-        self._add_root_wrench=add_root_wrench
+
+        self._add_root_wrench = add_root_wrench
 
         self._jnts_remapping = None
         self._q_remapping = q_remapping
         self._enable_height_sensor = enable_height_sensor
         self._height_grid_size = height_grid_size
         self._height_grid_resolution = height_grid_resolution
-        self.height_sensor = None
 
         self._safe = safe
         self._force_reconnection = force_reconnection
-        
+
         self._with_gpu_mirror = with_gpu_mirror
         self._with_torch_view = with_torch_view
 
-        self.root_state = RootState(namespace=self._namespace + self._basename, 
+        self._optional_features_shared = SharedTWrapper(
+            namespace=self._namespace + self._basename,
+            basename="OptionalFeatures",
+            is_server=self._is_server,
+            n_rows=1,
+            n_cols=4,
+            dtype=eigenipc_dtype.Float,
+            verbose=self._verbose,
+            vlevel=self._vlevel,
+            fill_value=0,
+            safe=self._safe,
+            force_reconnection=self._force_reconnection,
+            with_gpu_mirror=False,
+            with_torch_view=False,
+            optimize_mem=False,
+        )
+
+        self.root_state = RootState(namespace=self._namespace + self._basename,
                             is_server=self._is_server,
                             n_robots=self._n_robots,
                             q_remapping=self._q_remapping,
@@ -1447,8 +1468,8 @@ class FullRobState(SharedDataBase):
                             with_torch_view=with_torch_view,
                             fill_value=fill_value,
                             optimize_mem=optimize_mem)
-    
-        self.jnts_state = JntsState(namespace=self._namespace + self._basename, 
+
+        self.jnts_state = JntsState(namespace=self._namespace + self._basename,
                             is_server=self._is_server,
                             n_robots=self._n_robots,
                             n_jnts=self._n_jnts,
@@ -1461,58 +1482,8 @@ class FullRobState(SharedDataBase):
                             with_torch_view=with_torch_view,
                             fill_value=fill_value,
                             optimize_mem=optimize_mem)
-        
-        self.contact_wrenches = ContactWrenches(namespace=self._namespace + self._basename, 
-                            is_server=self._is_server,
-                            n_robots=self._n_robots,
-                            n_contacts=self._n_contacts,
-                            contact_names=self._contact_names,
-                            verbose=self._verbose,
-                            vlevel=self._vlevel,
-                            safe=self._safe,
-                            force_reconnection=self._force_reconnection,
-                            with_gpu_mirror=with_gpu_mirror,
-                            with_torch_view=with_torch_view,
-                            fill_value=fill_value,
-                            optimize_mem=optimize_mem)
-        
-        if self._add_root_wrench:
-            self.contact_wrenches_root = ContactWrenches(namespace=self._namespace + self._basename + "Root", 
-                            is_server=self._is_server,
-                            n_robots=self._n_robots,
-                            n_contacts=1, # total wrench on root
-                            contact_names=["root"],
-                            verbose=self._verbose,
-                            vlevel=self._vlevel,
-                            safe=self._safe,
-                            force_reconnection=self._force_reconnection,
-                            with_gpu_mirror=with_gpu_mirror,
-                            with_torch_view=with_torch_view,
-                            fill_value=fill_value,
-                            optimize_mem=optimize_mem)
-        
-        if self._enable_height_sensor:
-            if self._is_server and self._height_grid_size is None:
-                Journal.log(self.__class__.__name__,
-                    "__init__",
-                    "Height sensor enabled but height_grid_size is None on server.",
-                    LogType.EXCEP,
-                    throw_when_excep=True)
-            grid_size = self._height_grid_size if self._is_server else self._height_grid_size
-            self.height_sensor = HeightSensor(namespace=self._namespace + self._basename,
-                                is_server=self._is_server,
-                                n_robots=self._n_robots,
-                                grid_size=grid_size,
-                                resolution=self._height_grid_resolution,
-                                verbose=self._verbose,
-                                vlevel=self._vlevel,
-                                safe=self._safe,
-                                force_reconnection=self._force_reconnection,
-                                with_gpu_mirror=with_gpu_mirror,
-                                with_torch_view=with_torch_view,
-                                fill_value=fill_value,
-                                optimize_mem=optimize_mem)
-        self.contact_pos = ContactPos(namespace=self._namespace + self._basename, 
+
+        self.contact_wrenches = ContactWrenches(namespace=self._namespace + self._basename,
                             is_server=self._is_server,
                             n_robots=self._n_robots,
                             n_contacts=self._n_contacts,
@@ -1526,7 +1497,27 @@ class FullRobState(SharedDataBase):
                             fill_value=fill_value,
                             optimize_mem=optimize_mem)
 
-        self.contact_vel = ContactVel(namespace=self._namespace + self._basename, 
+        self.contact_wrenches_root = None
+        self.height_sensor = None
+
+        if self._is_server:
+            self._init_optional_components(fill_value=fill_value, optimize_mem=optimize_mem)
+
+        self.contact_pos = ContactPos(namespace=self._namespace + self._basename,
+                            is_server=self._is_server,
+                            n_robots=self._n_robots,
+                            n_contacts=self._n_contacts,
+                            contact_names=self._contact_names,
+                            verbose=self._verbose,
+                            vlevel=self._vlevel,
+                            safe=self._safe,
+                            force_reconnection=self._force_reconnection,
+                            with_gpu_mirror=with_gpu_mirror,
+                            with_torch_view=with_torch_view,
+                            fill_value=fill_value,
+                            optimize_mem=optimize_mem)
+
+        self.contact_vel = ContactVel(namespace=self._namespace + self._basename,
                             is_server=self._is_server,
                             n_robots=self._n_robots,
                             n_contacts=self._n_contacts,
@@ -1541,11 +1532,77 @@ class FullRobState(SharedDataBase):
                             optimize_mem=optimize_mem)
 
         self._is_running = False
-    
+
+    def _init_optional_components(self,
+            fill_value = 0,
+            optimize_mem: bool = False):
+
+        if self._add_root_wrench and self.contact_wrenches_root is None:
+            self.contact_wrenches_root = ContactWrenches(namespace=self._namespace + self._basename + "Root",
+                                is_server=self._is_server,
+                                n_robots=self._n_robots,
+                                n_contacts=1,
+                                contact_names=["root"],
+                                verbose=self._verbose,
+                                vlevel=self._vlevel,
+                                safe=self._safe,
+                                force_reconnection=self._force_reconnection,
+                                with_gpu_mirror=self._with_gpu_mirror,
+                                with_torch_view=self._with_torch_view,
+                                fill_value=fill_value,
+                                optimize_mem=optimize_mem)
+
+        if self._enable_height_sensor and self.height_sensor is None:
+            if self._is_server and self._height_grid_size is None:
+                Journal.log(self.__class__.__name__,
+                    "_init_optional_components",
+                    "Height sensor enabled but height_grid_size is None on server.",
+                    LogType.EXCEP,
+                    throw_when_excep=True)
+
+            self.height_sensor = HeightSensor(namespace=self._namespace + self._basename,
+                                is_server=self._is_server,
+                                n_robots=self._n_robots,
+                                grid_size=self._height_grid_size,
+                                resolution=self._height_grid_resolution,
+                                verbose=self._verbose,
+                                vlevel=self._vlevel,
+                                safe=self._safe,
+                                force_reconnection=self._force_reconnection,
+                                with_gpu_mirror=self._with_gpu_mirror,
+                                with_torch_view=self._with_torch_view,
+                                fill_value=fill_value,
+                                optimize_mem=optimize_mem)
+
+    def _write_optional_features(self):
+
+        features = self._optional_features_shared.get_numpy_mirror()
+        features[0, self._OPT_ADD_ROOT_WRENCH] = 1.0 if self.contact_wrenches_root is not None else 0.0
+        features[0, self._OPT_ENABLE_HEIGHT_SENSOR] = 1.0 if self.height_sensor is not None else 0.0
+        features[0, self._OPT_HEIGHT_GRID_SIZE] = float(self._height_grid_size) if self._height_grid_size is not None else 0.0
+        features[0, self._OPT_HEIGHT_GRID_RESOLUTION] = float(self._height_grid_resolution) if self._height_grid_resolution is not None else 0.0
+
+        self._optional_features_shared.synch_all(read=False, retry=True)
+
+    def _read_optional_features(self):
+
+        self._optional_features_shared.synch_all(read=True, retry=True)
+        features = self._optional_features_shared.get_numpy_mirror()
+
+        self._add_root_wrench = bool(round(float(features[0, self._OPT_ADD_ROOT_WRENCH])))
+        self._enable_height_sensor = bool(round(float(features[0, self._OPT_ENABLE_HEIGHT_SENSOR])))
+
+        if self._enable_height_sensor:
+            self._height_grid_size = int(round(float(features[0, self._OPT_HEIGHT_GRID_SIZE])))
+            self._height_grid_resolution = float(features[0, self._OPT_HEIGHT_GRID_RESOLUTION])
+        else:
+            self._height_grid_size = None
+            self._height_grid_resolution = None
+
     def __del__(self):
 
         self.close()
-    
+
     def get_shared_mem(self):
         shared_mems = []
         shared_mems.extend(_flatten_shared_mem(self.root_state.get_shared_mem()))
@@ -1553,38 +1610,41 @@ class FullRobState(SharedDataBase):
         shared_mems.extend(_flatten_shared_mem(self.contact_wrenches.get_shared_mem()))
         shared_mems.extend(_flatten_shared_mem(self.contact_pos.get_shared_mem()))
         shared_mems.extend(_flatten_shared_mem(self.contact_vel.get_shared_mem()))
-        if self._add_root_wrench:
+        shared_mems.extend(_flatten_shared_mem(self._optional_features_shared.get_shared_mem()))
+        if self.contact_wrenches_root is not None:
             shared_mems.extend(_flatten_shared_mem(self.contact_wrenches_root.get_shared_mem()))
+        if self.height_sensor is not None:
+            shared_mems.extend(_flatten_shared_mem(self.height_sensor.get_shared_mem()))
         return shared_mems
-    
+
     def n_robots(self):
         return self.root_state.getNRows()
-    
+
     def n_jnts(self):
 
         return self._n_jnts
-    
+
     def n_contacts(self):
 
         return self._n_contacts
-    
+
     def jnt_names(self):
 
         return self._jnt_names
-    
+
     def contact_names(self):
 
         return self._contact_names
-    
+
     def is_running(self):
 
         return self._is_running
-    
+
     def set_jnts_remapping(self,
                 jnts_remapping: List[int] = None):
 
         self.jnts_state.set_jnts_remapping(jnts_remapping=jnts_remapping)
-    
+
     def set_q_remapping(self,
                 q_remapping: List[int] = None):
 
@@ -1598,7 +1658,16 @@ class FullRobState(SharedDataBase):
         self.jnts_state.run()
 
         self.contact_wrenches.run()
-        if self._add_root_wrench:
+
+        self._optional_features_shared.run()
+
+        if self._is_server:
+            self._write_optional_features()
+        else:
+            self._read_optional_features()
+            self._init_optional_components()
+
+        if self.contact_wrenches_root is not None:
             self.contact_wrenches_root.run()
         if self.height_sensor is not None:
             self.height_sensor.run()
@@ -1608,7 +1677,7 @@ class FullRobState(SharedDataBase):
         if not self._is_server:
 
             self._n_robots = self.jnts_state.n_robots
-            
+
             self._n_jnts = self.jnts_state.n_jnts
 
             self._n_contacts = self.contact_wrenches.n_contacts
@@ -1623,7 +1692,7 @@ class FullRobState(SharedDataBase):
         self.set_jnts_remapping(jnts_remapping)
 
         self._is_running = True
-        
+
     def synch_mirror(self,
                 from_gpu: bool,
                 non_blocking: bool = False):
@@ -1636,7 +1705,7 @@ class FullRobState(SharedDataBase):
                 self.root_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.jnts_state.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_wrenches.synch_mirror(from_gpu=True,non_blocking=non_blocking)
-                if self._add_root_wrench:
+                if self.contact_wrenches_root is not None:
                     self.contact_wrenches_root.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_pos.synch_mirror(from_gpu=True,non_blocking=non_blocking)
                 self.contact_vel.synch_mirror(from_gpu=True,non_blocking=non_blocking)
@@ -1649,7 +1718,7 @@ class FullRobState(SharedDataBase):
                 self.root_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.jnts_state.synch_mirror(from_gpu=False,non_blocking=non_blocking)
                 self.contact_wrenches.synch_mirror(from_gpu=False,non_blocking=non_blocking)
-                if self._add_root_wrench:
+                if self.contact_wrenches_root is not None:
                     self.contact_wrenches_root.synch_mirror(from_gpu=False,non_blocking=non_blocking)
 
                 self.contact_pos.synch_mirror(from_gpu=False,non_blocking=non_blocking)
@@ -1658,14 +1727,14 @@ class FullRobState(SharedDataBase):
                     self.height_sensor.synch_mirror(from_gpu=False,non_blocking=non_blocking)
             #torch.cuda.synchronize() # this way we ensure that after this the state on GPU
             # is fully updated
-    
+
     def synch_from_shared_mem(self, robot_idx: int = 0, robot_idx_view: int = 0):
 
         # reads from shared mem
         self.root_state.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.jnts_state.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_wrenches.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
-        if self._add_root_wrench:
+        if self.contact_wrenches_root is not None:
             self.contact_wrenches_root.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_pos.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_vel.synch_all(read = True, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
@@ -1678,21 +1747,25 @@ class FullRobState(SharedDataBase):
         self.root_state.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.jnts_state.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_wrenches.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
-        if self._add_root_wrench:
+        if self.contact_wrenches_root is not None:
             self.contact_wrenches_root.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_pos.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         self.contact_vel.synch_all(read = False, retry = True, row_index=robot_idx, row_index_view=robot_idx_view)
         if self.height_sensor is not None:
             self.height_sensor.synch_all(read=False, retry=True, row_index=robot_idx, row_index_view=robot_idx_view)
-        
+
     def close(self):
 
         self.root_state.close()
         self.jnts_state.close()
         self.contact_wrenches.close()
-        if self._add_root_wrench:
+        if self.contact_wrenches_root is not None:
             self.contact_wrenches_root.close()
+            self.contact_wrenches_root = None
         self.contact_pos.close()
         self.contact_vel.close()
         if self.height_sensor is not None:
             self.height_sensor.close()
+            self.height_sensor = None
+        if self._optional_features_shared is not None:
+            self._optional_features_shared.close()
