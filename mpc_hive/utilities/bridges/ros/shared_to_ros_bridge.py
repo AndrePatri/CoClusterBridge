@@ -8,7 +8,7 @@ from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
 import argparse
 import time
 
-from mpc_hive.utilities.sysutils import set_process_affinity
+from mpc_hive.utilities.sysutils import set_process_affinity, parse_env_slice
 
 class SharedMemToRosBridge:
 
@@ -18,6 +18,8 @@ class SharedMemToRosBridge:
             namespace: str,
             backend: str = "ros2",
             add_training_data: bool = False,
+            env_idx: int = None,
+            env_count: int = 1,
             verbose: bool = True,
             vlevel: VLevel = VLevel.V2,
             queue_size: int = 1):
@@ -25,6 +27,8 @@ class SharedMemToRosBridge:
         self._namespace = namespace
         self._backend = backend
         self._add_training_data = add_training_data
+        self._env_idx = env_idx
+        self._env_count = env_count
         self._verbose = verbose
         self._vlevel = vlevel
         self._queue_size = queue_size
@@ -43,6 +47,20 @@ class SharedMemToRosBridge:
         self._node = None
 
         self._check_backend()
+
+        if self._env_idx is not None and self._env_idx < 0:
+            Journal.log(self.__class__.__name__,
+                "__init__",
+                f"Invalid env_idx {self._env_idx}. It must be >= 0.",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        if self._env_count < 1:
+            Journal.log(self.__class__.__name__,
+                "__init__",
+                f"Invalid env_count {self._env_count}. It must be >= 1.",
+                LogType.EXCEP,
+                throw_when_excep=True)
 
     def _check_backend(self):
 
@@ -185,12 +203,16 @@ class SharedMemToRosBridge:
             if self._backend == "ros1":
                 bridge = ToRos(client=shared_mem,
                     queue_size=self._queue_size,
-                    ros_backend=self._backend)
+                    ros_backend=self._backend,
+                    source_row_index=self._env_idx,
+                    source_n_rows=self._env_count)
             else:
                 bridge = ToRos(client=shared_mem,
                     queue_size=self._queue_size,
                     ros_backend=self._backend,
-                    node=self._node)
+                    node=self._node,
+                    source_row_index=self._env_idx,
+                    source_n_rows=self._env_count)
             bridge.run()
             self._bridges.append(bridge)
 
@@ -358,17 +380,23 @@ if __name__ == '__main__':
         help='Update interval in seconds, default is 0.01')
     parser.add_argument('--add_training_data', action='store_true',
         help='Reserved for derived bridge implementations')
+    parser.add_argument('--env_idx', type=str, default=None,
+        help='Optional env index or inclusive range (examples: "67", "67-75")')
     args = parser.parse_args()
 
     if args.cores:
         selected = set_process_affinity(args.cores)
         print(f"Set CPU affinity to cores: {selected}")
 
+    env_start, env_count = parse_env_slice(args.env_idx)
+
     backend = "ros2" if args.ros2 else "ros1"
 
     bridge = SharedMemToRosBridge(namespace=args.ns,
                     backend=backend,
-                    add_training_data=args.add_training_data)
+                    add_training_data=args.add_training_data,
+                    env_idx=env_start,
+                    env_count=env_count)
 
     try:
         bridge.run(dt=args.dt)

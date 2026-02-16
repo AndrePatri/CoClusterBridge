@@ -69,6 +69,35 @@ def set_process_affinity(core_tokens: Iterable[str], pid: int = 0) -> List[int]:
     os.sched_setaffinity(pid, cores)
     return cores
 
+
+def parse_env_slice(env_idx: str):
+
+    if env_idx is None:
+        return None, 1
+
+    token = str(env_idx).strip()
+    if token == "":
+        raise ValueError("Empty env_idx value")
+
+    for sep in ("-", ":"):
+        if sep in token:
+            parts = token.split(sep)
+            if len(parts) != 2:
+                raise ValueError(f"Invalid env range '{token}'")
+
+            start = int(parts[0])
+            end = int(parts[1])
+            if start < 0 or end < 0 or end < start:
+                raise ValueError(f"Invalid env range '{token}'")
+
+            return start, (end - start + 1)
+
+    idx = int(token)
+    if idx < 0:
+        raise ValueError(f"Invalid env index '{token}'")
+
+    return idx, 1
+
 class PathsGetter:
 
     def __init__(self):

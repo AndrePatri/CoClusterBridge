@@ -187,6 +187,7 @@ class ControlClusterServer(ABC):
                                 vlevel=self._vlevel,
                                 safe=False,
                                 add_root_wrench=True)
+        
         self._rhc_cmds = RhcCmds(namespace=self._namespace,
                                 is_server=True,
                                 n_robots=self.cluster_size,
@@ -200,6 +201,7 @@ class ControlClusterServer(ABC):
                                 verbose=True,
                                 vlevel=self._vlevel,
                                 safe=False)
+        
         self._rhc_pred = RhcPred(namespace=self._namespace,
                                 is_server=True,
                                 n_robots=self.cluster_size,
@@ -213,6 +215,7 @@ class ControlClusterServer(ABC):
                                 verbose=True,
                                 vlevel=self._vlevel,
                                 safe=False)
+        
         self._rhc_pred_delta=RhcPredDelta(namespace=self._namespace,
                                 is_server=True,
                                 n_robots=self.cluster_size,
@@ -241,6 +244,7 @@ class ControlClusterServer(ABC):
                             verbose = True,
                             vlevel = self._vlevel,
                             fill_value=np.nan)
+        
         self._rhc_status = RhcStatus(is_server=True,
             n_nodes=100, # should be set to be able to fit the maximum horizon length in the whole cluster
             n_contacts=self._n_contacts,
@@ -251,6 +255,7 @@ class ControlClusterServer(ABC):
             force_reconnection=self._force_reconnection,
             with_gpu_mirror=False,
             with_torch_view=self._using_torch)
+        
         cluster_info_dict = {}
         cluster_info_dict["cluster_size"] = self.cluster_size
         cluster_info_dict["cluster_dt"] = self._cluster_dt
@@ -263,6 +268,7 @@ class ControlClusterServer(ABC):
                                     vlevel=self._vlevel, 
                                     safe=True,
                                     force_reconnection=self._force_reconnection)
+        
         self._remote_triggerer = RemoteTriggererSrvr(namespace=self._namespace,
                                             verbose=self._verbose,
                                             vlevel=self._vlevel,

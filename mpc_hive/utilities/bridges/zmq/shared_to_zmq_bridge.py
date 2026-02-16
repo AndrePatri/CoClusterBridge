@@ -10,7 +10,7 @@ import argparse
 import time
 
 from perf_sleep.pyperfsleep import PerfSleep
-from mpc_hive.utilities.sysutils import set_process_affinity
+from mpc_hive.utilities.sysutils import set_process_affinity, parse_env_slice
 
 
 class SharedMemToZmqBridge:
@@ -20,6 +20,8 @@ class SharedMemToZmqBridge:
     def __init__(self,
             namespace: str,
             add_training_data: bool = False,
+            env_idx: int = None,
+            env_count: int = 1,
             verbose: bool = True,
             vlevel: VLevel = VLevel.V2,
             queue_size: int = 1,
@@ -31,6 +33,8 @@ class SharedMemToZmqBridge:
 
         self._namespace = namespace
         self._add_training_data = add_training_data
+        self._env_idx = env_idx
+        self._env_count = env_count
         self._verbose = verbose
         self._vlevel = vlevel
         self._queue_size = queue_size
@@ -51,6 +55,20 @@ class SharedMemToZmqBridge:
 
         self._dt = 0.05
         self._is_running = False
+
+        if self._env_idx is not None and self._env_idx < 0:
+            Journal.log(self.__class__.__name__,
+                "__init__",
+                f"Invalid env_idx {self._env_idx}. It must be >= 0.",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        if self._env_count < 1:
+            Journal.log(self.__class__.__name__,
+                "__init__",
+                f"Invalid env_count {self._env_count}. It must be >= 1.",
+                LogType.EXCEP,
+                throw_when_excep=True)
 
     def _build_extra_clients(self):
 
@@ -245,13 +263,16 @@ class SharedMemToZmqBridge:
                 bind=self._bind,
                 queue_size=self._queue_size,
                 conflate=self._conflate,
+                source_row_index=self._env_idx,
+                source_n_rows=self._env_count,
             )
             bridge.run()
             self._bridges.append(bridge)
 
             Journal.log(self.__class__.__name__,
                 "_init_to_zmq_bridges",
-                f"publishing {shared_mem.getNamespace()}/{shared_mem.getBasename()} on {endpoint}",
+                f"publishing {shared_mem.getNamespace()}/{shared_mem.getBasename()} on {endpoint} "
+                f"(env_idx={self._env_idx}, env_count={self._env_count})",
                 LogType.INFO,
                 throw_when_excep=True)
 
@@ -340,6 +361,8 @@ if __name__ == '__main__':
         help='Port span used by deterministic endpoint mapping')
     parser.add_argument('--add_training_data', action='store_true',
         help='Reserved for derived bridge implementations')
+    parser.add_argument('--env_idx', type=str, default=None,
+        help='Optional env index or inclusive range (examples: "67", "67-75")')
 
     args = parser.parse_args()
 
@@ -347,9 +370,13 @@ if __name__ == '__main__':
         selected = set_process_affinity(args.cores)
         print(f"Set CPU affinity to cores: {selected}")
 
+    env_start, env_count = parse_env_slice(args.env_idx)
+
     bridge = SharedMemToZmqBridge(
         namespace=args.ns,
         add_training_data=args.add_training_data,
+        env_idx=env_start,
+        env_count=env_count,
         queue_size=args.queue_size,
         conflate=not args.no_conflate,
         bind_ip=args.bind_ip,
