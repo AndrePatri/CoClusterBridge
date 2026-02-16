@@ -3,8 +3,11 @@ from EigenIPC.PyEigenIPC import StringTensorServer, StringTensorClient
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.to_zmq import ToZmq
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.abstractions import default_endpoint
 
-from mpc_hive.utilities.shared_data.rhc_data import RobotState, RhcRefs, RhcCmds, RhcStatus
+from mpc_hive.utilities.shared_data.rhc_data import RobotState, RhcRefs, RhcCmds, RhcStatus, RhcPred, RhcPredDelta
 from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
+from mpc_hive.utilities.shared_data.rhc_data import RhcInternal
+from mpc_hive.utilities.shared_data.sim_data import SharedEnvInfo
+from mpc_hive.utilities.shared_data.jnt_imp_control import JntImpCntrlData
 
 import argparse
 import time
@@ -77,6 +80,9 @@ class SharedMemToZmqBridge:
 
     def _init_clients(self):
 
+        # rhc_internal_config = RhcInternal.Config(is_server=False, 
+        #                 enable_q=True)
+
         self._clients = [
             RhcStatus(namespace=self._namespace,
                 is_server=False,
@@ -102,6 +108,26 @@ class SharedMemToZmqBridge:
                 safe=False,
                 verbose=self._verbose,
                 vlevel=self._vlevel),
+            RhcPred(namespace=self._namespace,
+                                is_server=False, 
+                                safe=False,
+                                verbose=self._verbose,
+                                vlevel=self._vlevel),
+            RhcPredDelta(namespace=self._namespace,
+                                is_server=False, 
+                                safe=False,
+                                verbose=self._verbose,
+                                vlevel=self._vlevel),
+            SharedEnvInfo(namespace=self._namespace,
+                is_server=False,
+                safe=False,
+                verbose=self._verbose,
+                vlevel=self._vlevel),
+            # JntImpCntrlData(is_server = False, 
+            #     namespace = self._namespace, 
+            #     verbose = self._verbose, 
+            #     vlevel = self._vlevel,
+            #         safe=False)
         ]
 
         self._clients.extend(self._build_extra_clients())
