@@ -1439,6 +1439,8 @@ class FullRobState(SharedDataBase):
         self._with_gpu_mirror = with_gpu_mirror
         self._with_torch_view = with_torch_view
 
+        self._optimize_mem=optimize_mem
+
         self._optional_features_shared = SharedTWrapper(
             namespace=self._namespace + self._basename,
             basename="OptionalFeatures",
