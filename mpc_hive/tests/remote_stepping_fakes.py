@@ -224,6 +224,10 @@ class DummyController(RHController):
         self._steps += 1
         return True
 
+    def _bootstrap(self) -> bool:
+        # for the dummy controller bootstrap follows the same solve path
+        return self._solve()
+
     def _init_problem(self):
         # initialize problem-> solver-depedent stuff here
         self.n_dofs = len(self._joint_names)

@@ -286,13 +286,13 @@ class RHController(ABC):
                                 )
         self.rhc_pred_delta.run()
 
-    def _rhc(self):
+    def _rhc(self, rti: bool = True):
         if self._debug:
-            self._rhc_db()
+            self._rhc_db(rti=rti)
         else:
-            self._rhc_min()
+            self._rhc_min(rti=rti)
     
-    def _rhc_db(self):
+    def _rhc_db(self, rti: bool = True):
         # rhc with debug data
         self._start_time = time.perf_counter()
 
@@ -303,7 +303,10 @@ class RHController(ABC):
 
         if not self.failed():
             # we can solve only if not in failure state
-            self._failed = not self._solve() # solve actual TO
+            if rti:
+                self._failed = not self._solve() # solve actual TO with RTI
+            else:
+                self._failed = not self._bootstrap() # full bootstrap solve
             if (self._failed): 
                 # perform failure procedure
                 self._on_failure()                       
@@ -338,7 +341,7 @@ class RHController(ABC):
                 LogType.INFO,
                 throw_when_excep = True) 
 
-    def _rhc_min(self):
+    def _rhc_min(self, rti: bool = True):
 
         self.robot_state.synch_from_shared_mem(robot_idx=self.controller_index, robot_idx_view=self.controller_index_np) # updates robot state with
         # latest data on shared mem
@@ -347,7 +350,10 @@ class RHController(ABC):
 
         if not self.failed():
             # we can solve only if not in failure state
-            self._failed = not self._solve() # solve actual TO
+            if rti:
+                self._failed = not self._solve() # solve actual TO with RTI
+            else:
+                self._failed = not self._bootstrap() # full bootstrap solve
             if (self._failed):  
                 # perform failure procedure
                 self._on_failure()                       
@@ -393,7 +399,10 @@ class RHController(ABC):
         if self.rhc_status.trigger.read_retry(row_index=self.controller_index,
                     col_index=0,
                     row_index_view=0)[0]:
-            self._rhc() # run solution
+            rti_solve = self.rhc_status.rti_solve.read_retry(row_index=self.controller_index,
+                        col_index=0,
+                        row_index_view=0)[0]
+            self._rhc(rti=rti_solve) # run solution with requested solve mode
             self.rhc_status.trigger.write_retry(False, 
                 row_index=self.controller_index,
                 col_index=0,
@@ -1223,6 +1232,10 @@ class RHController(ABC):
 
     @abstractmethod
     def _solve(self) -> bool:
+        pass
+
+    @abstractmethod
+    def _bootstrap(self) -> bool:
         pass
             
     @abstractmethod

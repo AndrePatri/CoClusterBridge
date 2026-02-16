@@ -992,6 +992,36 @@ class RhcStatus(SharedDataBase):
                 with_torch_view=with_torch_view,
                 fill_value = False,
                 optimize_mem=optimize_mem)
+
+    class RtiSolveFlagView(SharedTWrapper):
+
+        def __init__(self,
+                namespace = "",
+                is_server = False,
+                cluster_size: int = -1,
+                verbose: bool = False,
+                vlevel: VLevel = VLevel.V0,
+                force_reconnection: bool = False,
+                with_gpu_mirror: bool = False,
+                with_torch_view: bool = False,
+                optimize_mem: bool = False):
+
+            basename = "ClusterRtiSolveFlag" # hardcoded
+
+            super().__init__(namespace = namespace,
+                basename = basename,
+                is_server = is_server,
+                n_rows = cluster_size,
+                n_cols = 1,
+                verbose = verbose,
+                vlevel = vlevel,
+                safe = False, # boolean operations are atomic on 64 bit systems
+                dtype=dtype.Bool,
+                force_reconnection=force_reconnection,
+                with_gpu_mirror=with_gpu_mirror,
+                with_torch_view=with_torch_view,
+                fill_value = True, # default behavior is RTI solve
+                optimize_mem=optimize_mem)
     
     class ActivationFlagView(SharedTWrapper):
 
@@ -1508,6 +1538,7 @@ class RhcStatus(SharedDataBase):
         self.fails =None
         self.resets=None
         self.trigger=None
+        self.rti_solve=None
         self.activation_state=None
         self.registration=None
         self.controllers_counter=None
@@ -1538,6 +1569,7 @@ class RhcStatus(SharedDataBase):
         return [self.fails.get_shared_mem(),
             self.resets.get_shared_mem(),
             self.trigger.get_shared_mem(),
+            self.rti_solve.get_shared_mem(),
             self.activation_state.get_shared_mem(),
             self.registration.get_shared_mem(),
             self.controllers_counter.get_shared_mem(),
@@ -1600,6 +1632,16 @@ class RhcStatus(SharedDataBase):
                                 is_server=self.is_server, 
                                 cluster_size=self.cluster_size, 
                                 verbose=self.verbose, 
+                                vlevel=self.vlevel,
+                                force_reconnection=self.force_reconnection,
+                                with_gpu_mirror=self.with_gpu_mirror,
+                                with_torch_view=self.with_torch_view,
+                                optimize_mem=self._optimize_mem)
+
+        self.rti_solve = self.RtiSolveFlagView(namespace=self.namespace,
+                                is_server=self.is_server,
+                                cluster_size=self.cluster_size,
+                                verbose=self.verbose,
                                 vlevel=self.vlevel,
                                 force_reconnection=self.force_reconnection,
                                 with_gpu_mirror=self.with_gpu_mirror,
@@ -1724,6 +1766,7 @@ class RhcStatus(SharedDataBase):
         self.rhc_static_info.run()
         self.resets.run()
         self.trigger.run()
+        self.rti_solve.run()
         self.fails.run()
         self.activation_state.run()
         self.registration.run()
@@ -1750,6 +1793,7 @@ class RhcStatus(SharedDataBase):
             
             self.resets.close()
             self.trigger.close()
+            self.rti_solve.close()
             self.fails.close()    
             self.activation_state.close()
             self.registration.close()

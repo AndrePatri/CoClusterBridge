@@ -346,7 +346,7 @@ class ControlClusterServer(ABC):
                                 # to be considered active
         self._pre_triggered=True
 
-    def trigger_solution(self):
+    def trigger_solution(self, bootstrap=False):
         # performs checks and triggers cluster solution
         if self._debug:
             # we profile the whole solution pipeline
@@ -356,7 +356,7 @@ class ControlClusterServer(ABC):
             self._require_pretrigger() # we force sequentiality between pretriggering and
             # solution triggering
 
-        self._trigger_solution() # triggers solution of all controllers in the cluster 
+        self._trigger_solution(bootstrap=bootstrap) # triggers solution of all controllers in the cluster 
         # which are ACTIVE using the latest available state
         if self._debug:
             self._post_trigger_logs() # debug info
@@ -365,13 +365,18 @@ class ControlClusterServer(ABC):
         self._triggered=True
         self._got_fresh_sol=False
     
-    def _trigger_solution(self):
-        # trigger all
+    def _trigger_solution(self, bootstrap=False):
+
+        # first set solve mode (RTI by default, full bootstrap when requested)
         if self._using_torch:
+            rti_flag = self._rhc_status.rti_solve.get_torch_mirror()
             trigger = self._rhc_status.trigger.get_torch_mirror()
         else:
+            rti_flag = self._rhc_status.rti_solve.get_numpy_mirror()
             trigger = self._rhc_status.trigger.get_numpy_mirror()
+        rti_flag[:, :] = not bootstrap
         trigger[:, :] = True
+        self._rhc_status.rti_solve.synch_all(read=False, retry=True)
         self._rhc_status.trigger.synch_all(read=False, retry=True)
         self._remote_triggerer.trigger() # signal to listening controllers to process
         # request
