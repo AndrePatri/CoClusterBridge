@@ -1665,7 +1665,7 @@ class FullRobState(SharedDataBase):
             self._write_optional_features()
         else:
             self._read_optional_features()
-            self._init_optional_components()
+            self._init_optional_components(optimize_mem=self._optimize_mem)
 
         if self.contact_wrenches_root is not None:
             self.contact_wrenches_root.run()
