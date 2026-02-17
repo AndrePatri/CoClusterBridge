@@ -22,7 +22,6 @@ class SharedMemToZmqBridge:
 
     def __init__(self,
             namespace: str,
-            add_training_data: bool = False,
             add_rhc_internal: bool = False,
             env_idx: int = None,
             env_count: int = 1,
@@ -36,7 +35,6 @@ class SharedMemToZmqBridge:
             port_span: int = 40000):
 
         self._namespace = namespace
-        self._add_training_data = add_training_data
         self._add_rhc_internal = add_rhc_internal
         self._env_idx = env_idx
         self._env_count = env_count
