@@ -123,11 +123,11 @@ class SharedMemToZmqBridge:
                 safe=False,
                 verbose=self._verbose,
                 vlevel=self._vlevel),
-            # JntImpCntrlData(is_server = False, 
-            #     namespace = self._namespace, 
-            #     verbose = self._verbose, 
-            #     vlevel = self._vlevel,
-            #         safe=False)
+            JntImpCntrlData(is_server = False, 
+                namespace = self._namespace, 
+                verbose = self._verbose, 
+                vlevel = self._vlevel,
+                    safe=False)
         ]
 
         self._clients.extend(self._build_extra_clients())
@@ -151,9 +151,10 @@ class SharedMemToZmqBridge:
         for client in self._clients:
             client.run()
             if not client.is_running():
+                client_name = client.__class__.__name__
                 Journal.log(self.__class__.__name__,
                     "_run_clients",
-                    f"Client {client.get_name()} failed to start",
+                    f"Client {client_name} failed to start",
                     LogType.ERROR,
                     throw_when_excep=True)
             self._shared_mems.extend(self._as_mem_list(client.get_shared_mem()))

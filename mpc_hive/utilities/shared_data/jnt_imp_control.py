@@ -281,7 +281,9 @@ class JntImpCntrlData(SharedDataBase):
                     "Could not read joint names on shared memory. Retrying...",
                     LogType.WARN,
                     throw_when_excep = True)
-                
+        
+        self._is_runnning = True
+
     def close(self):
         
         self.imp_data_view.close()
