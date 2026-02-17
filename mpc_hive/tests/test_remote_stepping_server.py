@@ -4,10 +4,10 @@ from mpc_hive.tests.remote_stepping_fakes import (
     DummyClusterServer,
     NAMESPACE,
     N_PHYSICS_STEPS,
+    CLUSTER_SIZE
 )
 import numpy as np
 
-CLUSTER_SIZE = 50
 N_STEPS = 1000
 N_JNTS=42
 JOINT_NAMES = ["joint_{}".format(i) for i in range(N_JNTS)]
@@ -102,8 +102,9 @@ class RemoteSteppingServerTests(unittest.TestCase):
         physics_steps = 0
         for i in range(N_PHYSICS_STEPS*N_STEPS):
             if self.server.is_cluster_instant(physics_steps):
-                self.server.wait_for_solution() # blocking, wait for last solution
-
+                wait_ok=self.server.wait_for_solution() # blocking, wait for last solution
+                if not wait_ok:
+                    break
                 failed = self.server.get_failed_controllers()
                 self._set_cluster_actions() # write MPC cmds to low-level controllers
                 

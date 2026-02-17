@@ -6,9 +6,9 @@ from mpc_hive.tests.remote_stepping_fakes import (
     DummyClusterClient,
     write_dummy_srdf,
     NAMESPACE,
+    CLUSTER_SIZE
 )
 
-CLUSTER_SIZE = 50
 N_JNTS=42
 JOINT_NAMES = [f"joint_{i}" for i in range(N_JNTS)] # simulating a client with controllers having a reduced order model wrt server
 JOINT_NAMES_PARTIAL = [f"joint_{i}" for i in range(N_JNTS-10)] # simulating a client with controllers having a reduced order model wrt server

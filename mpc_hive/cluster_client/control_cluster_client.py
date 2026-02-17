@@ -43,7 +43,7 @@ class ControlClusterClient(ABC):
             set_affinity: bool = False,
             use_mp_fork: bool = True,
             use_core_pool: bool = False,
-            max_controllers_per_pool: int = 2,
+            max_controllers_per_pool: int = 32,
             isolated_cores_only: bool = False,
             core_ids_override_list: List[int] = None,
             verbose: bool = False,

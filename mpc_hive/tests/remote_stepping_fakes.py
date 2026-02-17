@@ -15,9 +15,12 @@ from mpc_hive.utilities.shared_data.rhc_data import RhcRefs
 CONTROL_DT = 0.0001 # dt at which lower lever controllers runs (e.g. joint impedance controllers)
 CLUSTER_DT = 0.03 # dt at which the cluster server steps (MPC dt)
 N_PHYSICS_STEPS=int(CLUSTER_DT / CONTROL_DT)
-ACK_TIMEOUT_MS = 8000
+ACK_TIMEOUT_MS = 15000
 N_NODES=30
-NAMESPACE = "mpc_hive_test_ns"
+NAMESPACE = "mpc_hive_unittest_ns"
+MAX_CONTROLLERS_PER_POOL=128 
+USE_POOL=False
+CLUSTER_SIZE=500
 
 def write_dummy_srdf(path, joint_names: List[str]) -> str:
     lines = ["<?xml version=\"1.0\"?>", "<robot name=\"dummy\">", "  <group_state name=\"home\" group=\"dummy_group\">"]
@@ -50,7 +53,8 @@ class DummyClusterServer(ControlClusterServer):
         self.pre_trigger()  # retrieves current controllers status 
         # (here custom logic depending on controllers status could be added)
         self.trigger_solution() # sends trigger to controllers
-        self.wait_for_solution() # waits for ALL controllers to solve
+        wait_ok=self.wait_for_solution() # waits for ALL controllers to solve
+        return wait_ok
 
 class DummyController(RHController):
     def __init__(
@@ -80,7 +84,7 @@ class DummyController(RHController):
             dt=CLUSTER_DT,
             namespace=namespace,
             dtype=np.float32,
-            verbose=True,
+            verbose=False,
             debug=True,
             timeout_ms=ACK_TIMEOUT_MS,
         )
@@ -212,10 +216,10 @@ class DummyController(RHController):
     def _solve(self) -> bool:
         if self._closed_loop:
             self._update_closed_loop()
-            print(f"Controller n. {self.controller_index}: problem solved (closed loop).")
+            # print(f"Controller n. {self.controller_index}: problem solved (closed loop).")
         else:
             self._update_open_loop()
-            print(f"Controller n. {self.controller_index}: problem solved (open loop).")
+            # print(f"Controller n. {self.controller_index}: problem solved (open loop).")
         
         self._rti()
 
@@ -281,8 +285,9 @@ class DummyClusterClient(ControlClusterClient):
             set_affinity=False,
             use_mp_fork=True,
             isolated_cores_only=False,
-            use_core_pool=False,
-            verbose=True,
+            use_core_pool=USE_POOL,
+            max_controllers_per_pool=MAX_CONTROLLERS_PER_POOL,
+            verbose=False,
             debug=True,
             custom_opts={"n_nodes": N_NODES, "cluster_dt": CLUSTER_DT, "some_other_mpc_opts": 12345},
         )
