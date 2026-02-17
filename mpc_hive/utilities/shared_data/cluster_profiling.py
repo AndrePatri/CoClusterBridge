@@ -328,6 +328,12 @@ class RhcProfiling(SharedDataBase):
             self.phase_shift_dt.get_shared_mem(),
             self.task_ref_update_dt.get_shared_mem(),
             self.shared_datanames.get_shared_mem()]
+
+    def get_shm_sliceable(self):
+
+        # shared_data and shared_datanames are metadata. Per-controller timing
+        # tensors are row-indexed and can be sliced.
+        return [False, True, True, True, True, True, False]
     
     def run(self):
         

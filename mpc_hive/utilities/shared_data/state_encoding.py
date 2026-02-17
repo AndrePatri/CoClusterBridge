@@ -5,7 +5,7 @@ from EigenIPC.PyEigenIPC import LogType
 from EigenIPC.PyEigenIPC import dtype as eigenipc_dtype 
 from EigenIPC.PyEigenIPC import Journal
 
-from mpc_hive.utilities.shared_data.abstractions import SharedDataBase
+from mpc_hive.utilities.shared_data.abstractions import SharedDataBase, infer_shm_type
 import numpy as np
 
 from typing import List
@@ -285,6 +285,14 @@ class JntsState(SharedTWrapper):
         shared_mems.extend(_flatten_shared_mem(self.shared_jnt_names.get_shared_mem()))
 
         return shared_mems
+
+    def get_shm_type(self):
+
+        return ["numeric", "str_list"]
+
+    def get_shm_sliceable(self):
+
+        return [True, False]
 
     def close(self):
         super().close()
@@ -770,6 +778,14 @@ class ContactWrenches(SharedTWrapper):
         shared_mems.extend(_flatten_shared_mem(self.shared_contact_names.get_shared_mem()))
 
         return shared_mems
+
+    def get_shm_type(self):
+
+        return ["numeric", "str_list"]
+
+    def get_shm_sliceable(self):
+
+        return [True, False]
     
     def close(self):
         super().close()
@@ -920,6 +936,14 @@ class HeightSensor(SharedTWrapper):
         shared_mems.extend(_flatten_shared_mem(self._shape_shared.get_shared_mem()))
 
         return shared_mems
+
+    def get_shm_type(self):
+
+        return ["numeric", "numeric"]
+
+    def get_shm_sliceable(self):
+
+        return [True, False]
     
 class ContactPos(SharedTWrapper):
 
@@ -1151,6 +1175,14 @@ class ContactPos(SharedTWrapper):
 
         return shared_mems
 
+    def get_shm_type(self):
+
+        return ["numeric", "str_list"]
+
+    def get_shm_sliceable(self):
+
+        return [True, False]
+
 class ContactVel(SharedTWrapper):
 
     def __init__(self,
@@ -1380,6 +1412,14 @@ class ContactVel(SharedTWrapper):
         shared_mems.extend(_flatten_shared_mem(self.shared_contact_names.get_shared_mem()))
 
         return shared_mems
+
+    def get_shm_type(self):
+
+        return ["numeric", "str_list"]
+
+    def get_shm_sliceable(self):
+
+        return [True, False]
     
 class FullRobState(SharedDataBase):
 
@@ -1618,6 +1658,26 @@ class FullRobState(SharedDataBase):
         if self.height_sensor is not None:
             shared_mems.extend(_flatten_shared_mem(self.height_sensor.get_shared_mem()))
         return shared_mems
+
+    def get_shm_sliceable(self):
+
+        shared_mems = _flatten_shared_mem(self.get_shared_mem())
+        sliceable = []
+
+        for shared_mem in shared_mems:
+            shm_type = infer_shm_type(shared_mem)
+            if shm_type == "str_list":
+                sliceable.append(False)
+                continue
+
+            basename = str(shared_mem.getBasename()).lower()
+            if basename.endswith("optionalfeatures") or basename.endswith("shape"):
+                sliceable.append(False)
+                continue
+
+            sliceable.append(True)
+
+        return sliceable
 
     def n_robots(self):
         return self.root_state.getNRows()

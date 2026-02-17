@@ -872,6 +872,14 @@ class RhcRefs(SharedDataBase):
             self.flight_settings_req.get_shared_mem(),
             self.alpha.get_shared_mem(),
             self.bound_rel.get_shared_mem()]
+
+    def get_shm_type(self):
+
+        return self.rob_refs.get_shm_type() + ["numeric"] * 6
+
+    def get_shm_sliceable(self):
+
+        return self.rob_refs.get_shm_sliceable() + [True] * 6
     
     def run(self):
 
@@ -2500,6 +2508,12 @@ class RhcInternal(SharedDataBase):
         self._append_shared_tensor_dict(shared_mems, self.cnstr)
         shared_mems.extend(_flatten_shared_mem(self._shared_jnt_names.get_shared_mem()))
         return shared_mems
+
+    def get_shm_sliceable(self):
+
+        # RhcInternal streams are per-controller. They should never be sliced
+        # with env_idx-based logic.
+        return [False] * len(_flatten_shared_mem(self.get_shared_mem()))
                 
     def jnt_names(self):
 

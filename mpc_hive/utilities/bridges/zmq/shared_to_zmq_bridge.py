@@ -8,6 +8,7 @@ from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
 from mpc_hive.utilities.shared_data.rhc_data import RhcInternal
 from mpc_hive.utilities.shared_data.sim_data import SharedEnvInfo
 from mpc_hive.utilities.shared_data.jnt_imp_control import JntImpCntrlData
+from mpc_hive.utilities.shared_data.abstractions import flatten_shared_mem
 
 import argparse
 import time
@@ -51,6 +52,7 @@ class SharedMemToZmqBridge:
         self._clients = []
         self._shared_mems = []
         self._rhc_internal_shared_mems = set()
+        self._unsliced_shared_mems = set()
 
         self._catalog_server = None
         self._catalog_client = None
@@ -146,10 +148,68 @@ class SharedMemToZmqBridge:
 
         return [shared_mem]
 
+    def _as_meta_list(self, meta):
+
+        if meta is None:
+            return []
+
+        if isinstance(meta, (list, tuple)):
+            return list(flatten_shared_mem(meta))
+
+        return [meta]
+
+    def _apply_client_shm_meta(self,
+            client,
+            client_mems):
+
+        if len(client_mems) == 0:
+            return
+
+        if not hasattr(client, "get_shm_type") or not callable(getattr(client, "get_shm_type")):
+            Journal.log(self.__class__.__name__,
+                "_apply_client_shm_meta",
+                f"Client {client.__class__.__name__} does not expose get_shm_type().",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        if not hasattr(client, "get_shm_sliceable") or not callable(getattr(client, "get_shm_sliceable")):
+            Journal.log(self.__class__.__name__,
+                "_apply_client_shm_meta",
+                f"Client {client.__class__.__name__} does not expose get_shm_sliceable().",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        client_types = self._as_meta_list(client.get_shm_type())
+        if len(client_types) != len(client_mems):
+            Journal.log(self.__class__.__name__,
+                "_apply_client_shm_meta",
+                f"Client {client.__class__.__name__} returned {len(client_types)} entries in get_shm_type "
+                f"for {len(client_mems)} shared memories.",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        client_sliceable = self._as_meta_list(client.get_shm_sliceable())
+        if len(client_sliceable) != len(client_mems):
+            Journal.log(self.__class__.__name__,
+                "_apply_client_shm_meta",
+                f"Client {client.__class__.__name__} returned {len(client_sliceable)} entries in get_shm_sliceable "
+                f"for {len(client_mems)} shared memories.",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        for idx, shm_type in enumerate(client_types):
+            if shm_type == "str_list":
+                self._unsliced_shared_mems.add(id(client_mems[idx]))
+
+        for idx, is_sliceable in enumerate(client_sliceable):
+            if not bool(is_sliceable):
+                self._unsliced_shared_mems.add(id(client_mems[idx]))
+
     def _run_clients(self):
 
         self._shared_mems = []
         self._rhc_internal_shared_mems = set()
+        self._unsliced_shared_mems = set()
         for client in self._clients:
             client.run()
             if not client.is_running():
@@ -159,7 +219,9 @@ class SharedMemToZmqBridge:
                     f"Client {client_name} failed to start",
                     LogType.ERROR,
                     throw_when_excep=True)
-            self._shared_mems.extend(self._as_mem_list(client.get_shared_mem()))
+            client_mems = self._as_mem_list(client.get_shared_mem())
+            self._shared_mems.extend(client_mems)
+            self._apply_client_shm_meta(client, client_mems)
 
         self._run_rhc_internal_clients()
 
@@ -224,6 +286,7 @@ class SharedMemToZmqBridge:
             self._clients.append(rhc_internal_client)
             rhc_mems = self._as_mem_list(rhc_internal_client.get_shared_mem())
             self._shared_mems.extend(rhc_mems)
+            self._apply_client_shm_meta(rhc_internal_client, rhc_mems)
             for mem in rhc_mems:
                 self._rhc_internal_shared_mems.add(id(mem))
 
@@ -345,8 +408,9 @@ class SharedMemToZmqBridge:
         self._bridges = []
         for shared_mem in self._shared_mems:
             is_rhc_internal_stream = id(shared_mem) in self._rhc_internal_shared_mems
-            source_row_index = None if is_rhc_internal_stream else self._env_idx
-            source_n_rows = 1 if is_rhc_internal_stream else self._env_count
+            is_unsliced_stream = id(shared_mem) in self._unsliced_shared_mems
+            source_row_index = None if (is_rhc_internal_stream or is_unsliced_stream) else self._env_idx
+            source_n_rows = 1 if (is_rhc_internal_stream or is_unsliced_stream) else self._env_count
 
             endpoint = default_endpoint(
                 namespace=shared_mem.getNamespace(),
@@ -438,6 +502,7 @@ class SharedMemToZmqBridge:
         self._clients = []
         self._shared_mems = []
         self._rhc_internal_shared_mems = set()
+        self._unsliced_shared_mems = set()
 
 
 if __name__ == '__main__':

@@ -128,6 +128,11 @@ class SharedClusterInfo(SharedDataBase):
     def get_shared_mem(self):
         return [self.shared_sim_data.get_shared_mem(),
             self.shared_sim_datanames.get_shared_mem()]
+
+    def get_shm_sliceable(self):
+
+        # SharedClusterInfo is metadata, not env-row indexed.
+        return [False, False]
     
     def _parse_sim_dict(self):
 
