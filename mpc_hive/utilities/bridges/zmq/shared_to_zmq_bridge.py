@@ -23,6 +23,7 @@ class SharedMemToZmqBridge:
     def __init__(self,
             namespace: str,
             add_training_data: bool = False,
+            add_rhc_internal: bool = False,
             env_idx: int = None,
             env_count: int = 1,
             verbose: bool = True,
@@ -36,6 +37,7 @@ class SharedMemToZmqBridge:
 
         self._namespace = namespace
         self._add_training_data = add_training_data
+        self._add_rhc_internal = add_rhc_internal
         self._env_idx = env_idx
         self._env_count = env_count
         self._verbose = verbose
@@ -50,6 +52,7 @@ class SharedMemToZmqBridge:
         self._bridges = []
         self._clients = []
         self._shared_mems = []
+        self._rhc_internal_shared_mems = set()
 
         self._catalog_server = None
         self._catalog_client = None
@@ -148,6 +151,7 @@ class SharedMemToZmqBridge:
     def _run_clients(self):
 
         self._shared_mems = []
+        self._rhc_internal_shared_mems = set()
         for client in self._clients:
             client.run()
             if not client.is_running():
@@ -158,6 +162,72 @@ class SharedMemToZmqBridge:
                     LogType.ERROR,
                     throw_when_excep=True)
             self._shared_mems.extend(self._as_mem_list(client.get_shared_mem()))
+
+        self._run_rhc_internal_clients()
+
+    def _infer_cluster_size(self):
+
+        for client in self._clients:
+            if isinstance(client, RobotState):
+                return client.n_robots()
+
+        for client in self._clients:
+            if isinstance(client, RhcStatus):
+                return int(client.trigger.n_rows)
+
+        Journal.log(self.__class__.__name__,
+            "_infer_cluster_size",
+            "Could not infer cluster size from existing clients.",
+            LogType.EXCEP,
+            throw_when_excep=True)
+
+    def _selected_rhc_indices(self,
+            cluster_size: int):
+
+        if self._env_idx is None:
+            return list(range(cluster_size))
+
+        if self._env_idx >= cluster_size:
+            Journal.log(self.__class__.__name__,
+                "_selected_rhc_indices",
+                f"env_idx={self._env_idx} is out of bounds for cluster size {cluster_size}.",
+                LogType.EXCEP,
+                throw_when_excep=True)
+
+        end_idx = min(self._env_idx + self._env_count, cluster_size)
+        return list(range(self._env_idx, end_idx))
+
+    def _run_rhc_internal_clients(self):
+
+        if not self._add_rhc_internal:
+            return
+
+        cluster_size = self._infer_cluster_size()
+        selected_indices = self._selected_rhc_indices(cluster_size)
+
+        for rhc_idx in selected_indices:
+            rhc_internal_client = RhcInternal(
+                config=RhcInternal.Config(is_server=False),
+                namespace=self._namespace,
+                rhc_index=rhc_idx,
+                safe=False,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+            )
+            rhc_internal_client.run()
+
+            if not rhc_internal_client.is_running():
+                Journal.log(self.__class__.__name__,
+                    "_run_rhc_internal_clients",
+                    f"RhcInternal client for index {rhc_idx} failed to start.",
+                    LogType.ERROR,
+                    throw_when_excep=True)
+
+            self._clients.append(rhc_internal_client)
+            rhc_mems = self._as_mem_list(rhc_internal_client.get_shared_mem())
+            self._shared_mems.extend(rhc_mems)
+            for mem in rhc_mems:
+                self._rhc_internal_shared_mems.add(id(mem))
 
     def _collect_stream_specs(self):
 
@@ -276,6 +346,10 @@ class SharedMemToZmqBridge:
 
         self._bridges = []
         for shared_mem in self._shared_mems:
+            is_rhc_internal_stream = id(shared_mem) in self._rhc_internal_shared_mems
+            source_row_index = None if is_rhc_internal_stream else self._env_idx
+            source_n_rows = 1 if is_rhc_internal_stream else self._env_count
+
             endpoint = default_endpoint(
                 namespace=shared_mem.getNamespace(),
                 basename=shared_mem.getBasename(),
@@ -290,8 +364,8 @@ class SharedMemToZmqBridge:
                 bind=self._bind,
                 queue_size=self._queue_size,
                 conflate=self._conflate,
-                source_row_index=self._env_idx,
-                source_n_rows=self._env_count,
+                source_row_index=source_row_index,
+                source_n_rows=source_n_rows,
             )
             bridge.run()
             self._bridges.append(bridge)
@@ -299,7 +373,7 @@ class SharedMemToZmqBridge:
             Journal.log(self.__class__.__name__,
                 "_init_to_zmq_bridges",
                 f"publishing {shared_mem.getNamespace()}/{shared_mem.getBasename()} on {endpoint} "
-                f"(env_idx={self._env_idx}, env_count={self._env_count})",
+                f"(env_idx={source_row_index}, env_count={source_n_rows})",
                 LogType.INFO,
                 throw_when_excep=True)
 
@@ -365,6 +439,7 @@ class SharedMemToZmqBridge:
         self._bridges = []
         self._clients = []
         self._shared_mems = []
+        self._rhc_internal_shared_mems = set()
 
 
 if __name__ == '__main__':
@@ -388,6 +463,8 @@ if __name__ == '__main__':
         help='Port span used by deterministic endpoint mapping')
     parser.add_argument('--add_training_data', action='store_true',
         help='Reserved for derived bridge implementations')
+    parser.add_argument('--add_rhc_internal', action='store_true',
+        help='Publish per-controller RhcInternal streams')
     parser.add_argument('--env_idx', type=str, default=None,
         help='Optional env index or inclusive range (examples: "67", "67-75")')
 
@@ -402,6 +479,7 @@ if __name__ == '__main__':
     bridge = SharedMemToZmqBridge(
         namespace=args.ns,
         add_training_data=args.add_training_data,
+        add_rhc_internal=args.add_rhc_internal,
         env_idx=env_start,
         env_count=env_count,
         queue_size=args.queue_size,

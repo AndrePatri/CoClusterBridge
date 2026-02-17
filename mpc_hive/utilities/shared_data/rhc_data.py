@@ -16,6 +16,19 @@ from typing import List
         
 from abc import ABC, abstractmethod
 
+def _flatten_shared_mem(shared_mem):
+
+    if shared_mem is None:
+        return []
+
+    if isinstance(shared_mem, (list, tuple)):
+        flattened = []
+        for item in shared_mem:
+            flattened.extend(_flatten_shared_mem(item))
+        return flattened
+
+    return [shared_mem]
+
 class RobotState(FullRobState):
 
     def __init__(self,
@@ -1814,6 +1827,15 @@ class RhcInternal(SharedDataBase):
 
     # class for sharing internal data of a 
     # receding-horizon controller
+    _OPT_ENABLE_Q = 0
+    _OPT_ENABLE_V = 1
+    _OPT_ENABLE_A = 2
+    _OPT_ENABLE_A_DOT = 3
+    _OPT_ENABLE_F = 4
+    _OPT_ENABLE_F_DOT = 5
+    _OPT_ENABLE_EFF = 6
+    _OPT_ENABLE_COSTS = 7
+    _OPT_ENABLE_CONSTR = 8
 
     class Q(SharedTWrapper):
 
@@ -2219,6 +2241,8 @@ class RhcInternal(SharedDataBase):
 
         self._jnt_names = jnt_names
         self._n_jnts = n_jnts
+        self._n_contacts = n_contacts
+        self._n_nodes = n_nodes
 
         # appending controller index to namespace
         self.namespace = self._basename + namespace + "_n_" + str(self.rhc_index)
@@ -2228,6 +2252,11 @@ class RhcInternal(SharedDataBase):
         else:
             # use defaults
             self.config = self.Config()
+
+        self._is_server = self.config.is_server
+        self._safe = safe
+        self._force_reconnection = force_reconnection
+        self._optimize_mem = optimize_mem
 
         self.q = None
         self.v = None
@@ -2241,111 +2270,36 @@ class RhcInternal(SharedDataBase):
         
         self._shared_jnt_names = None
 
-        self._is_server = config.is_server
+        self._optional_features_shared = SharedTWrapper(
+            namespace=self.namespace,
+            basename="OptionalFeatures",
+            is_server=self._is_server,
+            n_rows=1,
+            n_cols=9,
+            dtype=dtype.Float,
+            verbose=self._verbose,
+            vlevel=self._vlevel,
+            fill_value=0,
+            safe=self._safe,
+            force_reconnection=self._force_reconnection,
+            with_gpu_mirror=False,
+            with_torch_view=False,
+            optimize_mem=False,
+        )
 
-        if self.config.enable_q:
-            self.q = self.Q(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 3 + 4 + n_jnts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-        
-        if self.config.enable_v:
-            self.v = self.V(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 3 + 3 + n_jnts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-        
-        if self.config.enable_a:
-            self.a = self.A(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 3 + 3 + n_jnts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-        
-        if self.config.enable_a_dot:
-            self.a_dot = self.ADot(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 3 + 3 + n_jnts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-        
-        if self.config.enable_f:
-            self.f = self.F(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 6 * n_contacts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-            
-        if self.config.enable_f_dot:
-            self.f_dot = self.FDot(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 6 * n_contacts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-        
-        if self.config.enable_eff:
-            self.eff = self.Eff(namespace = self.namespace,
-                    is_server = self._is_server, 
-                    n_dims = 3 + 3 + n_jnts, 
-                    n_nodes = n_nodes, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-            
-        if self.config.enable_costs:
-            self.costs = self.RHCosts(names = self.config.cost_names, # not needed if client
-                    dimensions = self.config.cost_dims, # not needed if client
-                    n_nodes = n_nodes, # not needed if client 
-                    namespace = self.namespace,
-                    is_server = self._is_server, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
-        
-        if self.config.enable_constr:
-            self.cnstr = self.RHConstr(names = self.config.constr_names, # not needed if client
-                    dimensions = self.config.constr_dims, # not needed if client
-                    n_nodes = n_nodes, # not needed if client 
-                    namespace = self.namespace,
-                    is_server = self._is_server, 
-                    verbose = verbose, 
-                    vlevel = vlevel,
-                    force_reconnection=force_reconnection,
-                    safe=safe,
-                    optimize_mem=optimize_mem)
+        if self._is_server:
+            self._init_optional_components(optimize_mem=self._optimize_mem)
         
         if self._is_server:
-            self._shared_jnt_names = StringTensorServer(length = len(self._jnt_names), 
+            if self._jnt_names is None and self._n_jnts <= 0:
+                exception = "Server-side RhcInternal requires either jnt_names or n_jnts > 0."
+                Journal.log(self.__class__.__name__,
+                    "__init__",
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep=True)
+            jnt_names_len = len(self._jnt_names) if self._jnt_names is not None else int(self._n_jnts)
+            self._shared_jnt_names = StringTensorServer(length = jnt_names_len, 
                                         basename = self._basename + "Names", 
                                         name_space = self.namespace,
                                         verbose = self._verbose, 
@@ -2361,29 +2315,205 @@ class RhcInternal(SharedDataBase):
                                         safe = safe)
             
         self._is_running = False
+
+    def _init_optional_components(self,
+            optimize_mem: bool = False):
+
+        if self.config.enable_q and self.q is None:
+            self.q = self.Q(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=3 + 4 + self._n_jnts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_v and self.v is None:
+            self.v = self.V(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=3 + 3 + self._n_jnts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_a and self.a is None:
+            self.a = self.A(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=3 + 3 + self._n_jnts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_a_dot and self.a_dot is None:
+            self.a_dot = self.ADot(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=3 + 3 + self._n_jnts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_f and self.f is None:
+            self.f = self.F(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=6 * self._n_contacts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_f_dot and self.f_dot is None:
+            self.f_dot = self.FDot(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=6 * self._n_contacts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_eff and self.eff is None:
+            self.eff = self.Eff(namespace=self.namespace,
+                is_server=self._is_server,
+                n_dims=3 + 3 + self._n_jnts,
+                n_nodes=self._n_nodes,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_costs and self.costs is None:
+            self.costs = self.RHCosts(names=self.config.cost_names,
+                dimensions=self.config.cost_dims,
+                n_nodes=self._n_nodes,
+                namespace=self.namespace,
+                is_server=self._is_server,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+        if self.config.enable_constr and self.cnstr is None:
+            self.cnstr = self.RHConstr(names=self.config.constr_names,
+                dimensions=self.config.constr_dims,
+                n_nodes=self._n_nodes,
+                namespace=self.namespace,
+                is_server=self._is_server,
+                verbose=self._verbose,
+                vlevel=self._vlevel,
+                force_reconnection=self._force_reconnection,
+                safe=self._safe,
+                optimize_mem=optimize_mem)
+
+    def _write_optional_features(self):
+
+        features = self._optional_features_shared.get_numpy_mirror()
+        features[0, self._OPT_ENABLE_Q] = 1.0 if self.q is not None else 0.0
+        features[0, self._OPT_ENABLE_V] = 1.0 if self.v is not None else 0.0
+        features[0, self._OPT_ENABLE_A] = 1.0 if self.a is not None else 0.0
+        features[0, self._OPT_ENABLE_A_DOT] = 1.0 if self.a_dot is not None else 0.0
+        features[0, self._OPT_ENABLE_F] = 1.0 if self.f is not None else 0.0
+        features[0, self._OPT_ENABLE_F_DOT] = 1.0 if self.f_dot is not None else 0.0
+        features[0, self._OPT_ENABLE_EFF] = 1.0 if self.eff is not None else 0.0
+        features[0, self._OPT_ENABLE_COSTS] = 1.0 if self.costs is not None else 0.0
+        features[0, self._OPT_ENABLE_CONSTR] = 1.0 if self.cnstr is not None else 0.0
+        self._optional_features_shared.synch_all(read=False, retry=True)
+
+    def _read_optional_features(self):
+
+        self._optional_features_shared.synch_all(read=True, retry=True)
+        features = self._optional_features_shared.get_numpy_mirror()
+
+        self.config.enable_q = bool(round(float(features[0, self._OPT_ENABLE_Q])))
+        self.config.enable_v = bool(round(float(features[0, self._OPT_ENABLE_V])))
+        self.config.enable_a = bool(round(float(features[0, self._OPT_ENABLE_A])))
+        self.config.enable_a_dot = bool(round(float(features[0, self._OPT_ENABLE_A_DOT])))
+        self.config.enable_f = bool(round(float(features[0, self._OPT_ENABLE_F])))
+        self.config.enable_f_dot = bool(round(float(features[0, self._OPT_ENABLE_F_DOT])))
+        self.config.enable_eff = bool(round(float(features[0, self._OPT_ENABLE_EFF])))
+        self.config.enable_costs = bool(round(float(features[0, self._OPT_ENABLE_COSTS])))
+        self.config.enable_constr = bool(round(float(features[0, self._OPT_ENABLE_CONSTR])))
+
+    def _infer_n_jnts(self):
+
+        if self.q is not None:
+            return int(self.q.n_rows - 7)
+        if self.v is not None:
+            return int(self.v.n_rows - 6)
+        if self.a is not None:
+            return int(self.a.n_rows - 6)
+        if self.a_dot is not None:
+            return int(self.a_dot.n_rows - 6)
+        if self.eff is not None:
+            return int(self.eff.n_rows - 6)
+
+        return None
+
+    def _append_shared_tensor_dict(self,
+            shared_mems: List,
+            tensor_dict):
+
+        if tensor_dict is None:
+            return
+
+        shared_mems.extend(_flatten_shared_mem(tensor_dict.data.get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(tensor_dict.shared_names.shared_names.get_shared_mem()))
+        shared_mems.extend(_flatten_shared_mem(tensor_dict.shared_dims.get_shared_mem()))
     
     def is_running(self):
 
         return self._is_running
     
     def get_shared_mem(self):
-        return [self.fails.get_shared_mem(),
-            self.q.get_shared_mem(),
-            self.v.get_shared_mem(),
-            self.a.get_shared_mem(),
-            self.a_dot.get_shared_mem(),
-            self.f.get_shared_mem(),
-            self.f_dot.get_shared_mem(),
-            self.eff.get_shared_mem(),
-            self.costs.get_shared_mem(),
-            self.cnstr.get_shared_mem(),
-            self._shared_jnt_names.get_shared_mem()]
+        shared_mems = []
+        shared_mems.extend(_flatten_shared_mem(self._optional_features_shared.get_shared_mem()))
+        if self.q is not None:
+            shared_mems.extend(_flatten_shared_mem(self.q.get_shared_mem()))
+        if self.v is not None:
+            shared_mems.extend(_flatten_shared_mem(self.v.get_shared_mem()))
+        if self.a is not None:
+            shared_mems.extend(_flatten_shared_mem(self.a.get_shared_mem()))
+        if self.a_dot is not None:
+            shared_mems.extend(_flatten_shared_mem(self.a_dot.get_shared_mem()))
+        if self.f is not None:
+            shared_mems.extend(_flatten_shared_mem(self.f.get_shared_mem()))
+        if self.f_dot is not None:
+            shared_mems.extend(_flatten_shared_mem(self.f_dot.get_shared_mem()))
+        if self.eff is not None:
+            shared_mems.extend(_flatten_shared_mem(self.eff.get_shared_mem()))
+        self._append_shared_tensor_dict(shared_mems, self.costs)
+        self._append_shared_tensor_dict(shared_mems, self.cnstr)
+        shared_mems.extend(_flatten_shared_mem(self._shared_jnt_names.get_shared_mem()))
+        return shared_mems
                 
     def jnt_names(self):
 
         return self._jnt_names
         
     def run(self):
+
+        self._optional_features_shared.run()
+
+        if self._is_server:
+            self._write_optional_features()
+        else:
+            self._read_optional_features()
+            self._init_optional_components(optimize_mem=self._optimize_mem)
 
         if self.q is not None:
             self.q.run()
@@ -2424,9 +2554,9 @@ class RhcInternal(SharedDataBase):
                         f"does not match the number of joints {self._n_jnts}"
                     Journal.log(self.__class__.__name__,
                         "run",
-                        exception,
-                        LogType.EXCEP,
-                        throw_when_excep = True)
+                    exception,
+                    LogType.EXCEP,
+                    throw_when_excep = True)
             jnt_names_written = self._shared_jnt_names.write_vec(self._jnt_names, 0)
             if not jnt_names_written:
                 exception = "Could not write joint names on shared memory!"
@@ -2437,10 +2567,14 @@ class RhcInternal(SharedDataBase):
                     throw_when_excep = True)
                     
         else:
-            
-            if self.q is not None:
 
-                self._n_jnts = self.q.n_rows - 7
+            inferred_n_jnts = self._infer_n_jnts()
+            if inferred_n_jnts is not None:
+                self._n_jnts = inferred_n_jnts
+            else:
+                self._n_jnts = self._shared_jnt_names.length()
+
+            if self._n_jnts > 0:
                 self._jnt_names = [""] * self._n_jnts
                 while not self._shared_jnt_names.read_vec(self._jnt_names, 0):
                     Journal.log(self.__class__.__name__,
@@ -2448,6 +2582,8 @@ class RhcInternal(SharedDataBase):
                         "Could not read joint names on shared memory. Retrying...",
                         LogType.WARN,
                         throw_when_excep = True)
+            else:
+                self._jnt_names = []
 
         self._is_running = True
 
@@ -2515,6 +2651,11 @@ class RhcInternal(SharedDataBase):
         
         if self._shared_jnt_names is not None:
             self._shared_jnt_names.close()
+
+        if self._optional_features_shared is not None:
+            self._optional_features_shared.close()
+
+        self._is_running = False
 
     def _check_running_or_throw(self,
                         name: str):
