@@ -5,7 +5,6 @@
 #
 # Reasonable mapping (documented below) — adjust to taste.
 
-from aug_mpc.utils.shared_data.agent_refs import AgentRefs
 from mpc_hive.utilities.shared_data.rhc_data import RobotState
 from mpc_hive.utilities.math_utils import world2base_frame_twist
 
@@ -32,12 +31,30 @@ class RefsFromJoy:
                  verbose: bool = False,
                  agent_refs_world: bool = False,
                  env_idx: int = None,
-                 hold_time: float = 0.15):
+                 hold_time: float = 0.15,
+                 listener_factory=JoyListenerZMQ,
+                 listener_endpoint_mode: str = "connect",
+                 fixed_motion_mode: Optional[str] = None,
+                 force_omega: bool = False):
         self.namespace = namespace
         self._verbose = verbose
         self._agent_refs_world = agent_refs_world
         self._env_idx = env_idx
         self.hold_time = float(hold_time)
+        self._listener_factory = listener_factory
+        self._listener_endpoint_mode = str(listener_endpoint_mode).lower().strip()
+        if self._listener_endpoint_mode not in ("connect", "bind"):
+            raise ValueError(
+                f"Unsupported listener_endpoint_mode '{listener_endpoint_mode}'. "
+                "Use 'connect' or 'bind'."
+            )
+        self._fixed_motion_mode = None if fixed_motion_mode is None else str(fixed_motion_mode).lower().strip()
+        if self._fixed_motion_mode not in (None, "linvel", "pos"):
+            raise ValueError(
+                f"Unsupported fixed_motion_mode '{fixed_motion_mode}'. "
+                "Use None, 'linvel', or 'pos'."
+            )
+        self._force_omega = bool(force_omega)
         self._closed = False
 
         # optional old shared_refs (for contact_flags, phase_id, flight_settings, etc.)
@@ -352,6 +369,19 @@ class RefsFromJoy:
             robot_p[2] = 0.0
             self._current_pos_ref[:] = robot_p
 
+    def _apply_static_mode_policy(self):
+        if self._force_omega:
+            self.enable_omega = True
+
+        if self._fixed_motion_mode == "linvel":
+            self.enable_linvel = True
+            self.enable_pos = False
+            self.enable_linvelz = False
+        elif self._fixed_motion_mode == "pos":
+            self.enable_linvel = False
+            self.enable_pos = True
+            self.enable_linvelz = False
+
     def _write_to_shared_mem(self):
         self._shared_refs.rob_refs.root_state.synch_all(read=True)
         self._robot_state.root_state.synch_all(read=True, retry=True)
@@ -633,7 +663,8 @@ class RefsFromJoy:
         Parameters
         ----------
         connect : str
-            ZeroMQ connect address (host:port) for JoyListenerZMQ.
+            Listener endpoint address (host:port). Interpreted as connect or bind
+            depending on listener_endpoint_mode.
         topic : str
             ZMQ topic to subscribe to.
         poll_interval : float
@@ -649,7 +680,12 @@ class RefsFromJoy:
         Journal.log(self.__class__.__name__, "run", info, LogType.INFO, throw_when_excep=True)
 
         # start listener
-        joy_listener = JoyListenerZMQ(connect=connect, topic=topic, poll_interval=poll_interval)
+        listener_kwargs = {"topic": topic, "poll_interval": poll_interval}
+        if self._listener_endpoint_mode == "bind":
+            listener_kwargs["bind"] = connect
+        else:
+            listener_kwargs["connect"] = connect
+        joy_listener = self._listener_factory(**listener_kwargs)
         joy_listener.start()
 
         # main loop
@@ -663,6 +699,7 @@ class RefsFromJoy:
 
             # synchronize env/cluster index and process joystick-driven writes
             self._process_joy_for_writes(joy_listener)
+            self._apply_static_mode_policy()
 
             # compute twist/pos references like RefsFromJoy
             self._set_omega(joy_listener)
