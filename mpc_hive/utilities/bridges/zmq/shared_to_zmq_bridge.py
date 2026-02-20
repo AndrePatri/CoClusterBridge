@@ -33,7 +33,11 @@ class SharedMemToZmqBridge:
             bind: bool = True,
             bind_ip: str = "0.0.0.0",
             port_base: int = 20000,
-            port_span: int = 40000):
+            port_span: int = 40000,
+            timing_window: int = 200,
+            string_stream_period: float = 1.0,
+            string_stream_once: bool = False,
+            drop_if_busy: bool = True):
 
         self._namespace = namespace
         self._add_rhc_internal = add_rhc_internal
@@ -47,12 +51,18 @@ class SharedMemToZmqBridge:
         self._bind_ip = bind_ip
         self._port_base = port_base
         self._port_span = port_span
+        self._timing_window = max(1, int(timing_window))
+        self._string_stream_period = max(0.0, float(string_stream_period))
+        self._string_stream_once = bool(string_stream_once)
+        self._drop_if_busy = bool(drop_if_busy)
 
         self._bridges = []
+        self._bridge_meta = []
         self._clients = []
         self._shared_mems = []
         self._rhc_internal_shared_mems = set()
         self._unsliced_shared_mems = set()
+        self._string_shared_mems = set()
 
         self._catalog_server = None
         self._catalog_client = None
@@ -61,6 +71,14 @@ class SharedMemToZmqBridge:
 
         self._dt = 0.05
         self._is_running = False
+        self._timing_samples = 0
+        self._timing_overruns = 0
+        self._timing_elapsed_sum = 0.0
+        self._timing_elapsed_max = 0.0
+        self._timing_overrun_sum = 0.0
+        self._timing_overrun_max = 0.0
+        self._catalog_publish_period = 1.0
+        self._last_catalog_publish_t = 0.0
 
         if self._env_idx is not None and self._env_idx < 0:
             Journal.log(self.__class__.__name__,
@@ -200,6 +218,7 @@ class SharedMemToZmqBridge:
         for idx, shm_type in enumerate(client_types):
             if shm_type == "str_list":
                 self._unsliced_shared_mems.add(id(client_mems[idx]))
+                self._string_shared_mems.add(id(client_mems[idx]))
 
         for idx, is_sliceable in enumerate(client_sliceable):
             if not bool(is_sliceable):
@@ -210,6 +229,7 @@ class SharedMemToZmqBridge:
         self._shared_mems = []
         self._rhc_internal_shared_mems = set()
         self._unsliced_shared_mems = set()
+        self._string_shared_mems = set()
         for client in self._clients:
             client.run()
             if not client.is_running():
@@ -358,15 +378,55 @@ class SharedMemToZmqBridge:
             LogType.INFO,
             throw_when_excep=True)
 
-    def _publish_catalog(self):
+    def _publish_catalog(self,
+            force: bool = False):
 
         if self._catalog_server is None or self._catalog_bridge is None:
+            return
+
+        now = time.perf_counter()
+        if not force and (now - self._last_catalog_publish_t) < self._catalog_publish_period:
             return
 
         payload = self._catalog_strings if len(self._catalog_strings) > 0 else [""]
 
         self._catalog_server.write_vec(payload, 0)
         self._catalog_bridge.update(retry=False)
+        self._last_catalog_publish_t = now
+
+    def _accumulate_timing(self,
+            elapsed_time: float):
+
+        overrun = max(0.0, elapsed_time - self._dt)
+        self._timing_samples += 1
+        self._timing_elapsed_sum += elapsed_time
+        if elapsed_time > self._timing_elapsed_max:
+            self._timing_elapsed_max = elapsed_time
+
+        if overrun > 0.0:
+            self._timing_overruns += 1
+            self._timing_overrun_sum += overrun
+            if overrun > self._timing_overrun_max:
+                self._timing_overrun_max = overrun
+
+        if self._timing_samples >= self._timing_window:
+            if self._timing_overruns > 0:
+                avg_elapsed = self._timing_elapsed_sum / self._timing_samples
+                avg_overrun = self._timing_overrun_sum / self._timing_overruns
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    f"Timing window {self._timing_samples} samples: "
+                    f"overruns {self._timing_overruns}/{self._timing_samples}, "
+                    f"avg_elapsed={avg_elapsed:.6f}s, max_elapsed={self._timing_elapsed_max:.6f}s, "
+                    f"avg_overrun={avg_overrun:.6f}s, max_overrun={self._timing_overrun_max:.6f}s.",
+                    LogType.WARN,
+                    throw_when_excep=True)
+            self._timing_samples = 0
+            self._timing_overruns = 0
+            self._timing_elapsed_sum = 0.0
+            self._timing_elapsed_max = 0.0
+            self._timing_overrun_sum = 0.0
+            self._timing_overrun_max = 0.0
 
     def _close_catalog(self):
 
@@ -406,9 +466,11 @@ class SharedMemToZmqBridge:
     def _init_to_zmq_bridges(self):
 
         self._bridges = []
+        self._bridge_meta = []
         for shared_mem in self._shared_mems:
             is_rhc_internal_stream = id(shared_mem) in self._rhc_internal_shared_mems
             is_unsliced_stream = id(shared_mem) in self._unsliced_shared_mems
+            is_string_stream = id(shared_mem) in self._string_shared_mems
             source_row_index = None if (is_rhc_internal_stream or is_unsliced_stream) else self._env_idx
             source_n_rows = 1 if (is_rhc_internal_stream or is_unsliced_stream) else self._env_count
 
@@ -426,11 +488,17 @@ class SharedMemToZmqBridge:
                 bind=self._bind,
                 queue_size=self._queue_size,
                 conflate=self._conflate,
+                drop_if_busy=self._drop_if_busy,
                 source_row_index=source_row_index,
                 source_n_rows=source_n_rows,
             )
             bridge.run()
             self._bridges.append(bridge)
+            self._bridge_meta.append({
+                "is_string": is_string_stream,
+                "next_publish_t": 0.0,
+                "published_once": False,
+            })
 
             Journal.log(self.__class__.__name__,
                 "_init_to_zmq_bridges",
@@ -442,11 +510,14 @@ class SharedMemToZmqBridge:
     def run(self, dt: float = 0.05):
 
         self._dt = dt
+        self._catalog_publish_period = max(0.5, 20.0 * self._dt)
+        self._last_catalog_publish_t = 0.0
 
         self._init_clients()
         self._run_clients()
         self._init_to_zmq_bridges()
         self._init_catalog_bridge()
+        self._publish_catalog(force=True)
 
         self._is_running = True
         self._run_loop()
@@ -464,21 +535,13 @@ class SharedMemToZmqBridge:
             throw_when_excep=True)
 
         while self._is_running:
-            try:
-                start_time = time.perf_counter()
-                self._update()
-                elapsed_time = time.perf_counter() - start_time
-                time_to_sleep_ns = int((self._dt - elapsed_time) * 1e9)
-                if time_to_sleep_ns < 0:
-                    Journal.log(self.__class__.__name__,
-                        "run",
-                        f"Could not match desired update dt of {self._dt} s. Elapsed {elapsed_time} s.",
-                        LogType.WARN,
-                        throw_when_excep=True)
-                else:
-                    PerfSleep.thread_sleep(time_to_sleep_ns)
-            except (KeyboardInterrupt, SystemExit):
-                break
+            start_time = time.perf_counter()
+            self._update()
+            elapsed_time = time.perf_counter() - start_time
+            self._accumulate_timing(elapsed_time)
+            time_to_sleep_ns = int((self._dt - elapsed_time) * 1e9)
+            if time_to_sleep_ns >= 0:
+                PerfSleep.thread_sleep(time_to_sleep_ns)
 
         self.close()
 
@@ -486,8 +549,21 @@ class SharedMemToZmqBridge:
 
         self._publish_catalog()
 
-        for bridge in self._bridges:
-            bridge.update(retry=False)
+        now = time.perf_counter()
+        for idx, bridge in enumerate(self._bridges):
+            meta = self._bridge_meta[idx]
+            if meta["is_string"]:
+                if self._string_stream_once and meta["published_once"]:
+                    continue
+                if now < meta["next_publish_t"]:
+                    continue
+
+            published = bridge.update(retry=False)
+
+            if meta["is_string"] and published:
+                meta["published_once"] = True
+                if not self._string_stream_once:
+                    meta["next_publish_t"] = now + self._string_stream_period
 
     def close(self):
 
@@ -499,10 +575,12 @@ class SharedMemToZmqBridge:
         self._close_bridges()
         self._close_clients()
         self._bridges = []
+        self._bridge_meta = []
         self._clients = []
         self._shared_mems = []
         self._rhc_internal_shared_mems = set()
         self._unsliced_shared_mems = set()
+        self._string_shared_mems = set()
 
 
 if __name__ == '__main__':
@@ -530,6 +608,14 @@ if __name__ == '__main__':
         help='Publish per-controller RhcInternal streams')
     parser.add_argument('--env_idx', type=str, default=None,
         help='Optional env index or inclusive range (examples: "67", "67-75")')
+    parser.add_argument('--timing_window', type=int, default=200,
+        help='Number of loop samples used to aggregate dt violation warnings')
+    parser.add_argument('--string_stream_period', type=float, default=1.0,
+        help='Publish period [s] for str_list streams (row/col names)')
+    parser.add_argument('--string_stream_once', action='store_true',
+        help='Publish str_list streams only once after startup')
+    parser.add_argument('--no_drop_if_busy', action='store_true',
+        help='Disable non-blocking PUB send (bridge may block when socket is busy)')
 
     args = parser.parse_args()
 
@@ -550,9 +636,15 @@ if __name__ == '__main__':
         bind_ip=args.bind_ip,
         port_base=args.port_base,
         port_span=args.port_span,
+        timing_window=args.timing_window,
+        string_stream_period=args.string_stream_period,
+        string_stream_once=args.string_stream_once,
+        drop_if_busy=not args.no_drop_if_busy,
     )
 
     try:
         bridge.run(dt=args.dt)
+    except KeyboardInterrupt:
+        pass
     finally:
         bridge.close()

@@ -898,7 +898,6 @@ class RhcRefs(SharedDataBase):
 
         self.bound_rel.run()
 
-
         self._is_runnning = True
     
     def n_contacts(self):

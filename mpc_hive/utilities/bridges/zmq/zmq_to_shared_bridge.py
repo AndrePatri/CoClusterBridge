@@ -27,7 +27,8 @@ class ZmqToSharedMemBridge:
             port_base: int = 20000,
             port_span: int = 40000,
             force_reconnection: bool = True,
-            remap_ns: str = None):
+            remap_ns: str = None,
+            timing_window: int = 200):
 
         self._namespace = namespace
         self._add_training_data = add_training_data
@@ -42,12 +43,19 @@ class ZmqToSharedMemBridge:
         self._port_span = port_span
         self._force_reconnection = force_reconnection
         self._remap_ns = remap_ns
+        self._timing_window = max(1, int(timing_window))
 
         self._bridges = {}
         self._catalog_subscriber = None
 
         self._dt = 0.05
         self._is_running = False
+        self._timing_samples = 0
+        self._timing_overruns = 0
+        self._timing_elapsed_sum = 0.0
+        self._timing_elapsed_max = 0.0
+        self._timing_overrun_sum = 0.0
+        self._timing_overrun_max = 0.0
 
     def _catalog_endpoint(self):
 
@@ -251,21 +259,13 @@ class ZmqToSharedMemBridge:
             throw_when_excep=True)
 
         while self._is_running:
-            try:
-                start_time = time.perf_counter()
-                self._update()
-                elapsed_time = time.perf_counter() - start_time
-                time_to_sleep_ns = int((self._dt - elapsed_time) * 1e9)
-                if time_to_sleep_ns < 0:
-                    Journal.log(self.__class__.__name__,
-                        "run",
-                        f"Could not match desired update dt of {self._dt} s. Elapsed {elapsed_time} s.",
-                        LogType.WARN,
-                        throw_when_excep=True)
-                else:
-                    PerfSleep.thread_sleep(time_to_sleep_ns)
-            except (KeyboardInterrupt, SystemExit):
-                break
+            start_time = time.perf_counter()
+            self._update()
+            elapsed_time = time.perf_counter() - start_time
+            self._accumulate_timing(elapsed_time)
+            time_to_sleep_ns = int((self._dt - elapsed_time) * 1e9)
+            if time_to_sleep_ns >= 0:
+                PerfSleep.thread_sleep(time_to_sleep_ns)
 
         self.close()
 
@@ -278,6 +278,40 @@ class ZmqToSharedMemBridge:
                 continue
 
             bridge.update(retry_write=False)
+
+    def _accumulate_timing(self,
+            elapsed_time: float):
+
+        overrun = max(0.0, elapsed_time - self._dt)
+        self._timing_samples += 1
+        self._timing_elapsed_sum += elapsed_time
+        if elapsed_time > self._timing_elapsed_max:
+            self._timing_elapsed_max = elapsed_time
+
+        if overrun > 0.0:
+            self._timing_overruns += 1
+            self._timing_overrun_sum += overrun
+            if overrun > self._timing_overrun_max:
+                self._timing_overrun_max = overrun
+
+        if self._timing_samples >= self._timing_window:
+            if self._timing_overruns > 0:
+                avg_elapsed = self._timing_elapsed_sum / self._timing_samples
+                avg_overrun = self._timing_overrun_sum / self._timing_overruns
+                Journal.log(self.__class__.__name__,
+                    "run",
+                    f"Timing window {self._timing_samples} samples: "
+                    f"overruns {self._timing_overruns}/{self._timing_samples}, "
+                    f"avg_elapsed={avg_elapsed:.6f}s, max_elapsed={self._timing_elapsed_max:.6f}s, "
+                    f"avg_overrun={avg_overrun:.6f}s, max_overrun={self._timing_overrun_max:.6f}s.",
+                    LogType.WARN,
+                    throw_when_excep=True)
+            self._timing_samples = 0
+            self._timing_overruns = 0
+            self._timing_elapsed_sum = 0.0
+            self._timing_elapsed_max = 0.0
+            self._timing_overrun_sum = 0.0
+            self._timing_overrun_max = 0.0
 
     def close(self):
 
@@ -327,6 +361,8 @@ if __name__ == '__main__':
         help='Port span used by deterministic endpoint mapping')
     parser.add_argument('--add_training_data', action='store_true',
         help='Reserved, kept for compatibility')
+    parser.add_argument('--timing_window', type=int, default=200,
+        help='Number of loop samples used to aggregate dt violation warnings')
 
     args = parser.parse_args()
 
@@ -344,9 +380,12 @@ if __name__ == '__main__':
         source_ip=args.source_ip,
         port_base=args.port_base,
         port_span=args.port_span,
+        timing_window=args.timing_window,
     )
 
     try:
         bridge.run(dt=args.dt)
+    except KeyboardInterrupt:
+        pass
     finally:
         bridge.close()
