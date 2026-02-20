@@ -157,6 +157,43 @@ class RefsFromKeyboard:
             self._close()
     
     def _close(self):
+        try:
+            refs_running = (
+                self._shared_refs is not None
+                and getattr(self._shared_refs, "is_running", lambda: False)()
+            )
+            if refs_running:
+                if (
+                    self._env_idx is None
+                    and self.env_index is not None
+                    and getattr(self.env_index, "is_running", lambda: False)()
+                ):
+                    self.env_index.synch_all(read=True, retry=True)
+                    env_index = self.env_index.get_numpy_mirror()
+                    self._env_idx = int(env_index[0, 0].item())
+                if self._env_idx is not None:
+                    self.cluster_idx = int(self._env_idx)
+                    self.cluster_idx_np = self.cluster_idx
+                if self.cluster_idx >= 0:
+                    self._shared_refs.rob_refs.root_state.synch_all(read=True, retry=True)
+                    twist_ref = self._shared_refs.rob_refs.root_state.get(
+                        data_type="twist", robot_idxs=self.cluster_idx_np
+                    ).reshape(1, -1)
+                    twist_ref[:, :] = 0.0
+                    self._shared_refs.rob_refs.root_state.set(
+                        data_type="twist",
+                        data=twist_ref,
+                        robot_idxs=self.cluster_idx_np,
+                    )
+                    self._shared_refs.rob_refs.root_state.synch_retry(
+                        row_index=self.cluster_idx,
+                        col_index=7,
+                        n_rows=1,
+                        n_cols=6,
+                        read=False,
+                    )
+        except Exception:
+            pass
         
         if self._shared_refs is not None:
 

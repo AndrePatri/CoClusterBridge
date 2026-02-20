@@ -4,7 +4,7 @@
 #
 # Usage:
 #   python joy_sub.py
-#   python joy_sub.py --connect 192.168.1.10:5556 --topic joy
+#   python joy_sub.py --bind 0.0.0.0:5556 --topic joy
 
 import argparse
 import zmq
@@ -19,7 +19,7 @@ class JoyListenerZMQ:
     """
     ZeroMQ-based joystick state listener.
 
-    - Connects to a PUB socket and subscribes to `topic`.
+    - Binds a SUB socket and subscribes to `topic`.
     - Runs a background thread to receive (non-busy) and parse messages.
     - Keeps the latest joystick state in numpy arrays:
        - sticks: shape (4,) floats -> [left_x, left_y, right_x, right_y]
@@ -33,7 +33,7 @@ class JoyListenerZMQ:
 
     def __init__(
         self,
-        connect: str = "localhost:5556",
+        bind: str = "0.0.0.0:5556",
         topic: str = "joy",
         poll_interval: float = 0.01,
         on_message: Optional[Callable[[dict], None]] = None,
@@ -41,7 +41,7 @@ class JoyListenerZMQ:
     ):
         self.debug=debug
 
-        self.connect = connect
+        self.bind = bind
         self.topic = topic
         self.poll_interval = float(poll_interval)
         self.on_message = on_message
@@ -53,9 +53,9 @@ class JoyListenerZMQ:
         # ZMQ setup
         self.ctx = zmq.Context()
         self.sock = self.ctx.socket(zmq.SUB)
-        self.connect_addr = f"tcp://{self.connect}"
-        print("[JoyListenerZMQ]: Connecting to", self.connect_addr)
-        self.sock.connect(self.connect_addr)
+        self.bind_addr = f"tcp://{self.bind}"
+        print("[JoyListenerZMQ]: Binding to", self.bind_addr)
+        self.sock.bind(self.bind_addr)
 
         # subscribe to topic
         self.topic_bytes = self.topic.encode("utf-8")
@@ -377,7 +377,7 @@ class JoyListenerZMQ:
 
 def main():
     parser = argparse.ArgumentParser(description="ZeroMQ joystick subscriber (threaded, non-busy).")
-    parser.add_argument("--connect", default="localhost:5556", help="Publisher address to connect to (host:port). Default localhost:5556")
+    parser.add_argument("--bind", default="0.0.0.0:5556", help="Bind address (host:port). Default 0.0.0.0:5556")
     parser.add_argument("--topic", default="joy", help="Topic to subscribe to (default 'joy')")
     parser.add_argument("--poll-interval", type=float, default=0.01, help="Poll interval seconds (default 0.01)")
     args = parser.parse_args()
@@ -395,7 +395,7 @@ def main():
             print(f"[{time.strftime('%H:%M:%S', time.localtime(ts))}] seq={seq}")
 
     # create listener and run until Ctrl-C
-    listener = JoyListenerZMQ(connect=args.connect, topic=args.topic, poll_interval=args.poll_interval, on_message=on_message)
+    listener = JoyListenerZMQ(bind=args.bind, topic=args.topic, poll_interval=args.poll_interval, on_message=on_message)
 
     # start listening using context manager (optional)
     listener.start()
