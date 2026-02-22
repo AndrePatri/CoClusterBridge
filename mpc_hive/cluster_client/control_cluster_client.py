@@ -112,6 +112,10 @@ class ControlClusterClient(ABC):
         self._fd_peak_by_pid = {}
         self._fd_last_by_pid = {}
         self._fd_monitor_period_s = 0.02
+        self._fd_warn_fraction = 0.85
+        self._fd_warned_pids = set()
+        self._nofile_soft = None
+        self._nofile_hard = None
         self._fd_monitor_stop = False
         self._fd_monitor_thread = None
 
@@ -320,6 +324,8 @@ class ControlClusterClient(ABC):
         # let's make the paths to the controllers files available on shared memory for db
         from EigenIPC.PyEigenIPC import StringTensorServer
 
+        self._log_nofile_limits()
+
         self.shared_rhc_files = StringTensorServer(length=self.cluster_size, 
             basename="SharedRhcFilesDropDir", 
             name_space=self._namespace,
@@ -445,6 +451,21 @@ class ControlClusterClient(ABC):
                 prev_peak = self._fd_peak_by_pid.get(pid, 0)
                 if n_fds > prev_peak:
                     self._fd_peak_by_pid[pid] = n_fds
+                if self._nofile_soft is not None and self._nofile_soft > 0:
+                    warn_threshold = max(1, int(self._fd_warn_fraction * self._nofile_soft))
+                    if n_fds >= warn_threshold and pid not in self._fd_warned_pids:
+                        usage = 100.0 * (n_fds / float(self._nofile_soft))
+                        warn = (
+                            f"child pid {pid} reached {n_fds} open FDs "
+                            f"({usage:.1f}% of RLIMIT_NOFILE soft={self._nofile_soft}, "
+                            f"hard={self._nofile_hard})."
+                        )
+                        Journal.log(self.__class__.__name__,
+                                    "_monitor_child_fds",
+                                    warn,
+                                    LogType.WARN,
+                                    throw_when_excep=False)
+                        self._fd_warned_pids.add(pid)
 
             if (not any_alive) and len(self._processes) > 0:
                 break
@@ -455,6 +476,7 @@ class ControlClusterClient(ABC):
             return
         self._fd_peak_by_pid.clear()
         self._fd_last_by_pid.clear()
+        self._fd_warned_pids.clear()
         self._fd_monitor_stop = False
         self._fd_monitor_thread = threading.Thread(
             target=self._monitor_child_fds,
@@ -462,6 +484,42 @@ class ControlClusterClient(ABC):
             daemon=True,
         )
         self._fd_monitor_thread.start()
+
+    def _log_nofile_limits(self):
+        import resource
+
+        try:
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        except Exception as ex:
+            Journal.log(self.__class__.__name__,
+                        "_log_nofile_limits",
+                        f"Could not query RLIMIT_NOFILE ({ex}).",
+                        LogType.WARN,
+                        throw_when_excep=False)
+            self._nofile_soft = None
+            self._nofile_hard = None
+            return
+
+        self._nofile_soft = int(soft) if soft is not None else None
+        self._nofile_hard = int(hard) if hard is not None else None
+
+        info = f"RLIMIT_NOFILE soft={self._nofile_soft}, hard={self._nofile_hard}."
+        Journal.log(self.__class__.__name__,
+                    "_log_nofile_limits",
+                    info,
+                    LogType.INFO,
+                    throw_when_excep=False)
+
+        if self._nofile_soft is not None and self._nofile_soft < 65535:
+            warn = (
+                "RLIMIT_NOFILE soft limit is below 65535. "
+                "Large pooled clusters may fail with SEMOPEN/MEMOPEN errors."
+            )
+            Journal.log(self.__class__.__name__,
+                        "_log_nofile_limits",
+                        warn,
+                        LogType.WARN,
+                        throw_when_excep=False)
 
     def _stop_fd_monitor(self):
         self._fd_monitor_stop = True

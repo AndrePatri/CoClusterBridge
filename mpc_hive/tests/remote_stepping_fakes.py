@@ -17,10 +17,11 @@ CLUSTER_DT = 0.03 # dt at which the cluster server steps (MPC dt)
 N_PHYSICS_STEPS=int(CLUSTER_DT / CONTROL_DT)
 ACK_TIMEOUT_MS = 15000
 N_NODES=30
-NAMESPACE = "mpc_hive_unittest_ns"
-MAX_CONTROLLERS_PER_POOL=128 
+NAMESPACE = "mpc_hive_unittest_shm_ns"
+MAX_CONTROLLERS_PER_POOL=32 
 USE_POOL=False
-CLUSTER_SIZE=500
+CLUSTER_SIZE=1200
+N_STEPS = 100
 
 def write_dummy_srdf(path, joint_names: List[str]) -> str:
     lines = ["<?xml version=\"1.0\"?>", "<robot name=\"dummy\">", "  <group_state name=\"home\" group=\"dummy_group\">"]
@@ -291,6 +292,10 @@ class DummyClusterClient(ControlClusterClient):
             debug=True,
             custom_opts={"n_nodes": N_NODES, "cluster_dt": CLUSTER_DT, "some_other_mpc_opts": 12345},
         )
+        if USE_POOL:
+            # Pool workers are started from a bound method target (`self._spawn_controller_pool`),
+            # so `fork` avoids pickling `self` (which contains EigenIPC objects).
+            self._fork_ctx_name = "fork"
 
     def _generate_controller(self, idx: int):
         return DummyController(

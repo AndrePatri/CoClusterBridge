@@ -4,11 +4,11 @@ from mpc_hive.tests.remote_stepping_fakes import (
     DummyClusterServer,
     NAMESPACE,
     N_PHYSICS_STEPS,
-    CLUSTER_SIZE
+    CLUSTER_SIZE,
+    N_STEPS
 )
 import numpy as np
 
-N_STEPS = 1000
 N_JNTS=42
 JOINT_NAMES = ["joint_{}".format(i) for i in range(N_JNTS)]
 CONTACT_NAMES = ["contact_1"]
