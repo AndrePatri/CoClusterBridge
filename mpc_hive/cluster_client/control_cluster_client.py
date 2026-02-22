@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 
 from typing import List, Dict
 import math
+import threading
 
 import multiprocess as mp
 
@@ -106,6 +107,13 @@ class ControlClusterClient(ABC):
         self._terminated = False
 
         self._proc_closed=False
+
+        # per-child fd telemetry (sampled while children are alive)
+        self._fd_peak_by_pid = {}
+        self._fd_last_by_pid = {}
+        self._fd_monitor_period_s = 0.02
+        self._fd_monitor_stop = False
+        self._fd_monitor_thread = None
 
         if self._debug:
             self._system_start,self._system_avail =get_system_memory(label="__init__()", prev=0.0, db_print=False)
@@ -416,40 +424,94 @@ class ControlClusterClient(ABC):
             self._close_shared_mem() # and close the used shared memory
             self._terminated = True
 
+    def _monitor_child_fds(self):
+        import os
+        import time
+
+        while not self._fd_monitor_stop:
+            any_alive = False
+            for process in self._processes:
+                pid = process.pid
+                if pid is None:
+                    continue
+                if process.is_alive():
+                    any_alive = True
+                try:
+                    n_fds = len(os.listdir(f"/proc/{pid}/fd"))
+                except (FileNotFoundError, ProcessLookupError, PermissionError):
+                    continue
+
+                self._fd_last_by_pid[pid] = n_fds
+                prev_peak = self._fd_peak_by_pid.get(pid, 0)
+                if n_fds > prev_peak:
+                    self._fd_peak_by_pid[pid] = n_fds
+
+            if (not any_alive) and len(self._processes) > 0:
+                break
+            time.sleep(self._fd_monitor_period_s)
+
+    def _start_fd_monitor(self):
+        if self._fd_monitor_thread is not None and self._fd_monitor_thread.is_alive():
+            return
+        self._fd_peak_by_pid.clear()
+        self._fd_last_by_pid.clear()
+        self._fd_monitor_stop = False
+        self._fd_monitor_thread = threading.Thread(
+            target=self._monitor_child_fds,
+            name=f"{self.__class__.__name__}-fd-monitor",
+            daemon=True,
+        )
+        self._fd_monitor_thread.start()
+
+    def _stop_fd_monitor(self):
+        self._fd_monitor_stop = True
+        if self._fd_monitor_thread is not None and self._fd_monitor_thread.is_alive():
+            self._fd_monitor_thread.join(timeout=1.0)
+        self._fd_monitor_thread = None
+
+    def _fd_stats_suffix(self, process):
+        pid = process.pid
+        if pid is None:
+            return "(pid unavailable, fd_peak=n/a, fd_last=n/a)"
+        peak = self._fd_peak_by_pid.get(pid, "n/a")
+        last = self._fd_last_by_pid.get(pid, "n/a")
+        return f"(pid={pid}, fd_peak={peak}, fd_last={last})"
+
     def _close_process(self):
         if not self._proc_closed:
             for process in self._processes:
                 process.join() # wait for processes to terminate
                 exicode=process.exitcode
+                fd_stats = self._fd_stats_suffix(process)
                 if exicode==0:
                     Journal.log(self.__class__.__name__,
                         "_close_process",
-                        "successfully terminated child process " + str(process.name),
+                        "successfully terminated child process " + str(process.name) + " " + fd_stats,
                         LogType.STAT)
                     self._proc_closed=True
                 elif exicode is None:
                     Journal.log(self.__class__.__name__,
                         "_close_process",
-                        "child process " + str(process.name) + f" is not terminated yet",
+                        "child process " + str(process.name) + f" is not terminated yet " + fd_stats,
                         LogType.WARN)
                     self._proc_closed=False
                 elif exicode==1:
                     Journal.log(self.__class__.__name__,
                         "_close_process",
-                        "child process " + str(process.name) + f" terminated with code {exicode} (uncaught exception)",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (uncaught exception) " + fd_stats,
                         LogType.EXCEP,
                         throw_when_excep = False)
                     self._proc_closed=True
                 elif exicode>1:
                     Journal.log(self.__class__.__name__,
                         "_close_process",
-                        "child process " + str(process.name) + f" terminated with code {exicode} (sys.exit())",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (sys.exit()) " + fd_stats,
                         LogType.STAT)
                     self._proc_closed=True
                 else: # exitcode <0
                     Journal.log(self.__class__.__name__,
                         "_close_process",
-                        "child process " + str(process.name) + f" terminated with code {exicode} (by signal)",
+                        "child process " + str(process.name) + f" terminated with code {exicode} (by signal) " + fd_stats,
                         LogType.EXCEP,
                         throw_when_excep = False)
                     self._proc_closed=True
@@ -461,6 +523,7 @@ class ControlClusterClient(ABC):
                                     row_index=0,
                                     col_index=0) # send termination to controllers
         self._close_process()
+        self._stop_fd_monitor()
     
     def _close_shared_mem(self):
         if self.cluster_stats is not None:
@@ -632,6 +695,8 @@ class ControlClusterClient(ABC):
                         info,
                         LogType.STAT,
                         throw_when_excep = True)
+
+        self._start_fd_monitor()
 
         self._is_cluster_ready = self._wait_for_child_ps() # blocking: waits that all child ps are alive
 
