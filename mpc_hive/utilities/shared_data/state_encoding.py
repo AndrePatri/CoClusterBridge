@@ -45,7 +45,7 @@ class JntsState(SharedTWrapper):
             optimize_mem: bool = False):
         
         basename = "JntsState" 
-
+    
         n_cols = None
         if n_jnts is not None:
             n_cols = 4 * n_jnts # jnts config., vel., acc., torques
@@ -148,7 +148,7 @@ class JntsState(SharedTWrapper):
                 jnts_remapping: List[int] = None):
         
         if jnts_remapping is not None:
-            if not len(jnts_remapping) == self.n_jnts:
+            if (not len(jnts_remapping) == self.n_jnts) and self.verbose:
                 warning = f"Provided jnt remapping length {len(jnts_remapping)} " + \
                     f"does not match n. joints {self.n_jnts}! Was this intentional?"
                 Journal.log(self.__class__.__name__,
@@ -156,7 +156,7 @@ class JntsState(SharedTWrapper):
                     warning,
                     LogType.WARN,
                     throw_when_excep = True)
-            if not len(jnts_remapping) <= self.n_jnts:
+            if (not len(jnts_remapping) <= self.n_jnts) and self.verbose:
                 warning = f"Provided jnt remapping length {len(jnts_remapping)}" + \
                     f"is higher than {self.n_jnts}. It should be <={self.n_jnts}"
                 Journal.log(self.__class__.__name__,

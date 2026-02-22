@@ -27,7 +27,10 @@ class RobotHomer:
     def __init__(self, 
             srdf_path: str, 
             jnt_names: List[str] = None,
-            filter: bool = True):
+            filter: bool = True, 
+            verbose: bool = False):
+
+        self._verbose=verbose
 
         self._filter=filter
 
@@ -73,7 +76,7 @@ class RobotHomer:
 
         self.n_dofs_prb = len(self.jnt_names)
         self.n_dofs_srdf = len(self.jnt_names_srdf)
-        if not self.n_dofs_prb==self.n_dofs_srdf:
+        if not self.n_dofs_prb==self.n_dofs_srdf and self._verbose:
             warn = f"Found {self.n_dofs_srdf} jnt in SRDF, while provided ones are {self.n_dofs_prb}!"
             Journal.log(self.__class__.__name__,
                         "__init__",

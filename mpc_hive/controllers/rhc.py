@@ -169,10 +169,11 @@ class RHController(ABC):
         self._close()
 
     def _handle_sigint(self, signum, frame):
-        Journal.log(self._class_name,
-                "_handle_sigint",
-                "SIGINT received",
-                LogType.WARN)
+        if self._verbose:
+            Journal.log(self._class_name,
+                    "_handle_sigint",
+                    "SIGINT received",
+                    LogType.WARN)
         self._term_req_received = True
     
     def _set_rhc_pred_idx(self):
@@ -767,7 +768,7 @@ class RHController(ABC):
         server_side_contact_names = set(self.robot_state.contact_names())
         control_side_contact_names = set(self._get_contacts())
 
-        if not server_side_contact_names == control_side_contact_names:
+        if (not server_side_contact_names == control_side_contact_names) and self._verbose:
             warn = f"Controller-side contact names do not match server-side names!" + \
                 f"\nServer: {self.robot_state.contact_names()}\n Controller: {self._get_contacts()}"
             Journal.log(self._class_name,
@@ -832,10 +833,12 @@ class RHController(ABC):
 
     def _init_robot_homer(self):
         self._homer = RobotHomer(srdf_path=self.srdf_path, 
-                            jnt_names=self._controller_side_jnt_names)
+                            jnt_names=self._controller_side_jnt_names,
+                            verbose=self._verbose)
         
         self._homer_env = RobotHomer(srdf_path=self.srdf_path, 
-                            jnt_names=self.robot_state.jnt_names())
+                            jnt_names=self.robot_state.jnt_names(),
+                            verbose=self._verbose)
         
     def _update_profiling_data(self):
 
@@ -1042,6 +1045,9 @@ class RHController(ABC):
                 "\nmissing -> \n" + \
                 " ".join(list(env_is_missing))
                 msg_type=LogType.EXCEP
+            
+            if msg_type==LogType.WARN and not self._verbose:
+                return
             
             Journal.log(self._class_name,
                     "_check_jnt_names_compatibility",
