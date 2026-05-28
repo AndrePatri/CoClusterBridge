@@ -16,7 +16,6 @@
 # along with MPCHive.  If not, see <http://www.gnu.org/licenses/>.
 # 
 from abc import ABC, abstractmethod
-# from perf_sleep.pyperfsleep import PerfSleep
 # from mpc_hive.utilities.cpu_utils.core_utils import get_memory_usage
 
 import time 

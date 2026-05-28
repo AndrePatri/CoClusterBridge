@@ -2,11 +2,11 @@ from EigenIPC.PyEigenIPC import VLevel, LogType, Journal
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.from_zmq import FromZmq
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.abstractions import default_endpoint, ZmqSubscriber
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.defs import MSG_DATA, is_string_tensor
+from mpc_hive.utilities.timing import high_resolution_sleep_ns
 
 import argparse
 import time
 
-from perf_sleep.pyperfsleep import PerfSleep
 from mpc_hive.utilities.sysutils import set_process_affinity
 
 
@@ -265,7 +265,7 @@ class ZmqToSharedMemBridge:
             self._accumulate_timing(elapsed_time)
             time_to_sleep_ns = int((self._dt - elapsed_time) * 1e9)
             if time_to_sleep_ns >= 0:
-                PerfSleep.thread_sleep(time_to_sleep_ns)
+                high_resolution_sleep_ns(time_to_sleep_ns)
 
         self.close()
 

@@ -2,6 +2,7 @@ from EigenIPC.PyEigenIPC import VLevel, LogType, Journal
 from EigenIPC.PyEigenIPC import StringTensorServer, StringTensorClient
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.to_zmq import ToZmq
 from EigenIPC.PyEigenIPCExt.extensions.zmq_bridge.abstractions import default_endpoint
+from mpc_hive.utilities.timing import high_resolution_sleep_ns
 
 from mpc_hive.utilities.shared_data.rhc_data import RobotState, RhcRefs, RhcCmds, RhcStatus, RhcPred, RhcPredDelta
 from mpc_hive.utilities.shared_data.cluster_profiling import RhcProfiling
@@ -13,7 +14,6 @@ from mpc_hive.utilities.shared_data.abstractions import flatten_shared_mem
 import argparse
 import time
 
-from perf_sleep.pyperfsleep import PerfSleep
 from mpc_hive.utilities.sysutils import set_process_affinity, parse_env_slice
 
 
@@ -541,7 +541,7 @@ class SharedMemToZmqBridge:
             self._accumulate_timing(elapsed_time)
             time_to_sleep_ns = int((self._dt - elapsed_time) * 1e9)
             if time_to_sleep_ns >= 0:
-                PerfSleep.thread_sleep(time_to_sleep_ns)
+                high_resolution_sleep_ns(time_to_sleep_ns)
 
         self.close()
 

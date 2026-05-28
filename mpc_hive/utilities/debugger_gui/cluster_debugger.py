@@ -50,8 +50,6 @@ import sys
 
 import time
 
-from perf_sleep.pyperfsleep import PerfSleep
-
 class SharedDataThread(QThread):
 
     trigger_update = pyqtSignal()
@@ -60,10 +58,8 @@ class SharedDataThread(QThread):
     def __init__(self, 
                 update_dt: float, 
                 verbose = True):
-        
-        super().__init__()
 
-        self.perf_timer = PerfSleep()
+        super().__init__()
 
         # self._cluster_index = 0 # data for this cluster will be emitted
 
@@ -103,9 +99,6 @@ class SharedDataThread(QThread):
         actual_sleep = self.update_dt - update_duration
 
         if (actual_sleep > 0):
-            
-            # self.perf_timer.thread_sleep(int(actual_sleep * 1e9)) # from a child thread doesn't work
-
             time.sleep(actual_sleep)
         
     def run(self):
@@ -813,4 +806,3 @@ class RtClusterDebugger(QMainWindow):
                 self.data_spawner.buttons[i].setChecked(False)
 
                 self.data_spawner.buttons[i].setCheckable(True)
-

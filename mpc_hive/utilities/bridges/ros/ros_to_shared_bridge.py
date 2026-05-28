@@ -1,12 +1,12 @@
 from EigenIPC.PyEigenIPCExt.extensions.ros_bridge.from_ros import FromRos
 from EigenIPC.PyEigenIPC import ClientFactory
 from EigenIPC.PyEigenIPC import VLevel, LogType, Journal, dtype
+from mpc_hive.utilities.timing import high_resolution_sleep_ns
 
 import argparse
 import time
 import numpy as np
 
-from perf_sleep.pyperfsleep import PerfSleep
 from mpc_hive.utilities.sysutils import set_process_affinity
 
 
@@ -353,7 +353,7 @@ class RosToSharedMemBridge:
                         LogType.WARN,
                         throw_when_excep=True)
                 else:
-                    PerfSleep.thread_sleep(time_to_sleep_ns)
+                    high_resolution_sleep_ns(time_to_sleep_ns)
             except (KeyboardInterrupt, SystemExit):
                 break
 
