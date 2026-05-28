@@ -78,6 +78,16 @@ class JoyListenerZMQ:
         self.buttons = []
         self.hats = []
 
+    def _close_zmq(self):
+        try:
+            self.sock.close(linger=0)
+        except Exception:
+            pass
+        try:
+            self.ctx.term()
+        except Exception:
+            pass
+
     def __enter__(self):
         self.start()
         return self
@@ -103,7 +113,13 @@ class JoyListenerZMQ:
         try:
             while not self.done:
                 # poller timeout in milliseconds
-                events = dict(poller.poll(int(self.poll_interval * 1000)))
+                try:
+                    events = dict(poller.poll(int(self.poll_interval * 1000)))
+                except zmq.ZMQError as e:
+                    if self.done:
+                        break
+                    print("[JoyListenerZMQ] ZMQ poll error:", e)
+                    continue
                 if self.sock in events:
                     try:
                         frames = self.sock.recv_multipart(flags=0)
@@ -143,14 +159,7 @@ class JoyListenerZMQ:
         except KeyboardInterrupt:
             print("Subscriber stopped by user")
         finally:
-            try:
-                self.sock.close(linger=0)
-            except Exception:
-                pass
-            try:
-                self.ctx.term()
-            except Exception:
-                pass
+            self._close_zmq()
 
     def _store_payload_data(self, payload: dict):
         """
@@ -273,21 +282,16 @@ class JoyListenerZMQ:
         """
         Request the listener to stop and join the thread briefly.
         """
-        if not self.done:
-            self.done = True
-            # closing socket will interrupt poll/recv
-            try:
-                self.sock.close(linger=0)
-            except Exception:
-                pass
-            try:
-                self.ctx.term()
-            except Exception:
-                pass
+        self.done = True
 
-            # join thread
-            if self.listener_thread and self.listener_thread.is_alive():
-                self.listener_thread.join(timeout=1.0)
+        if self.listener_thread and self.listener_thread.is_alive():
+            if threading.current_thread() is not self.listener_thread:
+                self.listener_thread.join(timeout=max(1.0, 2.0 * self.poll_interval))
+                if self.listener_thread.is_alive():
+                    self._close_zmq()
+                    self.listener_thread.join(timeout=1.0)
+        else:
+            self._close_zmq()
 
     # def pretty_print_payload(self, payload: dict):
     #     """
