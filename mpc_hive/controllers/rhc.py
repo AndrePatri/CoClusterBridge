@@ -125,6 +125,10 @@ class RHController(ABC):
 
         self._got_contact_names = False
 
+        # when enabled by a derived controller, contact positions (base frame) are written into
+        # RhcCmds via the _compute_contact_positions_rel extension point.
+        self._write_contact_pos = False
+
         self._received_trigger = False # used for proper termination
 
         self._n_resets = 0
@@ -864,6 +868,14 @@ class RHController(ABC):
                                                             col_index=0,
                                                             row_index_view=0)
     
+    def _compute_contact_positions_rel(self):
+        """Extension point: return an (n_contacts, 3) array of contact-frame positions expressed in a
+        base link frame (base-relative), ordered as robot_state.contact_names(). Only invoked when
+        _write_contact_pos is set by a derived controller; override per controller."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} set _write_contact_pos but does not implement "
+            "_compute_contact_positions_rel().")
+
     def _write_cmds_from_sol(self):
 
         # gets data from the solution and updates the view on the shared data
@@ -893,11 +905,20 @@ class RHController(ABC):
                     v_out=self._contact_force_base_loc_aux,
                     is_q_wijk=False # horizon q is ijkw
                     )
-                self.robot_cmds.contact_wrenches.set(data=self._contact_force_base_loc_aux, 
-                    data_type="f", 
+                self.robot_cmds.contact_wrenches.set(data=self._contact_force_base_loc_aux,
+                    data_type="f",
                     robot_idxs=self.controller_index_np,
                     contact_name=contact)
-        
+
+        # optional: contact positions (base frame) written into the MPC cmds. FK is
+        # controller-specific (_compute_contact_positions_rel extension point); default off.
+        if self._write_contact_pos:
+            cpos = self._compute_contact_positions_rel()
+            cnames = self.robot_state.contact_names()
+            for i in range(len(cnames)):
+                self.robot_cmds.contact_pos.set(data=cpos[i:i+1, :], data_type="p",
+                    robot_idxs=self.controller_index_np, contact_name=cnames[i])
+
         # prediction data from MPC horizon
         self.robot_pred.jnts_state.set(data=self._get_jnt_q_from_sol(node_idx=self._pred_node_idx), data_type="q", robot_idxs=self.controller_index_np)
         self.robot_pred.jnts_state.set(data=self._get_jnt_v_from_sol(node_idx=self._pred_node_idx), data_type="v", robot_idxs=self.controller_index_np)
@@ -917,11 +938,16 @@ class RHController(ABC):
                                 row_index_view=0,
                                 n_rows=1, n_cols=self.robot_cmds.root_state.n_cols,
                                 read=False) # root state, in case it was written
-        self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0, 
+        self.robot_cmds.contact_wrenches.synch_retry(row_index=self.controller_index, col_index=0,
                                 row_index_view=0,
                                 n_rows=1, n_cols=self.robot_cmds.contact_wrenches.n_cols,
                                 read=False) # contact state
-        
+        if self._write_contact_pos:
+            self.robot_cmds.contact_pos.synch_retry(row_index=self.controller_index, col_index=0,
+                                row_index_view=0,
+                                n_rows=1, n_cols=self.robot_cmds.contact_pos.n_cols,
+                                read=False) # contact positions (base frame)
+
         # write robot pred
         self.robot_pred.jnts_state.synch_retry(row_index=self.controller_index, col_index=0, 
                                 row_index_view=0,
